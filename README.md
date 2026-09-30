@@ -48,7 +48,8 @@ npm run dev
 
 Acesse **http://localhost:3000**. Documentação da API: **http://localhost:3001/api-docs**.
 
-> Windows sem bash: rode `npm run dev:backend` e `npm run dev:frontend` em dois terminais.
+No Windows, Linux ou macOS, `npm run dev` na raiz ou em `frontend/` inicia os dois serviços. Para iniciar apenas o Next.js, use `npm run dev:next` em `frontend/`.
+Antes da primeira execução, instale as dependências dos dois pacotes com `npm ci --prefix backend` e `npm ci --prefix frontend`.
 
 ## Produção
 

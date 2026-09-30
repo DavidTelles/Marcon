@@ -3,9 +3,11 @@
   "version": "2.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "node scripts/run-with-backend.mjs dev",
+    "dev:next": "next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "node scripts/run-with-backend.mjs start",
+    "start:next": "next start",
     "lint": "eslint",
     "test:e2e": "playwright test",
     "db:migrate": "node scripts/db-migrate.mjs",
