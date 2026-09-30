@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 import { useEffect, useState } from "react";
 import { faceRequest } from "@/lib/face-client";
 import { FaceCapture } from "@/app/components/face/face-capture";
@@ -52,10 +52,10 @@ export function FaceRegister() {
             : "Cadastre seu rosto para entrar usando a câmera do computador."}
       </p>
       <p>
-        As amostras serão processadas neste computador. Somente os vetores
-        necessários à comparação serão enviados ao servidor local e guardados
-        criptografados, até você excluir ou substituir o cadastro. Fotos e
-        vídeos não serão salvos. O login com senha continua disponível.
+        As cinco fotos serão enviadas ao servidor local para análise em Python.
+        Apenas os vetores faciais serão guardados criptografados até você
+        excluir ou substituir o cadastro. Fotos e vídeos não serão salvos. O
+        login com senha continua disponível.
       </p>
       {!capture && (
         <>

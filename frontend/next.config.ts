@@ -5,6 +5,7 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["tesseract.js"],
   outputFileTracingIncludes: {
     "/api/maps": ["./node_modules/@tesseract.js-data/por/4.0.0/*"],
+    "/api/login/face": ["./face/recognize.py", "./face/models/*.onnx"],
   },
 };
 

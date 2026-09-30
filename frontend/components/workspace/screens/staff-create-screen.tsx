@@ -187,8 +187,8 @@ export function StaffCreateScreen() {
                 <ScanFace size={21} /> Cadastrar acesso facial
               </h2>
               <p>
-                A câmera só pedirá permissão ao iniciar. O processamento ocorre
-                localmente; fotos e vídeos não são guardados. Apenas embeddings
+                A câmera só pedirá permissão ao iniciar. Cinco fotos são
+                analisadas no servidor local e descartadas. Apenas vetores
                 criptografados são salvos, e a senha continua disponível.
               </p>
             </div>

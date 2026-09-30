@@ -76,34 +76,23 @@ assinatura e a credencial cadastrada antes de criar a sessão. Execute
 WebAuthn requer HTTPS em produção (localhost funciona para desenvolvimento)
 e um domínio estável: passkeys cadastradas em outro domínio não funcionam.
 
-### Reconhecimento pela câmera, sem serviços externos
+### Reconhecimento facial com Python e OpenCV
 
-`npm ci` copia os modelos do Human 3.3.6 para `public/models/human` (também via
-`npm run face:models`). Execute `npm run db:migrate`. Em localhost ou HTTPS,
-entre com senha, abra `/profile`, confirme senha/consentimento e cadastre seis
-amostras seguindo os movimentos e a pequena mudança de iluminação. No login,
-informe matrícula/e-mail e escolha **Entrar com reconhecimento facial**.
-O perfil permite excluir ou substituir o cadastro; senha e passkeys continuam disponíveis.
+Instale Python 3.10+ no servidor e execute `python -m pip install -r face/requirements.txt`
+na pasta `frontend`. Se necessário, defina `FACE_PYTHON` com o caminho do
+executável Python. Os modelos YuNet e SFace ficam em `face/models`.
+Execute `npm ci`, `npm run db:migrate` e configure `SESSION_SECRET`
+e MySQL. Em localhost ou HTTPS, entre com senha, abra `/profile` e
+cadastre cinco fotos com consentimento. No login, informe matrícula/e-mail
+e use a câmera. O servidor extrai vetores SFace e compara com similaridade
+cosseno mínima de 0,363, conforme o protótipo Python fornecido.
 
-Somente embeddings faceres são persistidos, com AES-256-GCM e chave derivada de
-`SESSION_SECRET` por HKDF. Proteja esse segredo e os backups do banco; sua troca
-exige novo cadastro facial. Fotos, vídeos, landmarks, idade e gênero não são persistidos.
-Os modelos carregam sob demanda; a câmera encerra ao cancelar, ocultar a aba ou sair.
-
-Política em `lib/face-policy.ts`: similaridade Human ≥ **0,85** com pelo menos
-3 das 6 referências, para **todas** as 5 capturas do login; consistência do
-cadastro ≥ 0,80 entre cada par. Limiar inicial conservador, testado com fixtures
-sintéticas, sem estimativa de FAR/FRR: calibre com pessoas e iluminação reais
-antes de ampliar o uso. [Escala do Human](https://github.com/vladmandic/human/wiki/Embedding).
-Há cinco tentativas por conta/modalidade a cada 15 minutos e desafios descartáveis de 120 s.
-A sessão depende da comparação no servidor, nunca de `recognized: true`.
-Presença por movimentos aleatórios é uma checagem simples: embeddings e medições
-vêm do navegador, portanto cliente adulterado, vetores roubados, câmeras virtuais
-e deepfakes podem burlá-la. Não equivale à proteção de uma passkey de hardware.
-
-Testes: `npx playwright test tests/face-policy.spec.ts tests/face-model.spec.ts`;
-com o banco de teste configurado, `npx playwright test -c playwright.mysql.config.ts face`.
-As fixtures de imagem em `tests/fixtures` são sintéticas, da coleção MIT do Human.
+As fotos são enviadas para análise e descartadas após a requisição. Apenas
+vetores são armazenados, criptografados com AES-256-GCM. Cadastros anteriores
+do modelo Human precisam ser refeitos. Excluir o cadastro, login com senha
+e passkeys continuam disponíveis. Há limite de cinco tentativas por conta
+a cada 15 minutos. Este fluxo não oferece prova robusta de presença:
+câmeras virtuais e imagens manipuladas podem burlá-lo.
 
 ## Estoque, mapas e planejamento
 

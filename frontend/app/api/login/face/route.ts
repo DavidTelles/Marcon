@@ -1,4 +1,4 @@
-﻿import { createHash, randomBytes, randomInt } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import type { RowDataPacket } from "mysql2";
 import { cookieName, createSession, currentUser } from "@/lib/auth";
@@ -6,13 +6,15 @@ import { databaseEnabled, getPool, transaction } from "@/lib/db";
 import { verifyPassword } from "@/lib/password";
 import { roleLanding, type Role } from "@/lib/workspace-routes";
 import { decryptFace, encryptFace } from "@/lib/face-crypto";
+import { extractFaces } from "@/lib/face-python";
 import {
   FACE_CONSENT,
+  FACE_COUNT,
   FACE_MODEL,
   FACE_TTL,
+  coherentCapture,
   matchesEnrollment,
-  validateCapture,
-  type FacePose,
+  validImages,
 } from "@/lib/face-policy";
 
 export const runtime = "nodejs";
@@ -38,10 +40,8 @@ type UserRow = RowDataPacket & {
 type ChallengeRow = RowDataPacket & {
   user_id: number;
   purpose: string;
-  poses: FacePose[] | string;
   session_hash: Buffer | null;
   password_hash: string;
-  age_ms: number;
 };
 type StoredFace = RowDataPacket & { embeddings: Buffer; model_version: string };
 
@@ -81,7 +81,7 @@ async function readBody(
     const { value, done } = await reader.read();
     if (done) break;
     size += value.length;
-    if (size > 256_000) {
+    if (size > 1_600_000) {
       await reader.cancel();
       return null;
     }
@@ -214,17 +214,7 @@ export async function POST(request: NextRequest) {
             401,
           );
       }
-      const turns: FacePose[] = randomInt(2)
-        ? ["left", "right"]
-        : ["right", "left"];
-      const poses: FacePose[] = [
-        "center",
-        turns[0],
-        "center",
-        turns[1],
-        "center",
-        ...(registering ? ["light" as const] : []),
-      ];
+      const poses = Array(FACE_COUNT).fill("center");
       const token = randomBytes(32).toString("base64url");
       await getPool().execute(
         "DELETE FROM face_challenges WHERE expires_at < UTC_TIMESTAMP(3)",
@@ -251,17 +241,41 @@ export async function POST(request: NextRequest) {
     if (!token || token.length > 128)
       return fail("Captura expirada. Inicie novamente.");
     const [challenges] = await getPool().execute<ChallengeRow[]>(
-      "SELECT *, TIMESTAMPDIFF(MICROSECOND, created_at, UTC_TIMESTAMP(3)) / 1000 AS age_ms FROM face_challenges WHERE token_hash = ? AND expires_at > UTC_TIMESTAMP(3)",
+      "SELECT * FROM face_challenges WHERE token_hash = ? AND expires_at > UTC_TIMESTAMP(3)",
       [digest(token)],
     );
     const challenge = challenges[0];
     if (!challenge)
       return fail("Captura expirada ou já utilizada. Inicie novamente.");
-    const poses =
-      typeof challenge.poses === "string"
-        ? JSON.parse(challenge.poses)
-        : challenge.poses;
-    const samples = body.samples;
+    const images = body.images;
+    if (body.model !== FACE_MODEL || !validImages(images))
+      return fail(
+        "Captura inválida. Tire cinco fotos com boa iluminação.",
+        422,
+      );
+    if (new Set(images).size !== FACE_COUNT)
+      return fail("As cinco fotos precisam ser capturas diferentes.", 422);
+    let samples: number[][];
+    try {
+      samples = await extractFaces(images);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException)?.code === "ENOENT")
+        return fail(
+          "Python não está disponível no servidor. Configure FACE_PYTHON.",
+          503,
+        );
+      return fail(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível analisar as fotos.",
+        422,
+      );
+    }
+    if (!coherentCapture(samples))
+      return fail(
+        "Os rostos das cinco fotos não coincidem. Tente novamente.",
+        422,
+      );
     const sessionUser =
       challenge.purpose === "register" ? await currentUser() : null;
     const response = await transaction(async (c) => {
@@ -280,15 +294,6 @@ export async function POST(request: NextRequest) {
       await c.execute("DELETE FROM face_challenges WHERE token_hash = ?", [
         digest(token),
       ]);
-      if (
-        body.model !== FACE_MODEL ||
-        !validateCapture(samples, poses) ||
-        samples.at(-1)!.elapsed > challenge.age_ms + 1000
-      )
-        return fail(
-          "Captura inválida. Repita os movimentos com boa iluminação.",
-          422,
-        );
       const user = users[0];
       if (!user?.active || user.password_hash !== challenge.password_hash)
         return fail("Conta alterada. Entre novamente com senha.", 401);
@@ -303,15 +308,7 @@ export async function POST(request: NextRequest) {
           return fail("Sessão expirada. Entre novamente.", 401);
         await c.execute(
           "INSERT INTO face_credentials (user_id, embeddings, model_version, consent_version) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE embeddings = VALUES(embeddings), model_version = VALUES(model_version), consent_version = VALUES(consent_version), created_at = CURRENT_TIMESTAMP(3)",
-          [
-            user.id,
-            encryptFace(
-              user.id,
-              samples.map((s) => s.embedding),
-            ),
-            FACE_MODEL,
-            FACE_CONSENT,
-          ],
+          [user.id, encryptFace(user.id, samples), FACE_MODEL, FACE_CONSENT],
         );
         await c.execute("DELETE FROM face_challenges WHERE user_id = ?", [
           user.id,

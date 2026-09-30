@@ -203,7 +203,6 @@ test("avisa alterações não salvas e falha da câmera não remove usuário", a
       .getByText("O funcionário presente autoriza", { exact: false })
       .click();
     await page.getByRole("button", { name: "Iniciar cadastro facial" }).click();
-    await page.getByRole("button", { name: "Iniciar captura" }).click();
     await expect(page.locator(".staff-face-step [role=alert]")).toContainText(
       "Permita o acesso à câmera",
       { timeout: 30000 },
