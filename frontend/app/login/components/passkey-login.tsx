@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { startAuthentication } from "@simplewebauthn/browser";
 import { passkeyRequest, passkeyError } from "@/lib/passkey-client";
+import { roleLanding } from "@/lib/workspace-routes";
 import type { PublicKeyCredentialRequestOptionsJSON } from "@simplewebauthn/browser";
 import styles from "../login.module.css";
 
@@ -16,7 +17,7 @@ export function PasskeyLogin({ identity, onCancel }: { identity: string; onCance
       const options = await passkeyRequest<PublicKeyCredentialRequestOptionsJSON>({ action: "login-options", identity });
       const assertion = await startAuthentication({ optionsJSON: options });
       const result = await passkeyRequest<{ destination: string }>({ action: "login-verify", response: assertion });
-      if (typeof result.destination !== "string" || !/^\/inicio\/[a-z]+$/.test(result.destination)) throw new Error("Destino inválido.");
+      if (typeof result.destination !== "string" || !Object.values(roleLanding).includes(result.destination)) throw new Error("Destino inválido.");
       window.location.assign(result.destination);
     } catch (cause) { setError(passkeyError(cause)); setBusy(false); }
   }

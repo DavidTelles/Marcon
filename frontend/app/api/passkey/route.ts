@@ -3,6 +3,7 @@ import { generateAuthenticationOptions, generateRegistrationOptions, verifyAuthe
 import type { AuthenticationResponseJSON, RegistrationResponseJSON } from "@simplewebauthn/server";
 import { currentUser, cookieName, createSession } from "@/lib/auth";
 import { accountByIdentity } from "@/lib/accounts";
+import { roleLanding } from "@/lib/workspace-routes";
 import { verifyPassword } from "@/lib/password";
 import { databaseEnabled, getPool, transaction } from "@/lib/db";
 import { clearFailedLogins, loginBlocked, recordFailedLogin } from "@/lib/login-rate";
@@ -112,7 +113,7 @@ if (body.action === "login-verify") {
   const account = accountRows[0] ? await accountByIdentity(accountRows[0].employee_no) : null;
   if (!account) return error("Conta indisponível.", 401);
   await clearFailedLogins(account.account.id);
-  const response = NextResponse.json({ destination: `/inicio/${account.account.role}` });
+  const response = NextResponse.json({ destination: roleLanding[account.account.role] });
   response.cookies.set(cookieName, createSession(account.account.id, account.passwordHash),
     { httpOnly: true, secure: request.nextUrl.protocol === "https:", sameSite: "lax", path: "/", maxAge: 8 * 60 * 60 });
   response.cookies.set(challengeCookie, "", { ...cookieOptions(request), maxAge: 0 });

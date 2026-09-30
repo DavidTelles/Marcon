@@ -21,7 +21,7 @@ export default async function CatalogLayout({
       <header className={styles.topbar}>
         <div className={styles.topbarInner}>
           <Link
-            href={`/inicio/${user.role}`}
+            href={roleLanding[user.role]}
             className={styles.brandLink}
             aria-label="Marcon — página inicial"
           >

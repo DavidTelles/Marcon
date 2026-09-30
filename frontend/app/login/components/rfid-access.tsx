@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, LoaderCircle, Radio } from "lucide-react";
 import styles from "../login.module.css";
+import { roleLanding } from "@/lib/workspace-routes";
 
 const READING_SECONDS = 5;
 type ReaderStatus = "waiting" | "submitting" | "success" | "error";
@@ -33,7 +34,7 @@ export function RfidAccess({ onCancel }: { onCancel: () => void }) {
           signal: controller.signal,
         });
         const result = await response.json();
-        if (!response.ok || result.destination !== "/inicio/funcionario") {
+        if (!response.ok || !Object.values(roleLanding).includes(result.destination)) {
           throw new Error("RFID simulation failed");
         }
         if (controller.signal.aborted) return;

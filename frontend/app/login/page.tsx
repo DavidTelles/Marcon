@@ -5,12 +5,13 @@ import { DemoCredentials } from "./components/demo-credentials";
 import LoginForm from "./login-form";
 import styles from "./login.module.css";
 import { databaseEnabled } from "@/lib/db";
+import { roleLanding } from "@/lib/workspace-routes";
 
 export default async function LoginPage() {
   const user = await currentUser();
 
   if (user) {
-    redirect(`/inicio/${user.role}`);
+    redirect(roleLanding[user.role]);
   }
 
   return (

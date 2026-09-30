@@ -3,7 +3,7 @@ import { cookieName, createSession } from "@/lib/auth";
 import { demoUsers } from "@/lib/users";
 import { databaseEnabled } from "@/lib/db";
 import { accountByIdentity } from "@/lib/accounts";
-import { verifyPassword } from "@/lib/password";
+import { roleLanding } from "@/lib/workspace-routes";
 import { clearFailedLogins, loginBlocked, recordFailedLogin } from "@/lib/login-rate";
 import {
   apiTokenCookie,
@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
       await clearFailedLogins(identity);
       const account = await accountByIdentity(session.user.employee_code);
       if (!account) return NextResponse.json({ error: "Conta local não encontrada." }, { status: 401 });
-      const response = NextResponse.json({ destination: `/inicio/${session.user.role_enum}` });
+      const response = NextResponse.json({ destination: roleLanding[session.user.role_enum] });
       setCookies(request, response, createSession(account.account.id, account.passwordHash), session.token);
       return response;
     } catch (error) {
@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
   if (!user || !valid) {
     return NextResponse.json({ error: "E-mail, matrícula ou senha incorretos. Tente novamente." }, { status: 401 });
   }
-  const response = NextResponse.json({ destination: `/inicio/${user.role}` });
+  const response = NextResponse.json({ destination: roleLanding[user.role] });
   setCookies(request, response, createSession(user.id));
   return response;
 }

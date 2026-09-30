@@ -61,7 +61,7 @@ test("credentials, errors, password visibility and logout", async ({
   await expect(page.locator("#login-error")).toContainText("incorretos");
   await page.getByLabel("Senha", { exact: true }).fill("Marcon@123");
   await page.getByRole("button", { name: "Entrar", exact: true }).click();
-  await expect(page).toHaveURL("/inicio/admin");
+  await expect(page).toHaveURL("/admin/dashboard");
   await page.getByRole("button", { name: "Sair da conta" }).click();
   await expect(page).toHaveURL("/login");
   await page.goto("/inicio/admin");
@@ -83,7 +83,7 @@ test("RFID waits five seconds and signs in without a password", async ({
   await expect(page).toHaveURL("/login");
   await expect(page.getByRole("status")).toContainText("1 s");
   await page.clock.runFor(1000);
-  await expect(page).toHaveURL("/inicio/funcionario");
+  await expect(page).toHaveURL("/employee/request");
 });
 
 test("canceling RFID stops the pending read and restores credentials", async ({
@@ -121,7 +121,7 @@ test("RFID failure allows another timed attempt", async ({ page }) => {
   await page.getByRole("button", { name: "Tentar leitura novamente" }).click();
   await expect(page.getByRole("status")).toContainText("5 s");
   await page.clock.runFor(5000);
-  await expect(page).toHaveURL("/inicio/funcionario");
+  await expect(page).toHaveURL("/employee/request");
 });
 
 test("reduced motion disables animation and tilt; keyboard reaches form", async ({

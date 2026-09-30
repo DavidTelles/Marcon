@@ -4,8 +4,8 @@
   color: #0f2038;
 }
 .topbar {
-  border-bottom: 1px solid #e1e5ef;
-  background: white;
+  border-bottom: 1px solid #ffffff24;
+  background: linear-gradient(110deg, #172f5d, #1d419c);
 }
 .topbarInner {
   display: flex;
@@ -21,7 +21,7 @@
   display: inline-flex;
   align-items: center;
   gap: 12px;
-  color: #0f2038;
+  color: white;
   text-decoration: none;
   font-size: 12px;
   font-weight: 700;
@@ -43,13 +43,13 @@
   align-items: center;
   gap: 9px;
   min-height: 42px;
-  border-bottom: 2px solid #1d419c;
-  color: #1d419c;
+  border-bottom: 2px solid #a8c7ff;
+  color: white;
   text-decoration: none;
   font-weight: 600;
 }
 .navNote {
-  color: #526177;
+  color: #d5def0;
   font-size: 12px;
 }
 .account {
@@ -61,7 +61,7 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  color: #526177;
+  color: white;
   font-size: 12px;
 }
 .logout {
@@ -69,14 +69,14 @@
   place-items: center;
   width: 42px;
   height: 42px;
-  border: 1px solid #e1e5ef;
+  border: 1px solid #ffffff55;
   border-radius: 10px;
-  background: white;
-  color: #526177;
+  background: #ffffff18;
+  color: white;
 }
 .logout:hover {
-  background: #f6f8fc;
-  color: #1d419c;
+  background: #ffffff30;
+  color: white;
 }
 .content {
   width: min(100%, 1440px);

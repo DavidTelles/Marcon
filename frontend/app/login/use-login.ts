@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { roleLanding } from "@/lib/workspace-routes";
 
 type LoginStatus = "idle" | "submitting" | "success";
 
@@ -37,7 +38,7 @@ export function useLogin() {
       }
       if (
         typeof result.destination !== "string" ||
-        !/^\/inicio\/[a-z]+$/.test(result.destination)
+        !Object.values(roleLanding).includes(result.destination)
       ) {
         throw new Error("Invalid login destination");
       }

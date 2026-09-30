@@ -2167,7 +2167,7 @@ td select {
   justify-content: space-between;
   gap: 16px;
   padding: 24px max(24px, 6vw);
-  background: var(--color-marcon-navy);
+  background: linear-gradient(110deg, #172f5d, var(--color-marcon-blue));
   color: white;
 }
 .home-account-actions {
@@ -3219,6 +3219,40 @@ td select {
 }
 
 /* Shared operational surfaces: same light, navy and blue as the login. */
+.topbar {
+  color: white;
+  border-bottom-color: #ffffff24;
+  background: linear-gradient(110deg, #172f5d, var(--color-marcon-blue));
+}
+.workspace-top-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-decoration: none;
+}
+.topbar .top-left > span,
+.topbar .top-left strong,
+.topbar .top-left b,
+.topbar .role-control,
+.topbar .workspace-profile,
+.topbar .icon-button { color: white; }
+.topbar .icon-button:hover,
+.topbar .workspace-profile:hover { background: #ffffff1c; border-radius: 8px; }
+.topbar .workspace-logout { border-color: #ffffff55; color: white; background: #ffffff18; }
+.topbar .workspace-logout:hover { background: #ffffff30; }
+.sidebar .brand { gap: 12px; }
+.sidebar .brand strong { letter-spacing: .08em; }
+@media (max-width: 1050px) {
+  .workspace-top-brand > span:last-child { display: none; }
+}
+@media (max-width: 639px) {
+  .workspace-top-brand .compact { width: 38px; }
+}
 textarea { font: inherit; }
 :where(a, button, input, select, textarea, summary):focus-visible {
   outline: 3px solid var(--bright);

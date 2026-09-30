@@ -1,9 +1,14 @@
 .page {
   min-height: 100svh;
-  padding: clamp(20px, 4vw, 56px) max(16px, env(safe-area-inset-right));
+  padding: 0 0 clamp(20px, 4vw, 56px);
   background: #f6f8fc;
   color: #0f2038;
 }
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 76px; padding: 12px clamp(20px, 4vw, 56px); color: white; background: linear-gradient(110deg, #172f5d, #1d419c); }
+.brandLink { display: inline-flex; align-items: center; gap: 10px; color: white; text-decoration: none; font-size: 12px; font-weight: 700; letter-spacing: .12em; }
+.topbarLink { min-height: 44px; display: inline-flex; align-items: center; padding: 0 14px; border: 1px solid #ffffff55; border-radius: 8px; color: white; text-decoration: none; font-weight: 600; }
+.topbarLink:hover { background: #ffffff22; }
+.container { padding-inline: 16px; }
 .container { width: min(100%, 960px); margin-inline: auto; display: grid; gap: clamp(18px, 2.5vw, 28px); }
 .header { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; min-width: 0; }
 .header > div { min-width: 0; }
@@ -48,7 +53,7 @@
   .passwordGrid > :first-child { grid-column: 1 / -1; }
 }
 @media (max-width: 540px) {
-  .page { padding: 24px 16px 40px; }
+  .page { padding-bottom: 40px; }
   .header { gap: 12px; }
   .back { margin-top: 0; }
   .grid, .passwordGrid { grid-template-columns: minmax(0, 1fr); gap: 18px; }

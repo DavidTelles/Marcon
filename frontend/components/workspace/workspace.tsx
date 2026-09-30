@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { BrandLogo } from "@/app/components/brand-logo";
 import { useDemoStore } from "./demo-store";
 import { useEmployeeName, useEmployeeBlock } from "./employee-identity";
 import { badge } from "./ui";
@@ -179,7 +180,7 @@ export default function Workspace({
       : dashboardView
         ? roleLanding[role]
         : page === "dashboard" || (role === "funcionario" && page === "nova")
-          ? `/inicio/${role}`
+          ? roleLanding[role]
           : roleLanding[role];
   const active =
     current.pages.find((item) => item.id === page) ?? current.pages[0];
@@ -454,6 +455,7 @@ export default function Workspace({
         aria-label="Menu principal"
       >
         <div className="brand">
+          <BrandLogo compact />
           <div>
             <strong>MARCON</strong>
             <small>Gestão de materiais</small>
@@ -501,6 +503,10 @@ export default function Workspace({
       <div className="main">
         <header className="topbar">
           <div className="top-left">
+            <Link className="workspace-top-brand" href={roleLanding[role]} aria-label="Marcon — página inicial">
+              <BrandLogo compact decorative />
+              <span>SMARTWAY</span>
+            </Link>
             <Link
               className="icon-button"
               aria-label="Voltar"

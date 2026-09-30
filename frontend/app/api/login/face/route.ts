@@ -4,6 +4,7 @@ import type { RowDataPacket } from "mysql2";
 import { cookieName, createSession, currentUser } from "@/lib/auth";
 import { databaseEnabled, getPool, transaction } from "@/lib/db";
 import { verifyPassword } from "@/lib/password";
+import { roleLanding, type Role } from "@/lib/workspace-routes";
 import { decryptFace, encryptFace } from "@/lib/face-crypto";
 import {
   FACE_CONSENT,
@@ -332,7 +333,7 @@ export async function POST(request: NextRequest) {
         );
       // Apenas este resultado calculado no servidor autoriza a sessão. Nunca
       // receber recognized=true, id escolhido pelo cliente, ou escore do cliente.
-      const result = json({ destination: `/inicio/${user.role}` });
+      const result = json({ destination: roleLanding[user.role as Role] });
       result.cookies.set(
         cookieName,
         createSession(user.employee_no, user.password_hash),

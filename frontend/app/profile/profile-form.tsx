@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { AccountRole } from "@/lib/accounts";
 import styles from "./profile.module.css";
+import { BrandLogo } from "@/app/components/brand-logo";
+import { roleLanding } from "@/lib/workspace-routes";
 import { FaceRegister } from "./face-register";
 import { PasskeyRegister } from "./passkey-register";
 
@@ -48,10 +50,14 @@ export default function ProfileForm({ name: initialName, email: initialEmail, ro
   }
 
   return <main className={styles.page}>
+    <header className={styles.topbar}>
+      <Link href={roleLanding[role]} className={styles.brandLink} aria-label="Marcon — página inicial"><BrandLogo compact decorative /><span>SMARTWAY</span></Link>
+      <Link href={roleLanding[role]} className={styles.topbarLink}>Página inicial</Link>
+    </header>
     <div className={styles.container}>
       <div className={styles.header}>
         <div><span className={styles.eyebrow}>CONTA MARCON</span><h1>Editar perfil</h1><p>Atualize seus dados e suas credenciais de acesso.</p></div>
-        <Link href={`/inicio/${role}`} className={styles.back}>Voltar</Link>
+        <Link href={roleLanding[role]} className={styles.back}>Voltar</Link>
       </div>
       {!persistent && <p role="note" className={styles.notice}>Configure o MySQL para salvar alterações no perfil.</p>}
       <form className={styles.card} onSubmit={save}>

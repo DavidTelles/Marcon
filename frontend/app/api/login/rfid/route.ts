@@ -3,6 +3,7 @@ import { cookieName, createSession } from "@/lib/auth";
 import { demoUsers } from "@/lib/users";
 import { databaseEnabled } from "@/lib/db";
 import { accountByIdentity } from "@/lib/accounts";
+import { roleLanding, type Role } from "@/lib/workspace-routes";
 import {
   apiTokenCookie,
   BackendError,
@@ -45,7 +46,7 @@ export async function POST(request: NextRequest) {
       });
       const account = await accountByIdentity(session.user.employee_code);
       if (!account) return NextResponse.json({ error: "Conta local não encontrada." }, { status: 401 });
-      const response = NextResponse.json({ destination: `/inicio/${session.user.role_enum}` });
+      const response = NextResponse.json({ destination: roleLanding[account.account.role] });
       setCookies(response, createSession(account.account.id, account.passwordHash), session.token);
       return response;
     } catch (error) {
@@ -56,7 +57,7 @@ export async function POST(request: NextRequest) {
   }
 
   const user = demoUsers[0];
-  const response = NextResponse.json({ destination: `/inicio/${user.role}` });
+  const response = NextResponse.json({ destination: roleLanding[user.role as Role] });
   setCookies(response, createSession(user.id));
   return response;
 }
