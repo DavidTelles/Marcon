@@ -1,0 +1,280 @@
+.scene {
+  width: 80px;
+  height: 92px;
+  position: relative;
+  perspective: 420px;
+  pointer-events: none;
+  --signal: #689dff;
+}
+.robot {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  transform: rotateY(-8deg);
+  transition: transform 0.38s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.head {
+  position: absolute;
+  width: 56px;
+  height: 33px;
+  left: 12px;
+  top: 1px;
+  display: grid;
+  place-items: center;
+  transform: translateZ(12px);
+  transition: transform 0.35s ease;
+  filter: drop-shadow(0 3px 2px #081c4650);
+}
+.head > span {
+  width: 56px;
+  height: 33px;
+}
+.neck {
+  position: absolute;
+  left: 34px;
+  top: 32px;
+  width: 12px;
+  height: 8px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #101e38, #7194c0, #203756);
+  transform: translateZ(2px);
+}
+.torso {
+  position: absolute;
+  left: 18px;
+  top: 38px;
+  width: 44px;
+  height: 32px;
+  border-radius: 11px 11px 16px 16px;
+  background: linear-gradient(
+    130deg,
+    #5277a5 0%,
+    #1e385d 30%,
+    #101f3b 70%,
+    #314c78
+  );
+  border: 1px solid #5e7fa8;
+  box-shadow:
+    inset 0 1px 2px #bed9ff90,
+    2px 3px 0 #0b1830,
+    0 4px 9px #09234855;
+  transform-style: preserve-3d;
+}
+.side {
+  position: absolute;
+  right: -4px;
+  top: 5px;
+  width: 7px;
+  height: 21px;
+  transform: rotateY(65deg) translateZ(-3px);
+  background: #112744;
+  border-radius: 4px;
+}
+.plate {
+  position: absolute;
+  inset: 4px 5px 12px;
+  border-radius: 5px;
+  background: linear-gradient(155deg, #53739a88, #12264366);
+  border-top: 1px solid #a9caff66;
+  transform: translateZ(2px);
+}
+.core {
+  position: absolute;
+  top: 10px;
+  left: 14px;
+  width: 14px;
+  height: 4px;
+  border-radius: 4px;
+  background: var(--signal);
+  box-shadow: 0 0 6px var(--signal);
+  transform: translateZ(4px);
+  transition:
+    background 0.2s,
+    box-shadow 0.2s;
+}
+.seam {
+  position: absolute;
+  bottom: 6px;
+  left: 13px;
+  width: 16px;
+  border-top: 1px solid #96c2ff80;
+}
+.arm {
+  position: absolute;
+  top: 40px;
+  width: 11px;
+  height: 18px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #0e213d, #6080a8 50%, #203959);
+  border: 1px solid #6a8cb4;
+  transform-origin: 50% 4px;
+  transform-style: preserve-3d;
+  transition: transform 0.4s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.left {
+  left: 7px;
+  transform: rotate(12deg);
+}
+.right {
+  right: 7px;
+  transform: rotate(-12deg);
+}
+.joint {
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 5px;
+  height: 5px;
+  border: 1px solid #aec7e3;
+  border-radius: 50%;
+  background: #142740;
+}
+.forearm {
+  position: absolute;
+  width: 10px;
+  height: 16px;
+  left: 0;
+  top: 13px;
+  border-radius: 3px 3px 6px 6px;
+  background: linear-gradient(100deg, #6184af, #172d50 70%);
+  border: 1px solid #6684aa;
+  transform-origin: 50% 2px;
+  transform: rotateX(-12deg);
+  transition: transform 0.4s ease;
+}
+.forearm i {
+  position: absolute;
+  bottom: 2px;
+  left: 2px;
+  width: 5px;
+  height: 2px;
+  background: var(--signal);
+  border-radius: 2px;
+}
+.thruster {
+  position: absolute;
+  top: 71px;
+  left: 27px;
+  width: 27px;
+  height: 5px;
+  border-radius: 40%;
+  background: linear-gradient(#06172d, #5a87bd);
+  transform: translateZ(-3px);
+}
+.thruster span {
+  position: absolute;
+  left: 5px;
+  width: 17px;
+  top: 4px;
+  height: 10px;
+  border-radius: 0 0 50% 50%;
+  background: linear-gradient(#aacdffbb, #417af830, transparent);
+  transition: height 0.3s;
+}
+.thruster i {
+  position: absolute;
+  top: 7px;
+  left: 10px;
+  width: 7px;
+  height: 5px;
+  border-radius: 50%;
+  background: #cae2ff;
+  filter: blur(1px);
+  opacity: 0.65;
+}
+.shadow {
+  position: absolute;
+  bottom: 0;
+  left: 17px;
+  width: 46px;
+  height: 5px;
+  border-radius: 50%;
+  background: #10295730;
+  filter: blur(2px);
+}
+.scene[data-character-state="waking"] .robot {
+  transform: rotateY(0) translateY(-3px);
+}
+.scene[data-character-state="listening"] .head {
+  transform: translateZ(12px) rotate(-7deg);
+}
+.scene[data-character-state="listening"] .right {
+  transform: rotate(-55deg);
+}
+.scene[data-character-state="processing"] .head {
+  transform: translateZ(12px) rotateX(10deg);
+}
+.scene[data-character-state="processing"] .core {
+  animation: think 1.4s ease-in-out 3;
+}
+.scene[data-character-state="speaking"] .right {
+  transform: rotate(-34deg);
+}
+.scene[data-character-state="pointing"] .right {
+  transform: rotate(-100deg);
+}
+.scene[data-options] .left {
+  transform: rotate(60deg);
+}
+.scene[data-options] .right {
+  transform: rotate(-60deg);
+}
+.scene[data-character-state="confirming"] {
+  --signal: #f2c96c;
+}
+.scene[data-character-state="confirming"] .left {
+  transform: rotate(40deg);
+}
+.scene[data-character-state="confirming"] .right {
+  transform: rotate(-40deg);
+}
+.scene[data-character-state="confirming"] .forearm {
+  transform: rotateX(-55deg);
+}
+.scene[data-character-state="success"] {
+  --signal: #71dab0;
+}
+.scene[data-character-state="success"] .right {
+  transform: rotate(-135deg);
+}
+.scene[data-character-state="error"] {
+  --signal: #f19b82;
+}
+.scene[data-character-state="error"] .head {
+  transform: translateZ(12px) rotateX(15deg);
+}
+.scene[data-character-state="error"] .core {
+  animation: think 0.4s ease-in-out 2;
+}
+.scene[data-compact] {
+  width: 40px;
+  height: 46px;
+}
+.scene[data-compact] .robot {
+  width: 80px;
+  height: 92px;
+  transform: scale(0.5);
+  transform-origin: top left;
+}
+.scene[data-compact] .shadow {
+  display: none;
+}
+@keyframes think {
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce), (update: slow) {
+  .robot,
+  .head,
+  .arm,
+  .forearm,
+  .core,
+  .thruster span {
+    transition: none;
+    animation: none !important;
+  }
+  .shadow {
+    filter: none;
+  }
+}

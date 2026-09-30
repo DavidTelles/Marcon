@@ -1,0 +1,24 @@
+.logo,
+.compact {
+  position: relative;
+  display: inline-block;
+  flex-shrink: 0;
+  overflow: hidden;
+  width: clamp(72px, 7vw, 96px);
+  aspect-ratio: 945 / 500;
+  vertical-align: middle;
+}
+
+.compact {
+  width: 44px;
+}
+
+/* Frame the mark without modifying the original PNG or its transparent margins. */
+.image {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 100%;
+  height: auto;
+  transform: translateY(-52.4%);
+}

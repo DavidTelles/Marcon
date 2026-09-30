@@ -1,0 +1,95 @@
+﻿.card {
+  padding: 2rem;
+  border: 1px solid #dbe3f1;
+  border-radius: 18px;
+  background: white;
+  color: #122547;
+}
+.card h2 {
+  margin: 0 0 0.6rem;
+  font-size: 1.2rem;
+}
+.card p {
+  line-height: 1.5;
+}
+.field {
+  display: grid;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+.field input {
+  width: 100%;
+  max-width: 440px;
+  border: 1px solid #bccbe3;
+  border-radius: 8px;
+  padding: 0.7rem;
+  color: #122547;
+  background: #f4f7fc;
+}
+.consent {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  line-height: 1.5;
+  margin: 1rem 0;
+}
+.consent input {
+  margin-top: 0.3rem;
+  flex: none;
+}
+.actions {
+  display: flex;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+  margin: 1rem 0;
+}
+.actions button {
+  background: #203da4;
+  color: white;
+  padding: 0.8rem 1rem;
+  border: 1px solid #203da4;
+  border-radius: 9px;
+  cursor: pointer;
+}
+.actions button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.actions button:focus-visible {
+  outline: 3px solid #76aaff;
+  outline-offset: 3px;
+}
+.error {
+  color: #ad1532;
+}
+.success {
+  color: #166534;
+}
+.capture {
+  display: grid;
+  gap: 0.6rem;
+  margin-top: 1rem;
+  min-width: 0;
+}
+.video {
+  width: 100%;
+  max-height: 360px;
+  aspect-ratio: 4/3;
+  object-fit: contain;
+  background: #101827;
+  border-radius: 12px;
+  transform: scaleX(-1);
+}
+.capture progress {
+  width: 100%;
+  accent-color: #203da4;
+}
+.capture small {
+  line-height: 1.5;
+  color: #445673;
+}
+@media (max-width: 480px) {
+  .card {
+    padding: 1rem;
+  }
+}
