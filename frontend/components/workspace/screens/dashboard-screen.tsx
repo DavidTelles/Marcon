@@ -12,6 +12,7 @@ import type { Role, Page } from "@/lib/workspace-routes";
 import { heading, badge } from "../ui";
 import { useDemoStore } from "../demo-store";
 import { WAREHOUSES, balanceOf } from "@/lib/inventory";
+import { InsightChart } from "../operations/insight-chart";
 export function DashboardScreen({
   role,
   current,
@@ -35,7 +36,7 @@ export function DashboardScreen({
 }) {
   const { balances } = useDemoStore();
   const [chart, setChart] = useState<"status" | "blocos" | "estoque">("status");
-  const statusRows = ["Pendente", "Em análise", "Aprovada", "Entregue", "Cancelada"].map((name) => ({ name, value: roleRequests.filter((item) => item.status === name).length }));
+  const statusRows = ["Pendente", "Em análise", "Aprovada", "Entregue", "Cancelada", "Cancelamento solicitado"].map((name) => ({ name, value: roleRequests.filter((item) => item.status === name).length }));
   const blockRows = ["Bloco A", "Bloco B", "Bloco C", "Bloco D"].map((name) => ({ name, value: roleRequests.filter((item) => item.block === name).length }));
   const warehouseRows = WAREHOUSES.map((name) => ({ name, value: stock.reduce((sum, part) => sum + balanceOf(balances, part.code, name), 0) }));
   const chartRows = chart === "status" ? statusRows : chart === "blocos" ? blockRows : warehouseRows;
@@ -178,6 +179,7 @@ export function DashboardScreen({
           </div>
         )}
       </div>
+      <InsightChart title="Como estão as requisições" description="Cada cor representa uma etapa. O número no centro é o total neste painel." rows={statusRows.map((row) => ({ label: row.name, value: row.value }))} unit="requisições" />
       <div className="dashboard-grid">
         <section className="panel visual-panel">
           <div className="panel-head"><div><h2>Entenda os números</h2><p>Selecione uma visão para comparar os dados.</p></div></div>

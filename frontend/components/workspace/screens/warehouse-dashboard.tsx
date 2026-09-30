@@ -15,6 +15,7 @@ import { boxLabel } from "@/lib/packaging";
 import { heading, badge } from "../ui";
 import { useDemoStore } from "../demo-store";
 import { WAREHOUSES, balanceOf } from "@/lib/inventory";
+import { InsightChart } from "../operations/insight-chart";
 
 type DetailKind =
   | "entries"
@@ -236,6 +237,7 @@ export function WarehouseDashboard({
         "Dashboard do almoxarifado",
         "Entradas, saídas, peças, estoque e requisições em uma visão filtrável.",
       )}
+      <InsightChart title="Fluxo de materiais" description="Compare as unidades recebidas e retiradas no período filtrado." rows={[{ label: "Entradas", value: received }, { label: "Saídas", value: dispatched }]} unit="unidades" />
       <div className="dashboard-actions">
         <span className="demo-label">
           {persistent
