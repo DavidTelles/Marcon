@@ -6,3 +6,16 @@ dist/
 *.log
 __pycache__/
 .DS_Store
+.next-james-test/
+test-results/
+test-results-mysql/
+playwright-report/
+coverage/
+out/
+build/
+*.tsbuildinfo
+next-env.d.ts
+api/node_modules/
+api/.npm-cache/
+.legacy/
+backend/.npm-cache/

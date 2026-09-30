@@ -1,7 +1,7 @@
 {
   "name": "marcon-backend",
   "version": "2.0.0",
-  "description": "API REST integrada MARCON — banco unificado, workspace, requisições, estoque, RFID e JWT",
+  "description": "API REST integrada MARCON — banco unificado, workspace, requisições, estoque, FaceId e JWT",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

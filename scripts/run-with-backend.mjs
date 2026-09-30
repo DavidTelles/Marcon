@@ -9,18 +9,14 @@ if (mode !== "dev" && mode !== "start") {
 }
 
 const frontend = resolve(import.meta.dirname, "..");
-const backend = resolve(frontend, "..", "backend");
+const backend = resolve(frontend, "api");
 const next = resolve(frontend, "node_modules", "next", "dist", "bin", "next");
-const nodemon = resolve(backend, "node_modules", "nodemon", "bin", "nodemon.js");
 if (!existsSync(resolve(backend, "node_modules", "dotenv", "package.json"))) {
-  console.error("Dependências do backend ausentes. Execute npm ci em backend/ antes de iniciar.");
+  console.error("Dependências da API ausentes. Execute npm ci --prefix api antes de iniciar.");
   process.exit(1);
 }
-const backendArgs = mode === "dev" && existsSync(nodemon)
-  ? [nodemon, "server.js"]
-  : ["server.js"];
 
-const api = spawn(process.execPath, backendArgs, {
+const api = spawn(process.execPath, ["server.js"], {
   cwd: backend,
   stdio: "inherit",
 });

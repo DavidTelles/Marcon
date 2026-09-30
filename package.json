@@ -2,16 +2,55 @@
   "name": "marcon",
   "version": "2.0.0",
   "private": true,
-  "description": "MARCON integrado — frontend Next.js + backend Express sobre banco MySQL unificado",
   "scripts": {
-    "setup": "bash scripts/setup-env.sh && npm --prefix backend install && npm --prefix frontend install",
-    "migrate": "npm --prefix backend run migrate",
-    "seed": "npm --prefix backend run seed",
-    "dev": "npm --prefix frontend run dev",
-    "dev:backend": "npm --prefix backend run dev",
-    "dev:frontend": "npm --prefix frontend run dev",
-    "build": "npm --prefix frontend run build",
-    "start": "npm --prefix frontend run start",
-    "test": "npm --prefix backend test"
+    "dev": "node scripts/run-with-backend.mjs dev",
+    "dev:next": "next dev",
+    "build": "next build",
+    "start": "node scripts/run-with-backend.mjs start",
+    "start:next": "next start",
+    "lint": "eslint",
+    "test:e2e": "playwright test",
+    "db:migrate": "node scripts/db-migrate.mjs",
+    "db:seed": "node scripts/db-seed.mjs",
+    "setup": "node scripts/setup-env.mjs && npm ci && npm ci --prefix api",
+    "migrate": "npm --prefix api run migrate",
+    "seed": "npm --prefix api run seed",
+    "dev:api": "npm --prefix api run dev",
+    "test:api": "npm --prefix api test",
+    "format": "prettier --write app/login app/globals.css tests playwright.config.ts",
+    "format:check": "prettier --check app/login app/globals.css tests playwright.config.ts"
+  },
+  "dependencies": {
+    "@simplewebauthn/browser": "^14.0.0",
+    "@simplewebauthn/server": "^14.0.3",
+    "@tesseract.js-data/por": "^1.0.0",
+    "@zxing/browser": "^0.2.1",
+    "exceljs": "^4.4.0",
+    "lucide-react": "^1.48.0",
+    "mysql2": "^3.24.4",
+    "next": "16.3.6",
+    "openai": "^7.23.0",
+    "pdf-lib": "^1.17.1",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "sharp": "^0.35.4",
+    "tesseract.js": "^7.0.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.6",
+    "prettier": "^3.9.9",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  },
+  "overrides": {
+    "exceljs": {
+      "uuid": "11.1.1"
+    }
   }
 }
