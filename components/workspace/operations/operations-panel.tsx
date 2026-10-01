@@ -114,8 +114,18 @@ export function OperationsPanel({
   useEffect(() => {
     const refresh = () => setRevision((v) => v + 1);
     window.addEventListener("marcon:workspace-updated", refresh);
-    return () =>
+    const onVisibility = () => {
+      if (!document.hidden) refresh();
+    };
+    const timer = window.setInterval(() => {
+      if (!document.hidden) refresh();
+    }, 30_000);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("marcon:workspace-updated", refresh);
+    };
   }, []);
   useEffect(() => {
     if (!jamesQuery) return;
@@ -523,6 +533,9 @@ export function OperationsPanel({
             <button className="button primary">Aplicar filtros</button>
           </form>
         </details>
+        {report && !loading && !planning && (
+          <DashboardCharts report={report} />
+        )}
         {error && (
           <div role="alert">
             <p>{error}</p>
@@ -620,10 +633,6 @@ export function OperationsPanel({
               }
             />
           )}
-          {!planning &&
-            ["geral", "bloco", "estoque", "compra"].includes(view) && (
-              <DashboardCharts report={report} />
-            )}
           {view === "geral" && (
             <section className="panel ops-panel">
               <div className="panel-head">

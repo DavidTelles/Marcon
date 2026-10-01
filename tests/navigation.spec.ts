@@ -35,6 +35,37 @@ for (const account of accounts) {
   });
 }
 
+test("James no centro inferior não acrescenta scroll aos quatro perfis", async ({ page, baseURL }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/login");
+  for (const account of accounts) {
+    await page.evaluate((id) => {
+      localStorage.setItem(`james-pet:${id}`, JSON.stringify({
+        still: true, quiet: true, dock: "inline", voice: false,
+      }));
+    }, account.id);
+    const login = await page.request.post("/api/login", {
+      headers: { origin: baseURL! },
+      data: { identity: account.id, password: "Marcon@123" },
+    });
+    expect(login.status()).toBe(200);
+    await page.goto(account.panel);
+    const james = page.locator("[data-james-pet]");
+    await expect(james).toHaveAttribute("data-dock", "inline");
+    const layout = await james.evaluate((element) => {
+      const before = document.documentElement.scrollHeight;
+      const rect = element.getBoundingClientRect();
+      element.style.display = "none";
+      const withoutJames = document.documentElement.scrollHeight;
+      element.style.removeProperty("display");
+      return { before, withoutJames, rectBottom: rect.bottom, position: getComputedStyle(element).position };
+    });
+    expect(layout.position).toBe("fixed");
+    expect(layout.before).toBe(layout.withoutJames);
+    expect(layout.rectBottom).toBeLessThanOrEqual(900);
+  }
+});
+
 test("solicitações do líder não ampliam a página em tablet", async ({ page, baseURL }) => {
   const login = await page.request.post("/api/login", {
     headers: { origin: baseURL! },

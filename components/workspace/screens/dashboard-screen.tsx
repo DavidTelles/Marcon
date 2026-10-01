@@ -139,6 +139,7 @@ export function DashboardScreen({
           </div>
         </section>
       )}
+      <InsightChart title="Como estão as requisições" description="Cada cor representa uma etapa. O número no centro é o total neste painel." rows={statusRows.map((row) => ({ label: row.name, value: row.value }))} unit="requisições" />
       <div className="stats">
         <div className="stat">
           <span className="stat-icon blue">
@@ -179,7 +180,6 @@ export function DashboardScreen({
           </div>
         )}
       </div>
-      <InsightChart title="Como estão as requisições" description="Cada cor representa uma etapa. O número no centro é o total neste painel." rows={statusRows.map((row) => ({ label: row.name, value: row.value }))} unit="requisições" />
       <div className="dashboard-grid">
         <section className="panel visual-panel">
           <div className="panel-head"><div><h2>Entenda os números</h2><p>Selecione uma visão para comparar os dados.</p></div></div>

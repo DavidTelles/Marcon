@@ -1072,7 +1072,7 @@ export default function JamesAssistant({ userId }: { userId: string }) {
                       <option value="right">Direita, se houver espaço</option>
                       <option value="left">Esquerda, se houver espaço</option>
                       <option value="inline">
-                        Área reservada ao fim da página
+                        Centro inferior
                       </option>
                     </select>
                   </label>

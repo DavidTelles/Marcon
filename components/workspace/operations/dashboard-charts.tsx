@@ -18,7 +18,18 @@ export function DashboardCharts({ report }: { report: DashboardReport }) {
   });
   const max = Math.max(1, ...series.map((s) => s.quantity)),
     top = report.top.filter((t) => t.unit === unit),
-    topMax = Math.max(1, ...top.map((t) => t.quantity));
+    topMax = Math.max(1, ...top.map((t) => t.quantity)),
+    requestMetrics = report.metrics.filter((metric) =>
+      ["requests", "pending", "urgent", "anomalies"].includes(metric.id),
+    ),
+    requestMax = Math.max(
+      1,
+      ...requestMetrics.map((metric) => metric.value ?? 0),
+    );
+  const updatedAt = new Date(report.generatedAt).toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
   const points = series
     .map(
       (s, i) =>
@@ -26,13 +37,47 @@ export function DashboardCharts({ report }: { report: DashboardReport }) {
     )
     .join(" ");
   return (
-    <section className="dashboard-charts" aria-label="Gráficos de consumo">
+    <section className="dashboard-charts" aria-label="Gráficos do painel">
+      {report.view === "requisicoes" ? (
+        <article className="panel ops-panel dashboard-request-chart">
+          <div className="panel-head">
+            <div>
+              <h2>Pedidos e pontos de atenção</h2>
+              <p>
+                {report.methodology.period} · {report.scope} · quantidade de
+                requisições · atualizado às {updatedAt}
+              </p>
+            </div>
+          </div>
+          <div className="dashboard-bars" role="list">
+            {requestMetrics.map((metric) => (
+              <div role="listitem" key={metric.id}>
+                <span>{metric.label}</span>
+                <div className="dashboard-bar-track">
+                  <span
+                    style={{
+                      width: `${(100 * (metric.value ?? 0)) / requestMax}%`,
+                    }}
+                  />
+                </div>
+                <strong>{(metric.value ?? 0).toLocaleString("pt-BR")}</strong>
+              </div>
+            ))}
+          </div>
+          <p className="dashboard-chart-note">
+            Pendentes, urgentes e anormalidades podem fazer parte do total de
+            pedidos; compare cada indicador sem somar as barras.
+          </p>
+        </article>
+      ) : (
+        <>
       <article className="panel ops-panel">
         <div className="panel-head">
           <div>
             <h2>Evolução das retiradas</h2>
             <p>
-              {report.methodology.period} · {report.scope} · baixas efetivas
+              {report.methodology.period} · {report.scope} · baixas efetivas ·
+              atualizado às {updatedAt}
             </p>
           </div>
         </div>
@@ -119,7 +164,9 @@ export function DashboardCharts({ report }: { report: DashboardReport }) {
         <div className="panel-head">
           <div>
             <h2>Peças mais usadas</h2>
-            <p>Até 12 itens · {unit} · retiradas efetivas no período</p>
+            <p>
+              Até 12 itens · {unit} · retiradas efetivas · atualizado às {updatedAt}
+            </p>
           </div>
         </div>
         {top.length ? (
@@ -178,6 +225,8 @@ export function DashboardCharts({ report }: { report: DashboardReport }) {
           </p>
         )}
       </article>
+        </>
+      )}
     </section>
   );
 }
