@@ -11,7 +11,7 @@ for (const account of accounts) {
   test(`${account.role}: conta fixa, voltar, restrição de perfil e sair`, async ({ page, baseURL }) => {
     const login = await page.request.post("/api/login", {
       headers: { origin: baseURL! },
-      data: { identity: account.id, password: "Marcon@123" },
+      data: { identity: account.id, password: "Marcon@12345" },
     });
     expect(login.status()).toBe(200);
     await page.goto(account.panel);
@@ -23,10 +23,10 @@ for (const account of accounts) {
       await expect(page).toHaveURL(account.panel);
     }
     await page.getByRole("link", { name: "Voltar", exact: true }).click();
-    await expect(page).toHaveURL(`/inicio/${account.role}`);
+    await expect(page).toHaveURL(account.panel);
     const other = accounts.find((item) => item.role !== account.role)!;
     await page.goto(other.panel);
-    await expect(page).toHaveURL(`/inicio/${account.role}`);
+    await expect(page).toHaveURL(account.panel);
     await page.goto(account.panel);
     await page.getByRole("button", { name: "Sair da conta" }).click();
     await expect(page).toHaveURL("/login");
@@ -46,7 +46,7 @@ test("James no centro inferior não acrescenta scroll aos quatro perfis", async 
     }, account.id);
     const login = await page.request.post("/api/login", {
       headers: { origin: baseURL! },
-      data: { identity: account.id, password: "Marcon@123" },
+      data: { identity: account.id, password: "Marcon@12345" },
     });
     expect(login.status()).toBe(200);
     await page.goto(account.panel);
@@ -69,7 +69,7 @@ test("James no centro inferior não acrescenta scroll aos quatro perfis", async 
 test("solicitações do líder não ampliam a página em tablet", async ({ page, baseURL }) => {
   const login = await page.request.post("/api/login", {
     headers: { origin: baseURL! },
-    data: { identity: "1002", password: "Marcon@123" },
+    data: { identity: "1002", password: "Marcon@12345" },
   });
   expect(login.status()).toBe(200);
   for (const width of [768, 1024]) {
@@ -84,7 +84,7 @@ test("perfil exige login e informa quando o Neon não está configurado", async 
   await expect(page).toHaveURL("/login");
   const login = await page.request.post("/api/login", {
     headers: { origin: baseURL! },
-    data: { identity: "1001", password: "Marcon@123" },
+    data: { identity: "1001", password: "Marcon@12345" },
   });
   expect(login.status()).toBe(200);
   await page.setViewportSize({ width: 320, height: 800 });
@@ -94,7 +94,7 @@ test("perfil exige login e informa quando o Neon não está configurado", async 
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
   const response = await page.request.patch("/api/profile", {
     headers: { origin: baseURL! },
-    data: { name: "Ana Souza", email: "ana@marcon.demo", currentPassword: "Marcon@123" },
+    data: { name: "Ana Souza", email: "ana@marcon.demo", currentPassword: "Marcon@12345" },
   });
   expect(response.status()).toBe(503);
 });

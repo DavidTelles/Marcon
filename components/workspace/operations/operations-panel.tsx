@@ -17,8 +17,15 @@ import { DashboardCharts } from "./dashboard-charts";
 import { DistributionMap } from "./distribution-map";
 import { TransferQueue } from "./transfer-queue";
 import { RecommendationCards } from "./recommendation-cards";
+import { AnimatedNumber } from "./animated-number";
 const dates = (value: string | null | undefined) =>
-  value ? value.replace("T", " ").replace("Z", "") + " UTC" : "Não registrado";
+  value && Number.isFinite(Date.parse(value))
+    ? new Date(value).toLocaleString("pt-BR", {
+        timeZone: "America/Sao_Paulo",
+        dateStyle: "short",
+        timeStyle: "short",
+      })
+    : "Não registrado";
 function initialView(role: Role, mode: string, view?: string): DashboardView {
   return role === "funcionario"
     ? "requisicoes"
@@ -69,12 +76,13 @@ export function OperationsPanel({
   }
   const urlParams = useSearchParams(),
     jamesQuery =
-      planning || urlParams.get("james") === "1" ? urlParams.toString() : "";
+      planning || mode === "dashboard" || urlParams.get("james") === "1" ? urlParams.toString() : "";
   const incoming = new URLSearchParams(jamesQuery);
   const jamesFilters = Object.fromEntries(
     [...incoming].filter(([k]) =>
       [
         "dashboard",
+        "metric",
         "from",
         "to",
         "block",
@@ -103,6 +111,8 @@ export function OperationsPanel({
     ),
     [report, setReport] = useState<DashboardReport | null>(null),
     [loading, setLoading] = useState(true),
+    [refreshing, setRefreshing] = useState(false),
+    [requiresLogin, setRequiresLogin] = useState(false),
     [error, setError] = useState(""),
     [revision, setRevision] = useState(0),
     [detailOpen, setDetailOpen] = useState(false),
@@ -111,18 +121,25 @@ export function OperationsPanel({
     [busy, setBusy] = useState(false),
     [exporting, setExporting] = useState(false);
   const resolve = useRef<((value: boolean) => void) | null>(null);
+  const fetching = useRef(false);
   useEffect(() => {
-    const refresh = () => setRevision((v) => v + 1);
+    const refresh = () => {
+      if (fetching.current || document.hidden || !navigator.onLine) return;
+      setRefreshing(true);
+      setRevision((v) => v + 1);
+    };
     window.addEventListener("marcon:workspace-updated", refresh);
     const onVisibility = () => {
       if (!document.hidden) refresh();
     };
     const timer = window.setInterval(() => {
       if (!document.hidden) refresh();
-    }, 30_000);
+    }, 5_000);
+    window.addEventListener("online", refresh);
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
       window.clearInterval(timer);
+      window.removeEventListener("online", refresh);
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("marcon:workspace-updated", refresh);
     };
@@ -147,6 +164,14 @@ export function OperationsPanel({
   ) as DashboardView;
   useEffect(() => {
     const c = new AbortController();
+    fetching.current = true;
+    const timeout = window.setTimeout(() => {
+      c.abort();
+      fetching.current = false;
+      setRefreshing(false);
+      setLoading(false);
+      setError("A atualização demorou mais que o esperado. Tente novamente.");
+    }, 15_000);
     const params = new URLSearchParams(query);
     if (planning) {
       params.delete("dashboard");
@@ -155,6 +180,8 @@ export function OperationsPanel({
     fetch("/api/operations?" + params, { signal: c.signal, cache: "no-store" })
       .then(async (r) => {
         const body = await r.json();
+        if (c.signal.aborted) return;
+        setRequiresLogin(r.status === 401);
         if (!r.ok) throw Error(body.error || "Falha ao carregar indicadores.");
         setReport(body);
         setLoading(false);
@@ -165,8 +192,19 @@ export function OperationsPanel({
           setError(e.message);
           setLoading(false);
         }
+      })
+      .finally(() => {
+        window.clearTimeout(timeout);
+        if (!c.signal.aborted) {
+          fetching.current = false;
+          setRefreshing(false);
+        }
       });
-    return () => c.abort();
+    return () => {
+      window.clearTimeout(timeout);
+      c.abort();
+      fetching.current = false;
+    };
   }, [query, revision, planning]);
   useEffect(
     () => () => {
@@ -184,7 +222,7 @@ export function OperationsPanel({
     setRevision((n) => n + 1);
   }
   function reload() {
-    setLoading(true);
+    setRefreshing(true);
     setRevision((n) => n + 1);
   }
   function confirm(message: string) {
@@ -339,7 +377,7 @@ export function OperationsPanel({
   );
   return (
     <div className="dashboard-suite">
-      {!planning && (
+      {!planning && mode !== "dashboard" && (
         <nav className="dashboard-tabs" aria-label="Dashboards">
           {views.map((v) => (
             <button
@@ -387,9 +425,14 @@ export function OperationsPanel({
                 ? "Revise compras por consumo efetivamente baixado, mínimos, prazo e entradas confirmadas."
                 : planning === "distribution"
                   ? "Aproxime os materiais dos blocos que os consomem, usando caminhos do mapa publicado. Confirme toda transferência."
-                  : "Confira o período, compare os indicadores e abra os registros."}
+                  : "Veja o que precisa de atenção e acompanhe seus materiais."}
             </p>
-            <p>Escopo: {report?.scope ?? "Validando acesso"} · Fonte: Neon</p>
+            <p>
+              {report?.scope ??
+                (error
+                  ? "Dados temporariamente indisponíveis"
+                  : "Carregando sua visão geral…")}
+            </p>
           </div>
           <details
             className="dashboard-popover"
@@ -531,23 +574,79 @@ export function OperationsPanel({
               </>
             )}
             <button className="button primary">Aplicar filtros</button>
+            <button
+              type="button"
+              className="button secondary"
+              onClick={() => {
+                setSelected(null);
+                update({
+                  from: "",
+                  to: "",
+                  block: "",
+                  code: "",
+                  part: "",
+                  sector: "",
+                  requester: "",
+                  warehouse: "",
+                  status: "",
+                  priority: "",
+                  page: "1",
+                });
+              }}
+            >
+              Limpar filtros
+            </button>
           </form>
         </details>
-        {report && !loading && !planning && (
-          <DashboardCharts report={report} />
-        )}
         {error && (
           <div role="alert">
             <p>{error}</p>
-            <button className="button secondary" onClick={reload}>
-              Tentar novamente
-            </button>
+            {report && (
+              <p>Os últimos dados carregados permanecem disponíveis.</p>
+            )}
+            {requiresLogin ? (
+              <a className="button secondary" href="/login">
+                Entrar novamente
+              </a>
+            ) : (
+              <button className="button secondary" onClick={reload}>
+                Tentar novamente
+              </button>
+            )}
           </div>
         )}
         {loading && <p role="status">Carregando indicadores e registros…</p>}
         {exporting && <p role="status">Gerando relatório…</p>}
         {report && !loading && (
           <>
+            <div
+              className="dashboard-live-bar"
+              aria-label="Atualização dos dados"
+            >
+              <span
+                className={
+                  error
+                    ? "dashboard-live-state unavailable"
+                    : "dashboard-live-state"
+                }
+              >
+                <i aria-hidden="true" />
+                {error
+                  ? "Atualização indisponível"
+                  : refreshing
+                    ? "Atualizando dados…"
+                    : "Dados conectados"}
+              </span>
+              <span>Atualização automática a cada 5 segundos</span>
+              <button
+                type="button"
+                className="button secondary"
+                disabled={refreshing}
+                onClick={reload}
+              >
+                Atualizar agora
+              </button>
+            </div>
             <p className="dashboard-context">
               Período: {report.methodology.period} · Escopo: {report.scope} ·
               Atualização: {dates(report.generatedAt)}
@@ -564,34 +663,37 @@ export function OperationsPanel({
                     >
                       <span>{m.label}</span>
                       <strong>
-                        {m.breakdown.length
-                          ? m.breakdown
-                              .map(
-                                (b) =>
-                                  `${b.quantity.toLocaleString("pt-BR")} ${b.unit}`,
-                              )
-                              .join(" · ")
-                          : m.value === null
-                            ? "Sem dados"
-                            : Number(m.value.toFixed(2)).toLocaleString(
-                                "pt-BR",
-                              )}
+                        {m.breakdown.length ? (
+                          m.breakdown
+                            .map(
+                              (b) =>
+                                `${b.quantity.toLocaleString("pt-BR")} ${b.unit}`,
+                            )
+                            .join(" · ")
+                        ) : m.value === null ? (
+                          "Sem dados"
+                        ) : (
+                          <AnimatedNumber
+                            value={m.value}
+                            decimals={m.id === "delivery" ? 2 : 0}
+                          />
+                        )}
                       </strong>
                       <small>{m.unit}</small>
                     </button>
                     <details className="dashboard-definition">
                       <summary aria-label={"Definição de " + m.label}>
-                        Definição
+                        Sobre este indicador
                       </summary>
                       <p role="tooltip">{m.definition}</p>
+                      <small>
+                        {m.period}
+                        <br />
+                        {m.scope}
+                        <br />
+                        Atualizado: {dates(m.updatedAt)}
+                      </small>
                     </details>
-                    <small>
-                      {m.period}
-                      <br />
-                      {m.scope}
-                      <br />
-                      Atualizado: {dates(m.updatedAt)}
-                    </small>
                   </article>
                 ))}
               </div>
@@ -599,6 +701,14 @@ export function OperationsPanel({
           </>
         )}
       </section>
+      {report && !loading && !planning && (
+        <DashboardCharts
+          report={report}
+          onWarehouse={(warehouse) => update({ warehouse, page: "1" })}
+          onItem={(code) => update({ code, page: "1" })}
+          onMetric={openMetric}
+        />
+      )}
       {report && !loading && (
         <>
           {planning && (
@@ -634,13 +744,8 @@ export function OperationsPanel({
             />
           )}
           {view === "geral" && (
-            <section className="panel ops-panel">
-              <div className="panel-head">
-                <div>
-                  <h2>Qualidade dos dados</h2>
-                  <p>Condições que limitam os indicadores e recomendações.</p>
-                </div>
-              </div>
+            <details className="panel ops-panel dashboard-quality">
+              <summary>Sobre os dados e recomendações</summary>
               {report.quality.map((q) => (
                 <details key={q.label}>
                   <summary>
@@ -661,7 +766,7 @@ export function OperationsPanel({
                 Prazo de atendimento não cadastrado; a fila usa urgência e
                 antiguidade, sem SLA presumido.
               </p>
-            </section>
+            </details>
           )}
           {["requisicoes", "bloco"].includes(view) && (
             <section className="panel ops-panel">

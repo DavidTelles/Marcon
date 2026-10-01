@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { BrandLogo } from "@/app/components/brand-logo";
 import { useDemoStore } from "./demo-store";
@@ -21,6 +21,7 @@ import { StaffCreateScreen } from "./screens/staff-create-screen";
 import { StockScreen } from "./screens/stock-screen";
 import { ReturnsScreen } from "./screens/returns-screen";
 import { DashboardScreen } from "./screens/dashboard-screen";
+import dashboardStyles from "./dashboard.module.css";
 import { WarehouseDashboard } from "./screens/warehouse-dashboard";
 import { RequestsScreen } from "./screens/requests-screen";
 import { type Request, type Part } from "@/lib/demo-data";
@@ -134,6 +135,11 @@ export default function Workspace({
   dashboardView?: string;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const selectedDashboard = searchParams.get("dashboard") ??
+    (dashboardView === "block" || role === "lider" ? "bloco" :
+      ["stock", "warehouse", "parts"].includes(dashboardView ?? "") ? "estoque" :
+      dashboardView === "sector" ? "requisicoes" : "geral");
   const employeeName = useEmployeeName();
   const employeeBlock = useEmployeeBlock();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -231,7 +237,7 @@ export default function Workspace({
       if (event.key === "Escape") setDrawerOpen(false);
       if (event.key !== "Tab" || !sidebar.current) return;
       const focusable = [
-        ...sidebar.current.querySelectorAll<HTMLElement>("button"),
+        ...sidebar.current.querySelectorAll<HTMLElement>("button, a[href]"),
       ];
       if (event.shiftKey && document.activeElement === focusable[0]) {
         event.preventDefault();
@@ -439,7 +445,7 @@ export default function Workspace({
     );
   }
   return (
-    <div className="shell">
+    <div className={`shell ${page === "dashboard" ? dashboardStyles.dashboard : ""}`}>
       <a className="workspace-skip" href="#workspace-content">
         Ir para o conteúdo
       </a>
@@ -471,17 +477,34 @@ export default function Workspace({
         <p className="nav-caption">ESPAÇO DE TRABALHO</p>
         <nav aria-label="Navegação principal">
           {current.pages.map((item) => (
+            <div key={item.id}>
             <button
-              key={item.id}
               className={"nav-link " + (active.id === item.id ? "active" : "")}
               onClick={() => navigate(item.id)}
               aria-current={active.id === item.id ? "page" : undefined}
+              aria-expanded={item.id === "dashboard" ? page === "dashboard" : undefined}
+              aria-controls={item.id === "dashboard" ? "dashboard-submenu" : undefined}
             >
               <span aria-hidden="true">
                 <NavIcon page={item.id} />
               </span>
               {item.label}
             </button>
+            {item.id === "dashboard" && page === "dashboard" && (
+              <nav id="dashboard-submenu" className={dashboardStyles.submenu} aria-label="Visões da dashboard">
+                {[["geral", "Geral"], ["bloco", "Por bloco"], ["estoque", "Estoque"], ["requisicoes", "Requisições"]]
+                  .filter(([view]) => role !== "lider" || ["bloco", "requisicoes"].includes(view))
+                  .map(([view, label]) => (
+                  <Link key={view}
+                    href={`${pathFor(role, "dashboard")}?dashboard=${view}&metric=${view === "estoque" ? "stock" : "requests"}`}
+                    aria-current={selectedDashboard === view ? "page" : undefined}
+                    onClick={() => setDrawerOpen(false)}>
+                    {label}
+                  </Link>
+                ))}
+              </nav>
+            )}
+            </div>
           ))}
         </nav>
         <div className="sidebar-bottom">
@@ -629,7 +652,7 @@ export default function Workspace({
               "solicitacoes",
             ].includes(page) && (
               <OperationsPanel
-                key={page + dashboardView + routePart}
+                key={page + dashboardView + routePart + (page === "dashboard" ? selectedDashboard : "")}
                 role={role}
                 mode={page}
                 dashboardView={dashboardView}

@@ -16,6 +16,7 @@ import { heading, badge } from "../ui";
 import { useDemoStore } from "../demo-store";
 import { WAREHOUSES, balanceOf } from "@/lib/inventory";
 import { InsightChart } from "../operations/insight-chart";
+import { ActivityTrend } from "../operations/activity-trend";
 
 type DetailKind =
   | "entries"
@@ -237,7 +238,6 @@ export function WarehouseDashboard({
         "Dashboard do almoxarifado",
         "Entradas, saídas, peças, estoque e requisições em uma visão filtrável.",
       )}
-      <InsightChart title="Fluxo de materiais" description="Compare as unidades recebidas e retiradas no período filtrado." rows={[{ label: "Entradas", value: received }, { label: "Saídas", value: dispatched }]} unit="unidades" />
       <div className="dashboard-actions">
         <span className="demo-label">
           {persistent
@@ -256,10 +256,18 @@ export function WarehouseDashboard({
           <FileText size={16} aria-hidden="true" /> PDF / imprimir
         </button>
       </div>
-      <section
+      <details
         className="panel warehouse-filters"
         aria-label="Filtros do dashboard"
       >
+        <summary>
+          Filtrar por local, peça ou período
+          {Object.entries(filters).some(
+            ([key, value]) => value !== defaultFilters[key as keyof Filters],
+          )
+            ? " · Filtros ativos"
+            : ""}
+        </summary>
         <div className="panel-head">
           <div>
             <h2>Filtros de análise</h2>
@@ -356,7 +364,7 @@ export function WarehouseDashboard({
             </select>
           </label>
         </div>
-      </section>
+      </details>
       <div className="stats warehouse-stats">
         <button
           type="button"
@@ -416,6 +424,24 @@ export function WarehouseDashboard({
             de {relevantStock.length} peças no recorte · Ver detalhes
           </small>
         </button>
+      </div>
+      <div className="dashboard-analytics">
+        <ActivityTrend
+          title="Evolução das retiradas"
+          records={filteredMovements
+            .filter((item) => (item.kind ?? item.type) === "saida")
+            .map((item) => ({ date: item.date, value: item.quantity }))}
+          unit="unidades"
+        />
+        <InsightChart
+          title="Fluxo de materiais"
+          description="Unidades recebidas e retiradas no período filtrado."
+          rows={[
+            { label: "Entradas", value: received, color: "#218238" },
+            { label: "Saídas", value: dispatched, color: "#1d419c" },
+          ]}
+          unit="unidades"
+        />
       </div>
       <section className="panel visual-panel">
         <div className="panel-head">

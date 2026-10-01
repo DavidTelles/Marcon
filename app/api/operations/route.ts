@@ -3,6 +3,7 @@ import { currentUser } from "@/lib/auth";
 import { databaseEnabled } from "@/lib/db";
 import { ActionError, demand } from "@/lib/permissions";
 import { operationsReport } from "@/lib/operations-report";
+import { BackendError } from "@/lib/backend-client";
 export const runtime = "nodejs";
 export async function GET(request: NextRequest) {
   if (!databaseEnabled())
@@ -77,7 +78,14 @@ export async function GET(request: NextRequest) {
   } catch (e) {
     if (e instanceof ActionError)
       return NextResponse.json({ error: e.message }, { status: e.status });
-    console.error("[operations] failed");
+    if (e instanceof BackendError)
+      return NextResponse.json({ error: e.message }, { status: e.status });
+    const cause = e instanceof Error && e.cause instanceof Error ? e.cause : e;
+    console.error("[operations] failed", {
+      name: cause instanceof Error ? cause.name : "Error",
+      code: (cause as { code?: string })?.code,
+      message: cause instanceof Error ? cause.message : "Unknown error",
+    });
     return NextResponse.json(
       { error: "Não foi possível gerar o relatório." },
       { status: 503 },

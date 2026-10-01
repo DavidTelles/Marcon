@@ -13,6 +13,7 @@ import { heading, badge } from "../ui";
 import { useDemoStore } from "../demo-store";
 import { WAREHOUSES, balanceOf } from "@/lib/inventory";
 import { InsightChart } from "../operations/insight-chart";
+import { ActivityTrend } from "../operations/activity-trend";
 export function DashboardScreen({
   role,
   current,
@@ -35,11 +36,32 @@ export function DashboardScreen({
   NavIcon: React.ComponentType<{ page: Page }>;
 }) {
   const { balances } = useDemoStore();
-  const [chart, setChart] = useState<"status" | "blocos" | "estoque">("status");
-  const statusRows = ["Pendente", "Em análise", "Aprovada", "Entregue", "Cancelada", "Cancelamento solicitado"].map((name) => ({ name, value: roleRequests.filter((item) => item.status === name).length }));
-  const blockRows = ["Bloco A", "Bloco B", "Bloco C", "Bloco D"].map((name) => ({ name, value: roleRequests.filter((item) => item.block === name).length }));
-  const warehouseRows = WAREHOUSES.map((name) => ({ name, value: stock.reduce((sum, part) => sum + balanceOf(balances, part.code, name), 0) }));
-  const chartRows = chart === "status" ? statusRows : chart === "blocos" ? blockRows : warehouseRows;
+  const [chart, setChart] = useState<"blocos" | "estoque">("blocos");
+  const statusRows = [
+    "Pendente",
+    "Em análise",
+    "Aprovada",
+    "Entregue",
+    "Cancelada",
+    "Cancelamento solicitado",
+  ].map((name) => ({
+    name,
+    value: roleRequests.filter((item) => item.status === name).length,
+  }));
+  const blockRows = ["Bloco A", "Bloco B", "Bloco C", "Bloco D"].map(
+    (name) => ({
+      name,
+      value: roleRequests.filter((item) => item.block === name).length,
+    }),
+  );
+  const warehouseRows = WAREHOUSES.map((name) => ({
+    name,
+    value: stock.reduce(
+      (sum, part) => sum + balanceOf(balances, part.code, name),
+      0,
+    ),
+  }));
+  const chartRows = chart === "blocos" ? blockRows : warehouseRows;
   const chartMax = Math.max(1, ...chartRows.map((row) => row.value));
   const dashboardTitle: Record<string, string> = {
     warehouse: "Almoxarifado",
@@ -59,22 +81,13 @@ export function DashboardScreen({
         )
       : undefined;
   return (
-    <>
+    <div className="dashboard-home">
       {heading(
         "VISÃO GERAL",
         dashboardView
           ? "Dashboard · " + (dashboardTitle[dashboardView] ?? "Visão geral")
-          : "Olá, " + current.name.toLowerCase() + "!",
+          : "Tudo em um só lugar",
         "Veja o que precisa da sua atenção hoje.",
-      )}
-      {role === "admin" && (
-        <div className="dashboard-subnav">
-          <Link href="/admin/dashboard">Geral</Link>
-          <Link href="/admin/dashboard/warehouse">Almoxarifado</Link>
-          <Link href="/admin/dashboard/stock">Estoque</Link>
-          <Link href="/admin/dashboard/block">Blocos</Link>
-          <Link href="/admin/dashboard/sector/metalurgia">Setor</Link>
-        </div>
       )}
       {role === "admin" && dashboardView && (
         <section className="panel dashboard-focus">
@@ -139,7 +152,28 @@ export function DashboardScreen({
           </div>
         </section>
       )}
-      <InsightChart title="Como estão as requisições" description="Cada cor representa uma etapa. O número no centro é o total neste painel." rows={statusRows.map((row) => ({ label: row.name, value: row.value }))} unit="requisições" />
+      <div className="dashboard-next-step">
+        <span className="activity-icon">
+          <Clock3 size={22} aria-hidden="true" />
+        </span>
+        <div>
+          <strong>
+            {roleRequests.some((item) => item.status === "Pendente")
+              ? "Há solicitações aguardando análise"
+              : "Suas solicitações estão em dia"}
+          </strong>
+          <p>Acompanhe os pedidos e veja o que precisa de atenção.</p>
+        </div>
+        <button
+          type="button"
+          className="button primary"
+          onClick={() =>
+            navigate(role === "lider" ? "solicitacoes" : "requisicoes")
+          }
+        >
+          Ver solicitações <ArrowRight size={18} aria-hidden="true" />
+        </button>
+      </div>
       <div className="stats">
         <div className="stat">
           <span className="stat-icon blue">
@@ -180,14 +214,83 @@ export function DashboardScreen({
           </div>
         )}
       </div>
+      <div className="dashboard-analytics">
+        <ActivityTrend
+          title="Evolução das solicitações"
+          records={roleRequests.map((item) => ({ date: item.date, value: 1 }))}
+          unit="solicitações"
+        />
+        <InsightChart
+          title="Situação dos pedidos"
+          description="Quantidade de pedidos em cada etapa."
+          rows={statusRows
+            .filter((row) => row.value > 0)
+            .map((row) => ({
+              label: row.name,
+              value: row.value,
+              color: (
+                {
+                  Pendente: "#b7791f",
+                  "Em análise": "#3a71e6",
+                  Aprovada: "#1d419c",
+                  Entregue: "#218238",
+                  Cancelada: "#7b879a",
+                  "Cancelamento solicitado": "#b54d43",
+                } as Record<string, string>
+              )[row.name],
+            }))}
+          unit="pedidos"
+        />
+      </div>
       <div className="dashboard-grid">
         <section className="panel visual-panel">
-          <div className="panel-head"><div><h2>Entenda os números</h2><p>Selecione uma visão para comparar os dados.</p></div></div>
-          <div className="dashboard-subnav" role="tablist" aria-label="Visualização dos dados">
-            {([["status", "Etapas"], ["blocos", "Blocos"], ["estoque", "Estoque"]] as const).map(([value, label]) => <button type="button" role="tab" aria-selected={chart === value} className={chart === value ? "active" : ""} key={value} onClick={() => setChart(value)}>{label}</button>)}
+          <div className="panel-head">
+            <div>
+              <h2>Entenda os números</h2>
+              <p>Selecione uma visão para comparar os dados.</p>
+            </div>
           </div>
-          <div className="visual-bars">{chartRows.map((row) => <div className="visual-bar" key={row.name}><span>{row.name}</span><div className="metric-track"><i className={row.name === "Pendente" ? "exit" : "entry"} style={{ width: `${row.value / chartMax * 100}%` }} /></div><strong>{row.value}</strong></div>)}</div>
-          <small>{chart === "estoque" ? "Unidades disponíveis em cada almoxarifado" : "Quantidade de requisições em cada grupo"}</small>
+          <div
+            className="dashboard-subnav"
+            role="group"
+            aria-label="Visualização dos dados"
+          >
+            {(
+              [
+                ["blocos", "Blocos"],
+                ["estoque", "Estoque"],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                type="button"
+                aria-pressed={chart === value}
+                className={chart === value ? "active" : ""}
+                key={value}
+                onClick={() => setChart(value)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="visual-bars">
+            {chartRows.map((row) => (
+              <div className="visual-bar" key={row.name}>
+                <span>{row.name}</span>
+                <div className="metric-track">
+                  <i
+                    className={row.name === "Pendente" ? "exit" : "entry"}
+                    style={{ width: `${(row.value / chartMax) * 100}%` }}
+                  />
+                </div>
+                <strong>{row.value}</strong>
+              </div>
+            ))}
+          </div>
+          <small>
+            {chart === "estoque"
+              ? "Unidades disponíveis em cada almoxarifado"
+              : "Quantidade de requisições em cada grupo"}
+          </small>
         </section>
         <section className="panel">
           <div className="panel-head">
@@ -218,6 +321,9 @@ export function DashboardScreen({
               {badge(item.status)}
             </div>
           ))}
+          {roleRequests.length === 0 && (
+            <p className="dashboard-empty">Nenhuma solicitação por enquanto.</p>
+          )}
         </section>
         <section className="panel">
           <div className="panel-head">
@@ -244,15 +350,6 @@ export function DashboardScreen({
             ))}
         </section>
       </div>
-      {role === "lider" && (
-        <div className="info">
-          <strong>Avisos por e-mail</strong>
-          <p>
-            O fluxo prevê avisos para novas requisições e anormalidades. O envio
-            depende da integração com o backend.
-          </p>
-        </div>
-      )}
-    </>
+    </div>
   );
 }

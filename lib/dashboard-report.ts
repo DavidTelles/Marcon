@@ -221,7 +221,7 @@ export async function dashboardReport(
   if (part) {
     if (part.length > 128) throw new ActionError("Item inválido.");
     const [parts] = await getPool().execute<RowDataPacket[]>(
-      "SELECT code FROM parts WHERE code=? OR CAST(id AS CHAR)=? LIMIT 1",
+      "SELECT code FROM parts WHERE code=? OR CAST(id AS TEXT)=? LIMIT 1",
       [part, part],
     );
     if (!parts.length) throw new ActionError("Item não encontrado.", 404);
@@ -257,7 +257,7 @@ export async function dashboardReport(
     }),
     w = requestWhere(user, f);
   const [requestCounts] = await pool.execute<RowDataPacket[]>(
-    `SELECT COUNT(*) requests,COALESCE(SUM(${open}),0) pending,COALESCE(SUM(${open} AND r.priority='Urgente'),0) urgent,COALESCE(SUM(r.status<>'Cancelada' AND (r.priority='Urgente' OR COALESCE(r.justification,'')<>'')),0) anomalies ${requestJoins} WHERE ${w.sql}`,
+    `SELECT COUNT(*) requests,COALESCE(SUM(CASE WHEN ${open} THEN 1 ELSE 0 END),0) pending,COALESCE(SUM(CASE WHEN ${open} AND r.priority='Urgente' THEN 1 ELSE 0 END),0) urgent,COALESCE(SUM(CASE WHEN r.status<>'Cancelada' AND (r.priority='Urgente' OR COALESCE(r.justification,'')<>'') THEN 1 ELSE 0 END),0) anomalies ${requestJoins} WHERE ${w.sql}`,
     w.params,
   );
   const deliveryWhere = requestWhere(user, f, false);
@@ -563,6 +563,24 @@ export async function dashboardReport(
       ? rows
       : rows.slice((f.page - 1) * f.pageSize, f.page * f.pageSize),
     rowTotal: rows.length,
+    stockByItem: rows.map(({ code, item, warehouse, unit, available }) => ({
+      code, item, warehouse, unit, available,
+    })),
+    stockByWarehouse: [
+      ...new Set(rows.map((row) => JSON.stringify([row.warehouse, row.unit]))),
+    ].map((key) => {
+      const [warehouse, unit] = JSON.parse(key) as [string, string];
+      const locations = rows.filter(
+        (row) => row.warehouse === warehouse && row.unit === unit,
+      );
+      return {
+        warehouse,
+        unit,
+        available: locations.reduce((sum, row) => sum + row.available, 0),
+        reserved: locations.reduce((sum, row) => sum + row.reserved, 0),
+        physical: locations.reduce((sum, row) => sum + row.physical, 0),
+      };
+    }),
     daily: daily.map((r) => ({
       date: String(r.date),
       unit: String(r.unit),

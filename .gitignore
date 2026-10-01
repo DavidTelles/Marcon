@@ -18,3 +18,9 @@ build/
 next-env.d.ts
 .legacy/
 /node_modules/
+/.npm-cache/
+/.validation/
+/.next-dashboard-test/
+/.next-dashboard-build/
+/.next-dashboard-real/
+/test-results-live-dashboard/
