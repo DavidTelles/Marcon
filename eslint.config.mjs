@@ -14,7 +14,7 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
     "test-results/**",
-    "test-results-mysql/**",
+    "test-results-neon/**",
     "playwright-report/**",
   ]),
 ]);

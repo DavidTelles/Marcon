@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { PoolConnection } from "mysql2/promise";
+import type { PoolConnection } from "./db-types";
 import type { Account } from "./accounts";
 import { transaction } from "./db";
 import { ActionError, demand, integer, reason, text } from "./permissions";

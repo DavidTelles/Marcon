@@ -161,14 +161,14 @@ export default function LoginForm({ children, demoMode = true }: { children: Rea
             <button className={styles.rfidButton} type="button" disabled={demoMode || isBusy || !identity.trim()} onClick={() => { setPassword(""); setCameraActive(true); }} aria-describedby="camera-access-note">
               <ScanFace size={20} aria-hidden="true" /><span>Entrar com reconhecimento facial</span>
             </button>
-            <p id="camera-access-note" className={styles.rfidNote}>{demoMode ? "Acesso facial disponível com MySQL configurado." : "Informe e-mail ou matrícula. Cadastre seu rosto no perfil após entrar com senha."}</p>
+            <p id="camera-access-note" className={styles.rfidNote}>{demoMode ? "Acesso facial disponível com Neon configurado." : "Informe e-mail ou matrícula. Cadastre seu rosto no perfil após entrar com senha."}</p>
             <button className={styles.rfidButton} type="button" disabled={demoMode || isBusy || !identity.trim()}
               onClick={() => setFaceActive(true)} aria-describedby="face-access-note">
               <ScanFace size={20} aria-hidden="true" />
               <span>Entrar com passkey</span>
             </button>
             <p id="face-access-note" className={styles.rfidNote}>
-              {demoMode ? "Disponível com MySQL configurado." : "Informe seu e-mail ou matrícula. Cadastre sua passkey no perfil após entrar com senha."}
+              {demoMode ? "Disponível com Neon configurado." : "Informe seu e-mail ou matrícula. Cadastre sua passkey no perfil após entrar com senha."}
             </p>
             {demoMode && <>
               <button

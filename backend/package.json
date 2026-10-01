@@ -1,0 +1,35 @@
+{
+  "name": "marcon-backend",
+  "version": "2.0.0",
+  "description": "API REST integrada MARCON — banco unificado, workspace, requisições, estoque, FaceId e JWT",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "migrate": "node ../scripts/db-migrate.mjs",
+    "seed": "node ../scripts/db-seed.mjs",
+    "test": "jest --runInBand --forceExit"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.1.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "drizzle-orm": "^0.45.3",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.5.0",
+    "helmet": "^8.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "pdfkit": "^0.16.0",
+    "swagger-ui-express": "^5.0.1",
+    "ws": "^8.22.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "nodemon": "^3.1.9",
+    "supertest": "^7.0.0"
+  }
+}

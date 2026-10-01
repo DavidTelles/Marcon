@@ -1,4 +1,4 @@
-﻿// Sem API/documentação/credenciais no projeto. Não confundir o nome informado
+// Sem API/documentação/credenciais no projeto. Não confundir o nome informado
 // "TOTUS" com TOTVS sem confirmação do sistema efetivamente usado pela MARCON.
 export type CorporateStockEvent = {
   idempotencyKey: string;
@@ -24,7 +24,7 @@ export const corporateAdapter: CorporateAdapter = {
   },
 };
 export const integrationStatus = {
-  officialStockSource: "MySQL local MARCON",
+  officialStockSource: "Neon local MARCON",
   corporate: {
     active: false,
     name: "TOTUS — nome não confirmado",

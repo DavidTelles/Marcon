@@ -5,7 +5,7 @@ const baseURL = `http://localhost:${port}`;
 
 export default defineConfig({
   testDir: "./tests",
-  testIgnore: "**/mysql/**",
+  testIgnore: "**/neon/**",
   fullyParallel: false,
   workers: 1,
   reporter: "list",
@@ -18,7 +18,7 @@ export default defineConfig({
   webServer: {
     command: `npx next ${process.env.PLAYWRIGHT_PRODUCTION ? "start" : "dev"} -p ${port}`,
     url: `${baseURL}/login`,
-    env: { DATABASE_URL: "", DB_NAME: "", DB_USER: "" },
+    env: { DATABASE_URL: "" },
     reuseExistingServer: false,
     timeout: 120_000,
   },

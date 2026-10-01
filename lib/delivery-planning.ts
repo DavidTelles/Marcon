@@ -1,4 +1,4 @@
-import type { PoolConnection } from "mysql2/promise";
+import type { PoolConnection } from "./db-types";
 import type { Account } from "./accounts";
 import { transaction, getPool } from "./db";
 import { ActionError, demand, integer, text } from "./permissions";
@@ -9,7 +9,7 @@ import {
   type FacilityGraph,
   type Path,
 } from "./routing";
-import type { ResultSetHeader, RowDataPacket } from "mysql2";
+import type { ResultSetHeader, RowDataPacket } from "./db-types";
 
 export type DeliveryPlan = {
   route: Path | null;

@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
-import type { RowDataPacket } from "mysql2";
+import type { RowDataPacket } from "@/lib/db-types";
 import { cookieName, createSession, currentUser } from "@/lib/auth";
 import { databaseEnabled, getPool, transaction } from "@/lib/db";
 import { verifyPassword } from "@/lib/password";
@@ -100,7 +100,7 @@ async function readBody(
 export async function GET() {
   try {
     if (!databaseEnabled())
-      return fail("Configure o MySQL para usar o acesso facial.", 503);
+      return fail("Configure o Neon para usar o acesso facial.", 503);
     const user = await currentUser();
     if (!user) return fail("Faça login para consultar seu cadastro.", 401);
     const [rows] = await getPool().execute<RowDataPacket[]>(
@@ -121,7 +121,7 @@ export async function POST(request: NextRequest) {
     if (request.headers.get("origin") !== request.nextUrl.origin)
       return fail("Origem não autorizada.", 403);
     if (!databaseEnabled())
-      return fail("Configure o MySQL para usar o acesso facial.", 503);
+      return fail("Configure o Neon para usar o acesso facial.", 503);
     const body = await readBody(request);
     if (!body) return fail("Dados inválidos ou captura muito grande.");
     if (body.action === "start" || body.action === "delete") {

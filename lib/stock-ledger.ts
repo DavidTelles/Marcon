@@ -1,5 +1,5 @@
-﻿import type { PoolConnection } from "mysql2/promise";
-import type { RowDataPacket } from "mysql2";
+﻿import type { PoolConnection } from "./db-types";
+import type { RowDataPacket } from "./db-types";
 import { ActionError, text } from "./permissions";
 export type Row = RowDataPacket & Record<string, unknown>;
 export async function rows(

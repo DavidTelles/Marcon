@@ -125,7 +125,7 @@ export function DemoProvider({
       return;
     }
     if (!response.ok)
-      throw new Error("Não foi possível carregar os dados do MySQL.");
+      throw new Error("Não foi possível carregar os dados do Neon.");
     const data: WorkspaceSnapshot = await response.json();
     setRequests(data.requests);
     setStock(data.stock);

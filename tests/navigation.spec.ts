@@ -79,7 +79,7 @@ test("solicitações do líder não ampliam a página em tablet", async ({ page,
   }
 });
 
-test("perfil exige login e informa quando o MySQL não está configurado", async ({ page, baseURL }) => {
+test("perfil exige login e informa quando o Neon não está configurado", async ({ page, baseURL }) => {
   await page.goto("/profile");
   await expect(page).toHaveURL("/login");
   const login = await page.request.post("/api/login", {

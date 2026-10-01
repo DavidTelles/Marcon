@@ -4,7 +4,7 @@ import { demoUsers } from "./users";
 import { databaseEnabled } from "./db";
 import { accountByIdentity, type Account } from "./accounts";
 if (databaseEnabled() && (!process.env.SESSION_SECRET || process.env.SESSION_SECRET.length < 32 || process.env.SESSION_SECRET.startsWith("troque_"))) {
-  throw new Error("SESSION_SECRET forte (mínimo 32 caracteres) é obrigatória no modo MySQL.");
+  throw new Error("SESSION_SECRET forte (mínimo 32 caracteres) é obrigatória no modo Neon.");
 }
 const globalAuth = globalThis as typeof globalThis & { marconSecret?: string };
 const secret = process.env.SESSION_SECRET || (globalAuth.marconSecret ??= randomBytes(32).toString("hex"));

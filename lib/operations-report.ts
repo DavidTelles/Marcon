@@ -1,7 +1,7 @@
 import type { Account } from "./accounts";
 import { workspaceSnapshot } from "./workspace-db";
 import { getPool } from "./db";
-import type { RowDataPacket } from "mysql2";
+import type { RowDataPacket } from "./db-types";
 import { ActionError, can } from "./permissions";
 import { predict, suggestTransfers, type Forecast } from "./forecast";
 import { graphProblems, type FacilityGraph } from "./routing";
@@ -460,7 +460,7 @@ export async function operationsReport(user: Account, filters: ReportFilter) {
     period: { from, to },
     generatedAt: new Date().toISOString(),
     source:
-      "MySQL local: baixas efetivas kind=saida; devoluções separadas. Previsão usa dias observáveis do período selecionado até hoje; saldos são atuais.",
+      "Neon local: baixas efetivas kind=saida; devoluções separadas. Previsão usa dias observáveis do período selecionado até hoje; saldos são atuais.",
     rows: reportRows,
     transfers,
     incoming: incomingRows,

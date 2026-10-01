@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import type { RowDataPacket } from "mysql2";
+import type { RowDataPacket } from "./db-types";
 import { getPool, transaction } from "./db";
 
 export const challengeCookie = "marcon_passkey_challenge";

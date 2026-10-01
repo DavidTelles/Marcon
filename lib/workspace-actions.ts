@@ -1,4 +1,4 @@
-import type { PoolConnection } from "mysql2/promise";
+import type { PoolConnection } from "./db-types";
 import type { Account } from "./accounts";
 import { ActionError } from "./permissions";
 export { ActionError } from "./permissions";

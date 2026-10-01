@@ -6,6 +6,7 @@ import { accountByIdentity } from "@/lib/accounts";
 import { roleLanding } from "@/lib/workspace-routes";
 import { verifyPassword } from "@/lib/password";
 import { databaseEnabled, getPool, transaction } from "@/lib/db";
+import type { RowDataPacket } from "@/lib/db-types";
 import { clearFailedLogins, loginBlocked, recordFailedLogin } from "@/lib/login-rate";
 import { challengeCookie, consumeChallenge, createChallenge, credentialTransports, credentialsForUser, relyingParty, userIdForIdentity, type CredentialRow } from "@/lib/passkeys";
 
@@ -26,7 +27,7 @@ export async function POST(request: NextRequest) {
 
 async function handlePost(request: NextRequest) {
   if (request.headers.get("origin") !== request.nextUrl.origin) return error("Origem não autorizada.", 403);
-  if (!databaseEnabled()) return error("Configure o MySQL para usar passkeys.", 503);
+  if (!databaseEnabled()) return error("Configure o Neon para usar passkeys.", 503);
   let body: Record<string, unknown>;
   try { body = await request.json(); } catch { return error("Dados inválidos.", 400); }
   if (!body || typeof body !== "object") return error("Dados inválidos.", 400);
@@ -109,7 +110,7 @@ if (body.action === "login-verify") {
     return stored.user_id;
   });
   if (!result) return error("Não foi possível validar a passkey.", 401);
-  const [accountRows] = await getPool().execute<import("mysql2").RowDataPacket[]>("SELECT employee_no FROM users WHERE id = ? AND active = TRUE", [result]);
+  const [accountRows] = await getPool().execute<RowDataPacket[]>("SELECT employee_no FROM users WHERE id = ? AND active = TRUE", [result]);
   const account = accountRows[0] ? await accountByIdentity(accountRows[0].employee_no) : null;
   if (!account) return error("Conta indisponível.", 401);
   await clearFailedLogins(account.account.id);

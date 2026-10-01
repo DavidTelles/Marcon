@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import type { RowDataPacket } from "mysql2";
+import type { RowDataPacket } from "@/lib/db-types";
 import { currentUser } from "@/lib/auth";
 import { databaseEnabled, transaction } from "@/lib/db";
 import { hashPassword, verifyPassword } from "@/lib/password";
@@ -21,7 +21,7 @@ export async function PATCH(request: NextRequest) {
   if (request.headers.get("origin") !== request.nextUrl.origin)
     return NextResponse.json({ error: "Origem não autorizada." }, { status: 403 });
   if (!databaseEnabled())
-    return NextResponse.json({ error: "Configure o MySQL para salvar alterações no perfil." }, { status: 503 });
+    return NextResponse.json({ error: "Configure o Neon para salvar alterações no perfil." }, { status: 503 });
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "Faça login." }, { status: 401 });
   let data: unknown;

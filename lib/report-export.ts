@@ -1,4 +1,4 @@
-﻿import type { operationsReport } from "./operations-report";
+import type { operationsReport } from "./operations-report";
 type Report = Awaited<ReturnType<typeof operationsReport>>;
 const columns = [
   ["code", "Código"],
@@ -130,7 +130,7 @@ export async function exportReport(report: Report, format: "pdf" | "xlsx") {
       );
     });
     page.drawText(
-      "Fonte: baixas efetivas no MySQL. Previsão não garante precisão. Valores internos sem frete/impostos cotados.",
+      "Fonte: baixas efetivas no Neon. Previsão não garante precisão. Valores internos sem frete/impostos cotados.",
       { x: 28, y: 15, size: 8, font },
     );
   }

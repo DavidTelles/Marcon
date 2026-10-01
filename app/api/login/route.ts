@@ -63,11 +63,17 @@ export async function POST(request: NextRequest) {
       setCookies(request, response, createSession(account.account.id, account.passwordHash), session.token);
       return response;
     } catch (error) {
-      if (error instanceof BackendError && error.status === 503)
-        return NextResponse.json({ error: error.message }, { status: 503 });
+      if (!(error instanceof BackendError) || error.status >= 500) {
+        return NextResponse.json(
+          { error: "Não foi possível consultar o backend ou o banco. Verifique a configuração compartilhada e tente novamente." },
+          { status: 503 },
+        );
+      }
+      if (error.status === 429)
+        return NextResponse.json({ error: error.message }, { status: 429 });
       await recordFailedLogin(identity);
-      const status = error instanceof BackendError && error.status === 403 ? 403 : 401;
-      const message = error instanceof BackendError && error.status === 403
+      const status = error.status === 403 ? 403 : 401;
+      const message = error.status === 403
         ? error.message
         : "E-mail, matrícula ou senha incorretos. Tente novamente.";
       return NextResponse.json({ error: message }, { status });
@@ -75,7 +81,7 @@ export async function POST(request: NextRequest) {
   }
 
   const user = demoUsers.find((item) => item.id === identity || item.email === identity);
-  const valid = data.password === "Marcon@123";
+  const valid = data.password === "Marcon@12345";
   if (!user || !valid) {
     return NextResponse.json({ error: "E-mail, matrícula ou senha incorretos. Tente novamente." }, { status: 401 });
   }

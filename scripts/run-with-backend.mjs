@@ -9,10 +9,10 @@ if (mode !== "dev" && mode !== "start") {
 }
 
 const frontend = resolve(import.meta.dirname, "..");
-const backend = resolve(frontend, "api");
+const backend = resolve(frontend, "backend");
 const next = resolve(frontend, "node_modules", "next", "dist", "bin", "next");
 if (!existsSync(resolve(backend, "node_modules", "dotenv", "package.json"))) {
-  console.error("Dependências da API ausentes. Execute npm ci --prefix api antes de iniciar.");
+  console.error("Dependências do backend ausentes. Execute npm ci --prefix backend antes de iniciar.");
   process.exit(1);
 }
 

@@ -11,7 +11,7 @@ export function RecommendationScreen() {
       <section className="panel ops-panel">
         <h2>Planejamento indisponível no modo de demonstração</h2>
         <p role="status">
-          Configure o MySQL e execute as migrações para analisar consumo,
+          Configure o Neon e execute as migrações para analisar consumo,
           solicitar transferências e conferir saída e recebimento. Nenhum saldo
           é movimentado neste modo.
         </p>

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { InspectReturn } from "../operations/inspect-return";
 import { WAREHOUSES } from "@/lib/inventory";
@@ -190,7 +190,7 @@ export function ReturnsScreen({
           <span>Devoluções</span>
           <strong>{returns.length}</strong>
           <small>
-            {persistent ? "Registros do MySQL" : "Registros desta sessão"}
+            {persistent ? "Registros do Neon" : "Registros desta sessão"}
           </small>
         </div>
         <div className="stat">

@@ -1,4 +1,4 @@
-import type { RowDataPacket } from "mysql2";
+import type { RowDataPacket } from "./db-types";
 import { getPool } from "./db";
 
 export type AccountRole = "admin" | "lider" | "almoxarifado" | "funcionario";

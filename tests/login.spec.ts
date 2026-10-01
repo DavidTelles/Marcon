@@ -41,7 +41,7 @@ test("layout remains usable from 320px to 1920px", async ({ page }) => {
 test("passkey exige banco configurado", async ({ page }) => {
   await page.goto("/login");
   await expect(page.getByRole("button", { name: "Entrar com passkey" })).toBeDisabled();
-  await expect(page.getByText("Disponível com MySQL configurado.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Disponível com Neon configurado.", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Entrar com reconhecimento facial", exact: true })).toBeDisabled();
   await expect(page).toHaveURL("/login");
 });

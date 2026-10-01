@@ -13,8 +13,7 @@ import {
 } from "./stock-ledger";
 import { transferAction } from "./transfer-actions";
 import { requestActions, executeRequestAction } from "./request-actions";
-import type { ResultSetHeader } from "mysql2";
-import type { PoolConnection } from "mysql2/promise";
+import type { ResultSetHeader, PoolConnection } from "./db-types";
 export const inventoryActions = new Set([
   ...requestActions,
   "transfer",

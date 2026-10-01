@@ -389,7 +389,7 @@ export function OperationsPanel({
                   ? "Aproxime os materiais dos blocos que os consomem, usando caminhos do mapa publicado. Confirme toda transferência."
                   : "Confira o período, compare os indicadores e abra os registros."}
             </p>
-            <p>Escopo: {report?.scope ?? "Validando acesso"} · Fonte: MySQL</p>
+            <p>Escopo: {report?.scope ?? "Validando acesso"} · Fonte: Neon</p>
           </div>
           <details
             className="dashboard-popover"

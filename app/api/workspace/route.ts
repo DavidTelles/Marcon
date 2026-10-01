@@ -14,7 +14,7 @@ const unavailable = () =>
   NextResponse.json(
     {
       error:
-        "Configure DB_NAME e DB_USER (ou DATABASE_URL) para usar o modo persistente.",
+        "Configure DATABASE_URL do Neon para usar o modo persistente.",
     },
     { status: 503 },
   );
@@ -25,7 +25,7 @@ function failure(error: unknown) {
   return NextResponse.json(
     {
       error:
-        "Não foi possível carregar o estoque. Verifique a API do backend e o MySQL.",
+        "Não foi possível carregar o estoque. Verifique a API do backend e o Neon.",
     },
     { status: 503 },
   );

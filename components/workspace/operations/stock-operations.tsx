@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 import { useRef, useState } from "react";
 import { TransferQueue } from "./transfer-queue";
 import { useDemoStore } from "../demo-store";
@@ -33,7 +33,7 @@ export function StockOperations() {
         supplier: d.get("supplier"),
         reference: d.get("reference"),
       });
-      setMessage("Operação registrada no MySQL.");
+      setMessage("Operação registrada no Neon.");
       requestKey.current = "";
       f.reset();
       setCode("");

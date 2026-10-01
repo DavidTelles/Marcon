@@ -1,5 +1,5 @@
-import type { PoolConnection } from "mysql2/promise";
-import type { ResultSetHeader } from "mysql2";
+import type { PoolConnection } from "./db-types";
+import type { ResultSetHeader } from "./db-types";
 import { ActionError, integer, reason, text } from "./permissions";
 import {
   first,

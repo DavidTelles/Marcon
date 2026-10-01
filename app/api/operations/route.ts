@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { currentUser } from "@/lib/auth";
 import { databaseEnabled } from "@/lib/db";
 import { ActionError, demand } from "@/lib/permissions";
@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 export async function GET(request: NextRequest) {
   if (!databaseEnabled())
     return NextResponse.json(
-      { error: "Planejamento real requer MySQL configurado." },
+      { error: "Planejamento real requer Neon configurado." },
       { status: 503 },
     );
   const user = await currentUser();

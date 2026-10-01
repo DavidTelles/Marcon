@@ -6,7 +6,7 @@ test.beforeEach(async ({ page }) => {
   await page.getByRole("button", { name: "Entrar", exact: true }).click();
   await page.waitForURL(/\/inicio\//);
 });
-test("demonstração não simula transferências sem MySQL", async ({
+test("demonstração não simula transferências sem Neon", async ({
   page,
   baseURL,
 }) => {

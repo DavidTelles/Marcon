@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { RowDataPacket } from "mysql2";
+import type { RowDataPacket } from "./db-types";
 import { getPool, transaction } from "./db";
 
 type Attempt = RowDataPacket & { attempts: number; expired: number; blocked: number };

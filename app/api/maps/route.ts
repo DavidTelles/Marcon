@@ -1,10 +1,10 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import sharp from "sharp";
 import { currentUser } from "@/lib/auth";
 import { databaseEnabled, getPool, transaction } from "@/lib/db";
 import { ActionError, can, demand, integer, text } from "@/lib/permissions";
 import { graphProblems, planStops, type FacilityGraph } from "@/lib/routing";
-import type { RowDataPacket, ResultSetHeader } from "mysql2";
+import type { RowDataPacket, ResultSetHeader } from "@/lib/db-types";
 import { imageObstacles, imageSuggestions } from "@/lib/map-image";
 import { deliveryHistory, planDelivery } from "@/lib/delivery-planning";
 export const runtime = "nodejs";
@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
     if (!user) return json({ error: "Faça login." }, 401);
     if (!can(user.role, "stock"))
       return json({ error: "Acesso ao mapa operacional restrito." }, 403);
-    if (!databaseEnabled()) return json({ error: "Configure o MySQL." }, 503);
+    if (!databaseEnabled()) return json({ error: "Configure o Neon." }, 503);
     if (request.nextUrl.searchParams.has("delivery")) {
       const page = integer(
         Number(request.nextUrl.searchParams.get("page") ?? 1),
@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
     return json(
       {
         error:
-          "Não foi possível carregar o mapa. Verifique o MySQL e as migrações.",
+          "Não foi possível carregar o mapa. Verifique o Neon e as migrações.",
       },
       503,
     );
@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
     return json({ error: "Origem não autorizada." }, 403);
   const user = await currentUser();
   if (!user) return json({ error: "Faça login." }, 401);
-  if (!databaseEnabled()) return json({ error: "Configure o MySQL." }, 503);
+  if (!databaseEnabled()) return json({ error: "Configure o Neon." }, 503);
   try {
     const reader = request.body?.getReader();
     if (!reader) throw new ActionError("Dados ausentes.");

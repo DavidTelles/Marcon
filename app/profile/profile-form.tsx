@@ -59,7 +59,7 @@ export default function ProfileForm({ name: initialName, email: initialEmail, ro
         <div><span className={styles.eyebrow}>CONTA MARCON</span><h1>Editar perfil</h1><p>Atualize seus dados e suas credenciais de acesso.</p></div>
         <Link href={roleLanding[role]} className={styles.back}>Voltar</Link>
       </div>
-      {!persistent && <p role="note" className={styles.notice}>Configure o MySQL para salvar alterações no perfil.</p>}
+      {!persistent && <p role="note" className={styles.notice}>Configure o Neon para salvar alterações no perfil.</p>}
       <form className={styles.card} onSubmit={save}>
         <div className={styles.cardSection}>
           <div className={styles.sectionHeading}><h2>Dados pessoais</h2><p>Mantenha suas informações de contato atualizadas.</p></div>

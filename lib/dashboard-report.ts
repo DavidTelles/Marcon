@@ -1,5 +1,5 @@
-﻿import type { Account } from "./accounts";
-import type { RowDataPacket } from "mysql2";
+import type { Account } from "./accounts";
+import type { RowDataPacket } from "./db-types";
 import { getPool } from "./db";
 import { operationsReport } from "./operations-report";
 import { ActionError } from "./permissions";
@@ -624,7 +624,7 @@ export async function dashboardReport(
       scope,
       filters: f,
       generatedAt: base.generatedAt,
-      source: "MySQL local MARCON; eventos efetivamente persistidos.",
+      source: "Neon local MARCON; eventos efetivamente persistidos.",
       definitions: metrics.map((m) => m.label + ": " + m.definition),
       formulas: [
         f.view === "compra"

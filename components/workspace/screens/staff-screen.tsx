@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -238,7 +238,7 @@ export function StaffScreen({
               <h2>{editingId ? "Editar usuário" : "Cadastrar usuário"}</h2>
               <p>
                 {persistent
-                  ? "Dados salvos no MySQL após confirmação."
+                  ? "Dados salvos no Neon após confirmação."
                   : "Dados demonstrativos. As alterações ficam nesta sessão."}
               </p>
             </div>
