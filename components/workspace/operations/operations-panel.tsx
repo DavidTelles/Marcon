@@ -18,6 +18,33 @@ import { DistributionMap } from "./distribution-map";
 import { TransferQueue } from "./transfer-queue";
 import { RecommendationCards } from "./recommendation-cards";
 import { AnimatedNumber } from "./animated-number";
+import { DashboardOverview } from "./dashboard-overview";
+import {
+  Boxes,
+  Clock3,
+  ArrowDownLeft,
+  ArrowUpRight,
+  ClipboardList,
+  TriangleAlert,
+} from "lucide-react";
+const metricIcons: Partial<Record<Metric, typeof Boxes>> = {
+  pending: Clock3,
+  urgent: TriangleAlert,
+  critical: Boxes,
+  stock: Boxes,
+  idle: Clock3,
+  delivery: Clock3,
+  requests: ClipboardList,
+  entries: ArrowDownLeft,
+  withdrawals: ArrowUpRight,
+};
+const shortLabels: Partial<Record<Metric, string>> = {
+  pending: "Pendentes",
+  urgent: "Urgentes",
+  requests: "Requisições",
+  stock: "Posições de estoque",
+  delivery: "Tempo médio de entrega",
+};
 const dates = (value: string | null | undefined) =>
   value && Number.isFinite(Date.parse(value))
     ? new Date(value).toLocaleString("pt-BR", {
@@ -405,13 +432,19 @@ export function OperationsPanel({
         <div
           className="ops-scroll history-table"
           role="region"
-          aria-label="Registros de requisições"
+          aria-label={
+            mode === "historico"
+              ? "Registros do histórico"
+              : "Registros de requisições"
+          }
           tabIndex={0}
         >
           <table>
             <caption>
               {mode === "historico"
-                ? "Histórico de requisições"
+                ? report.filters.metric === "requests"
+                  ? "Histórico de requisições"
+                  : "Histórico de movimentações"
                 : "Acompanhamento das requisições"}
             </caption>
             <thead>
@@ -421,6 +454,9 @@ export function OperationsPanel({
                   "Material",
                   "Quantidade",
                   "Solicitante",
+                  ...(mode === "historico"
+                    ? ["Responsável", "Almoxarifado"]
+                    : []),
                   "Bloco",
                   "Data",
                   "Prioridade",
@@ -447,6 +483,14 @@ export function OperationsPanel({
                   <td data-label="Solicitante">
                     {r.person || "Não informado"}
                   </td>
+                  {mode === "historico" && (
+                    <>
+                      <td data-label="Responsável">
+                        {r.actor || "Não atribuído"}
+                      </td>
+                      <td data-label="Almoxarifado">{r.warehouse || "—"}</td>
+                    </>
+                  )}
                   <td data-label="Bloco">{r.block || "—"}</td>
                   <td data-label="Data">{dates(r.date)}</td>
                   <td data-label="Prioridade">
@@ -461,7 +505,15 @@ export function OperationsPanel({
                   </td>
                   <td data-label="Situação">
                     <span className="dashboard-badge" data-status={r.status}>
-                      {r.status}
+                      {r.kind === "movement"
+                        ? ((
+                            {
+                              entrada: "Entrada",
+                              saida: "Saída",
+                              devolucao: "Devolução",
+                            } as Record<string, string>
+                          )[r.status] ?? r.status)
+                        : r.status}
                     </span>
                   </td>
                   <td data-label="Detalhes">
@@ -590,7 +642,7 @@ export function OperationsPanel({
               <tbody>
                 {report.rows.map((r) => (
                   <tr key={r.code + r.warehouse}>
-                    <td data-label="Item / local">
+                    <td data-label="Peça">
                       <strong>
                         {r.code} · {r.item}
                       </strong>
@@ -629,11 +681,14 @@ export function OperationsPanel({
                       </span>
                     </td>
                     <td data-label="Movimentações">
-                      Entradas: {r.entries}
-                      <br />
-                      Retiradas: {r.withdrawals}
-                      <br />
-                      Devoluções: {r.returns}
+                      <details className="stock-flow-detail">
+                        <summary>Consultar</summary>
+                        Entradas: {r.entries}
+                        <br />
+                        Retiradas: {r.withdrawals}
+                        <br />
+                        Devoluções: {r.returns}
+                      </details>
                     </td>
                     {planning && (
                       <>
@@ -763,12 +818,6 @@ export function OperationsPanel({
                   : role === "funcionario"
                     ? "Acompanhe seus pedidos, confira as etapas e consulte os detalhes."
                     : "Veja o que precisa de atenção e acompanhe seus materiais."}
-            </p>
-            <p>
-              {report?.scope ??
-                (error
-                  ? "Dados temporariamente indisponíveis"
-                  : "Carregando sua visão geral…")}
             </p>
           </div>
           <details
@@ -1016,12 +1065,29 @@ export function OperationsPanel({
               <div className="ops-metrics dashboard-metrics">
                 {displayed.map((m) => (
                   <article className="ops-metric" key={m.id}>
+                    {role === "admin" &&
+                      metricIcons[m.id] &&
+                      (() => {
+                        const Icon = metricIcons[m.id]!;
+                        return (
+                          <span
+                            className="dashboard-metric-icon"
+                            aria-hidden="true"
+                          >
+                            <Icon size={15} strokeWidth={1.8} />
+                          </span>
+                        );
+                      })()}
                     <button
                       className="dashboard-metric-button"
                       onClick={() => openMetric(m.id)}
                       aria-label={"Abrir " + m.label}
                     >
-                      <span>{m.label}</span>
+                      <span>
+                        {role === "admin"
+                          ? (shortLabels[m.id] ?? m.label)
+                          : m.label}
+                      </span>
                       <strong>
                         {m.breakdown.length ? (
                           m.breakdown
@@ -1043,21 +1109,58 @@ export function OperationsPanel({
                     </button>
                     <details className="dashboard-definition">
                       <summary aria-label={"Definição de " + m.label}>
-                        Sobre este indicador
+                        <span aria-hidden="true">i</span>
                       </summary>
-                      <p role="tooltip">{m.definition}</p>
-                      <small>
-                        {m.period}
-                        <br />
-                        {m.scope}
-                        <br />
-                        Atualizado: {dates(m.updatedAt)}
-                      </small>
+                      <div className="dashboard-definition-body">
+                        <p role="tooltip">{m.definition}</p>
+                        <small>
+                          {m.period}
+                          <br />
+                          {m.scope}
+                          <br />
+                          Atualizado: {dates(m.updatedAt)}
+                        </small>
+                      </div>
                     </details>
                   </article>
                 ))}
               </div>
             </details>
+            {role === "admin" &&
+              mode === "dashboard" &&
+              view === "geral" &&
+              !planning && (
+                <DashboardOverview
+                  inventory={report.stockByWarehouse}
+                  records={
+                    report.details.records.some((r) => r.kind !== "request")
+                      ? undefined
+                      : report.details.records
+                  }
+                  onRecord={(id) => {
+                    const record = report.details.records.find(
+                      (r) => r.id === id,
+                    );
+                    if (record) {
+                      setSelected(record);
+                      setDetailOpen(true);
+                    }
+                  }}
+                  onWarehouse={(warehouse) =>
+                    router.push(
+                      pathFor(role, "dashboard") +
+                        "?" +
+                        new URLSearchParams({
+                          dashboard: "estoque",
+                          metric: "stock",
+                          from: report.filters.from,
+                          to: report.filters.to,
+                          warehouse,
+                        }),
+                    )
+                  }
+                />
+              )}
           </>
         )}
         {report &&
@@ -1066,15 +1169,47 @@ export function OperationsPanel({
           role !== "funcionario" &&
           ["requisicoes", "bloco"].includes(view) && (
             <section className="dashboard-request-integrated">
+              {mode === "historico" &&
+                ["admin", "almoxarifado"].includes(role) && (
+                  <div
+                    className="history-type-tabs"
+                    role="group"
+                    aria-label="Tipo de registro do histórico"
+                  >
+                    {(
+                      [
+                        ["requests", "Requisições"],
+                        ["entries", "Entradas"],
+                        ["withdrawals", "Saídas"],
+                        ["returns", "Devoluções"],
+                      ] as const
+                    ).map(([metric, label]) => (
+                      <button
+                        key={metric}
+                        type="button"
+                        className="button secondary"
+                        aria-pressed={report.filters.metric === metric}
+                        onClick={() => update({ metric, page: "1" })}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
               <div className="panel-head">
                 <div>
                   <h2>
                     {mode === "historico"
-                      ? "Histórico de requisições"
+                      ? report.filters.metric === "requests"
+                        ? "Histórico de requisições"
+                        : "Histórico de movimentações"
                       : "Acompanhamento das requisições"}
                   </h2>
                   <p>
-                    Consulte situação, solicitante e detalhes de cada material.
+                    {mode === "historico" &&
+                    report.filters.metric !== "requests"
+                      ? "Consulte movimento, responsável, quantidade e almoxarifado."
+                      : "Consulte situação, solicitante e detalhes de cada material."}
                   </p>
                 </div>
               </div>

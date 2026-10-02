@@ -607,10 +607,10 @@
   }
 }
 
+.root { width: min(180px, calc(100vw - 24px)); }
+.root[data-dock="inline"] { left: max(12px, calc(50% - 90px)); }
+.root .launcher { gap: 6px; padding: 9px; border-radius: 13px; font-size: 12px; min-height: 44px; }
 @media (max-width: 800px) {
-  .root { width: min(180px, calc(100vw - 24px)); }
-  .root[data-dock="inline"] { left: max(12px, calc(50% - 90px)); }
-  .root .launcher { gap: 6px; padding: 9px; border-radius: 13px; font-size: 12px; min-height: 44px; }
   .symbol { scale: .75; transform-origin: top right; }
   .panel header { padding: 15px; padding-right: 80px; min-height: 89px; }
   .panel h2 { font-size: 18px; }

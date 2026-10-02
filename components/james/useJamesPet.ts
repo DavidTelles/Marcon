@@ -140,7 +140,7 @@ export function useJamesPet(userId: string, path: string, open: boolean) {
       ).filter(
         (e) => !e.closest("[data-james-pet]") && e.getClientRects().length,
       );
-      const width = 240,
+      const width = root.current?.getBoundingClientRect().width || 180,
         height = root.current?.getBoundingClientRect().height || 80;
       const viewport = window.visualViewport;
       const bottom =

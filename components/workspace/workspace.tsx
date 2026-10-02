@@ -25,6 +25,7 @@ import { AdminDashboard } from "./screens/admin-dashboard";
 import dashboardStyles from "./dashboard.module.css";
 import appearance from "./appearance.module.css";
 import compactStyles from "./compact.module.css";
+import adminShell from "./admin-shell.module.css";
 import { ThemeToggle, useWorkspaceTheme } from "./theme-toggle";
 import { WarehouseDashboard } from "./screens/warehouse-dashboard";
 import { RequestsScreen } from "./screens/requests-screen";
@@ -125,6 +126,13 @@ function NavIcon({ page }: { page: Page }) {
   const Icon = pageIcons[page];
   return <Icon size={19} strokeWidth={1.9} aria-hidden="true" />;
 }
+function navigationGroup(page: Page) {
+  return ["compra", "recomendacoes"].includes(page)
+    ? "Planejamento"
+    : page === "funcionarios"
+      ? "Administração"
+      : "Operação";
+}
 export default function Workspace({
   role,
   page,
@@ -139,15 +147,22 @@ export default function Workspace({
   const router = useRouter();
   const theme = useWorkspaceTheme();
   const searchParams = useSearchParams();
-  const selectedDashboard = searchParams.get("dashboard") ??
-    (dashboardView === "block" || role === "lider" ? "bloco" :
-      ["stock", "warehouse", "parts"].includes(dashboardView ?? "") ? "estoque" :
-      dashboardView === "sector" ? "requisicoes" : "geral");
+  const selectedDashboard =
+    searchParams.get("dashboard") ??
+    (dashboardView === "block" || role === "lider"
+      ? "bloco"
+      : ["stock", "warehouse", "parts"].includes(dashboardView ?? "")
+        ? "estoque"
+        : dashboardView === "sector"
+          ? "requisicoes"
+          : "geral");
   const employeeName = useEmployeeName();
   const employeeBlock = useEmployeeBlock();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  const [dashboardExpanded, setDashboardExpanded] = useState(page === "dashboard");
+  const [dashboardExpanded, setDashboardExpanded] = useState(
+    page === "dashboard",
+  );
   const {
     requests,
     setRequests,
@@ -194,7 +209,9 @@ export default function Workspace({
           : roleLanding[role];
   const active =
     current.pages.find((item) => item.id === page) ??
-    (page === "requisicoes" ? { id: page, label: "Requisições" } : current.pages[0]);
+    (page === "requisicoes"
+      ? { id: page, label: "Requisições" }
+      : current.pages[0]);
   const roleRequests = requests.filter((item) =>
     role === "funcionario"
       ? item.person === employeeName || item.person === "Você"
@@ -449,8 +466,18 @@ export default function Workspace({
       </article>
     );
   }
+  const navigationPages = [...current.pages].sort((a, b) => {
+    const groups = ["Operação", "Planejamento", "Administração"];
+    return (
+      groups.indexOf(navigationGroup(a.id)) -
+      groups.indexOf(navigationGroup(b.id))
+    );
+  });
   return (
-    <div data-theme={theme} className={`shell ${appearance.workspace} ${compactStyles.compact} ${role === "funcionario" && page === "historico" ? appearance.employeeHistory : ""} ${page === "dashboard" ? dashboardStyles.dashboard : ""}`}>
+    <div
+      data-theme={theme}
+      className={`shell ${appearance.workspace} ${compactStyles.compact} ${adminShell.shell} ${role === "funcionario" && page === "historico" ? appearance.employeeHistory : ""} ${page === "dashboard" ? dashboardStyles.dashboard : ""}`}
+    >
       <a className="workspace-skip" href="#workspace-content">
         Ir para o conteúdo
       </a>
@@ -467,7 +494,18 @@ export default function Workspace({
         aria-label="Menu principal"
       >
         <div className="brand">
-          <BrandLogo compact />
+          {isMobile ? (
+            <button
+              type="button"
+              className={adminShell.logoClose}
+              aria-label="Fechar menu Marcon"
+              onClick={() => setDrawerOpen(false)}
+            >
+              <BrandLogo compact decorative />
+            </button>
+          ) : (
+            <BrandLogo compact />
+          )}
           <div>
             <strong>MARCON</strong>
             <small>Gestão de materiais</small>
@@ -480,52 +518,108 @@ export default function Workspace({
             <X size={20} />
           </button>
         </div>
-        <p className="nav-caption">ESPAÇO DE TRABALHO</p>
         <nav aria-label="Navegação principal">
-          {current.pages.map((item) => (
+          {navigationPages.map((item, index) => (
             <div key={item.id}>
-            <button
-              className={"nav-link " + (active.id === item.id ? "active" : "")}
-              onClick={() => {
-                if (item.id === "dashboard") {
-                  setDashboardExpanded((expanded) => !expanded);
-                } else {
-                  navigate(item.id);
+              {(index === 0 ||
+                navigationGroup(navigationPages[index - 1].id) !==
+                  navigationGroup(item.id)) && (
+                <p className="nav-caption">{navigationGroup(item.id)}</p>
+              )}
+              <button
+                className={
+                  "nav-link " + (active.id === item.id ? "active" : "")
                 }
-              }}
-              aria-current={active.id === item.id ? "page" : undefined}
-              aria-expanded={item.id === "dashboard" ? dashboardExpanded : undefined}
-              aria-controls={item.id === "dashboard" ? "dashboard-submenu" : undefined}
-            >
-              <span aria-hidden="true">
-                <NavIcon page={item.id} />
-              </span>
-              {item.label}
-              {item.id === "dashboard" && <span className={compactStyles.dashboardArrow} aria-hidden="true">{dashboardExpanded ? "↓" : ">"}</span>}
-            </button>
-            {item.id === "dashboard" && dashboardExpanded && (
-              <nav id="dashboard-submenu" className={dashboardStyles.submenu} aria-label="Visões da dashboard">
-                {[["geral", "Geral"], ["bloco", "Por bloco"], ["estoque", "Estoque"], ["requisicoes", "Requisições"]]
-                  .filter(([view]) => role !== "lider" || ["bloco", "requisicoes"].includes(view))
-                  .map(([view, label]) => (
-                  <Link key={view}
-                    href={`${pathFor(role, "dashboard")}?dashboard=${view}&metric=${view === "estoque" ? "stock" : "requests"}`}
-                    aria-current={selectedDashboard === view ? "page" : undefined}
-                    onClick={() => setDrawerOpen(false)}>
-                    {label}
-                  </Link>
-                ))}
-              </nav>
-            )}
+                onClick={() => {
+                  if (item.id === "dashboard") {
+                    setDashboardExpanded((expanded) => !expanded);
+                  } else {
+                    navigate(item.id);
+                  }
+                }}
+                aria-current={active.id === item.id ? "page" : undefined}
+                aria-expanded={
+                  item.id === "dashboard" ? dashboardExpanded : undefined
+                }
+                aria-controls={
+                  item.id === "dashboard" ? "dashboard-submenu" : undefined
+                }
+              >
+                <span aria-hidden="true">
+                  <NavIcon page={item.id} />
+                </span>
+                {item.label}
+                {item.id === "dashboard" && (
+                  <span
+                    className={compactStyles.dashboardArrow}
+                    aria-hidden="true"
+                  >
+                    {dashboardExpanded ? "↓" : ">"}
+                  </span>
+                )}
+              </button>
+              {item.id === "dashboard" && dashboardExpanded && (
+                <nav
+                  id="dashboard-submenu"
+                  className={dashboardStyles.submenu}
+                  aria-label="Visões da dashboard"
+                >
+                  {[
+                    ["geral", "Geral"],
+                    ["bloco", "Por bloco"],
+                    ["estoque", "Estoque"],
+                    ["requisicoes", "Requisições"],
+                  ]
+                    .filter(
+                      ([view]) =>
+                        role !== "lider" ||
+                        ["bloco", "requisicoes"].includes(view),
+                    )
+                    .map(([view, label]) => (
+                      <Link
+                        key={view}
+                        href={`${pathFor(role, "dashboard")}?dashboard=${view}&metric=${view === "estoque" ? "stock" : "requests"}`}
+                        aria-current={
+                          page === "dashboard" && selectedDashboard === view
+                            ? "page"
+                            : undefined
+                        }
+                        onClick={() => setDrawerOpen(false)}
+                      >
+                        <span aria-hidden="true">
+                          {view === "estoque" ? (
+                            <Boxes size={15} />
+                          ) : view === "requisicoes" ? (
+                            <ClipboardList size={15} />
+                          ) : view === "bloco" ? (
+                            <ChartNoAxesCombined size={15} />
+                          ) : (
+                            <LayoutDashboard size={15} />
+                          )}
+                        </span>
+                        {label}
+                      </Link>
+                    ))}
+                </nav>
+              )}
             </div>
           ))}
         </nav>
         <div className="sidebar-bottom">
-          {isMobile && <div className={compactStyles.mobileAccount}>
-            <ThemeToggle />
-            <Link href="/profile" onClick={() => setDrawerOpen(false)}>Editar perfil</Link>
-            <form action="/api/logout" method="post"><button type="submit" className="workspace-logout"><LogOut size={16} aria-hidden="true" />Sair da conta</button></form>
-          </div>}
+          {isMobile && (
+            <div className={compactStyles.mobileAccount}>
+              <ThemeToggle />
+              <Link href="/profile" onClick={() => setDrawerOpen(false)}>
+                Editar perfil
+              </Link>
+              <form action="/api/logout" method="post">
+                <button type="submit" className="workspace-logout">
+                  <LogOut size={16} aria-hidden="true" />
+                  Sair da conta
+                </button>
+              </form>
+            </div>
+          )}
           <div className="side-note">
             <strong>Seu espaço, seu ritmo.</strong>
             <p>Organize materiais e acompanhe solicitações em um só lugar.</p>
@@ -544,7 +638,11 @@ export default function Workspace({
       <div className="main">
         <header className="topbar">
           <div className="top-left">
-            <Link className="workspace-top-brand" href={roleLanding[role]} aria-label="Marcon — página inicial">
+            <Link
+              className="workspace-top-brand"
+              href={roleLanding[role]}
+              aria-label="Marcon — página inicial"
+            >
               <BrandLogo compact decorative />
               <span>SMARTWAY</span>
             </Link>
@@ -560,7 +658,7 @@ export default function Workspace({
               ref={menuButton}
               className={`icon-button menu ${compactStyles.logoMenu}`}
               type="button"
-              onClick={() => setDrawerOpen(true)}
+              onClick={() => setDrawerOpen((open) => !open)}
               aria-label="Abrir menu"
               aria-expanded={drawerOpen}
               aria-controls="workspace-menu"
@@ -613,20 +711,28 @@ export default function Workspace({
               movements={movements}
             />
           )}
-          {!persistent && page === "dashboard" && role === "admin" && <AdminDashboard dashboardView={dashboardView} routePart={routePart} />}
-          {!persistent && page === "dashboard" && role !== "almoxarifado" && role !== "admin" && (
-            <DashboardScreen
-              role={role}
-              current={current}
-              roleRequests={roleRequests}
-              stock={stock}
-              requests={requests}
+          {!persistent && page === "dashboard" && role === "admin" && (
+            <AdminDashboard
               dashboardView={dashboardView}
               routePart={routePart}
-              navigate={navigate}
-              NavIcon={NavIcon}
             />
           )}
+          {!persistent &&
+            page === "dashboard" &&
+            role !== "almoxarifado" &&
+            role !== "admin" && (
+              <DashboardScreen
+                role={role}
+                current={current}
+                roleRequests={roleRequests}
+                stock={stock}
+                requests={requests}
+                dashboardView={dashboardView}
+                routePart={routePart}
+                navigate={navigate}
+                NavIcon={NavIcon}
+              />
+            )}
           {!persistent &&
             ["requisicoes", "solicitacoes", "historico"].includes(page) && (
               <RequestsScreen
@@ -675,7 +781,12 @@ export default function Workspace({
               "solicitacoes",
             ].includes(page) && (
               <OperationsPanel
-                key={page + dashboardView + routePart + (page === "dashboard" ? selectedDashboard : "")}
+                key={
+                  page +
+                  dashboardView +
+                  routePart +
+                  (page === "dashboard" ? selectedDashboard : "")
+                }
                 role={role}
                 mode={page}
                 dashboardView={dashboardView}

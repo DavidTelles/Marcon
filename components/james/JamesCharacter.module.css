@@ -7,9 +7,6 @@
   --signal: #689dff;
 }
 
-@media (max-width: 800px) {
-  .scene[data-compact] { zoom: .75; }
-}
 .robot {
   position: absolute;
   inset: 0;
@@ -251,13 +248,13 @@
   animation: think 0.4s ease-in-out 2;
 }
 .scene[data-compact] {
-  width: 40px;
-  height: 46px;
+  width: 30px;
+  height: 34.5px;
 }
 .scene[data-compact] .robot {
   width: 80px;
   height: 92px;
-  transform: scale(0.5);
+  transform: scale(0.375);
   transform-origin: top left;
 }
 .scene[data-compact] .shadow {

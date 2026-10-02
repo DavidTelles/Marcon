@@ -21,6 +21,19 @@ test("admin: visão geral compacta, submenu e estoque integrado", async ({
   await expect(page.locator("main > .dashboard-suite > .panel")).toHaveCount(1);
   await expect(page.locator(".dashboard-charts")).toHaveCount(0);
   await expect(
+    page.getByRole("region", {
+      name: "Disponibilidade por almoxarifado",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Resumo das requisições", exact: true }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: test.info().outputPath("overview-desktop.png"),
+    fullPage: true,
+  });
+  await expect(
     page.getByRole("button", { name: "Ver requisições", exact: true }),
   ).toHaveCount(0);
   const dashboard = page.getByRole("button", {
@@ -36,14 +49,12 @@ test("admin: visão geral compacta, submenu e estoque integrado", async ({
   await expect(
     page.getByRole("heading", { name: "Dashboard de estoque", exact: true }),
   ).toBeVisible();
-  const table = page
-    .locator(".ops-scroll")
-    .filter({
-      has: page.getByRole("columnheader", {
-        name: "Disponibilidade",
-        exact: true,
-      }),
-    });
+  const table = page.locator(".ops-scroll").filter({
+    has: page.getByRole("columnheader", {
+      name: "Disponibilidade",
+      exact: true,
+    }),
+  });
   await expect(
     table.getByRole("columnheader", { name: "Almoxarifado", exact: true }),
   ).toBeVisible();
@@ -74,6 +85,104 @@ test("admin: visão geral compacta, submenu e estoque integrado", async ({
   expect(errors).toEqual([]);
 });
 
+test("páginas existentes: navegação, dados e layout continuam acessíveis", async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  for (const path of [
+    "/admin/dashboard",
+    "/admin/map",
+    "/admin/purchases",
+    "/admin/recommendations",
+    "/admin/create",
+    "/admin/history",
+    "/admin/all-requests",
+  ]) {
+    await page.goto(path);
+    await expect(page).toHaveURL(
+      new RegExp(path.replaceAll("/", "\\/") + "(?:\\?.*)?$"),
+    );
+    await expect(
+      page.locator("main").getByRole("heading").first(),
+    ).toBeVisible();
+    for (const width of [390, 1024, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expect
+        .poll(() =>
+          page.evaluate(
+            () => document.documentElement.scrollWidth <= innerWidth,
+          ),
+        )
+        .toBeTruthy();
+    }
+  }
+  await page.goto("/admin/history");
+  const historyTypes = page.getByRole("group", {
+    name: "Tipo de registro do histórico",
+    exact: true,
+  });
+  if (await historyTypes.count()) {
+    await historyTypes
+      .getByRole("button", { name: "Saídas", exact: true })
+      .click();
+    await expect(
+      historyTypes.getByRole("button", { name: "Saídas", exact: true }),
+    ).toHaveAttribute("aria-pressed", "true");
+    await expect(
+      page.getByRole("heading", {
+        name: "Histórico de movimentações",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(page.locator(".dashboard-request-integrated")).toContainText(
+      /Nenhum registro|Histórico de movimentações/,
+    );
+    await historyTypes
+      .getByRole("button", { name: "Requisições", exact: true })
+      .click();
+    await expect(
+      page.getByRole("table").filter({
+        has: page.locator("caption", { hasText: "Histórico de requisições" }),
+      }),
+    ).toBeVisible();
+  }
+  expect(errors).toEqual([]);
+});
+
+test("visão geral: tema escuro, métricas e consulta pelo gráfico", async ({
+  page,
+}) => {
+  await page.goto("/admin/dashboard");
+  await page.getByRole("button", { name: "Modo escuro", exact: true }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  const inventory = page.getByRole("region", {
+    name: "Disponibilidade por almoxarifado",
+    exact: true,
+  });
+  await expect(inventory).toBeVisible();
+  await page.screenshot({
+    path: test.info().outputPath("overview-dark.png"),
+    fullPage: true,
+  });
+  for (const width of [320, 390, 768, 1024, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect
+      .poll(() =>
+        page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+      )
+      .toBeTruthy();
+  }
+  if (await inventory.getByRole("button").count()) {
+    await inventory.getByRole("button").first().click();
+    await expect(
+      page.getByRole("heading", { name: "Dashboard de estoque", exact: true }),
+    ).toBeVisible();
+    await expect(page.locator(".ops-scroll tbody tr").first()).toBeVisible();
+  }
+});
+
 test("mobile: somente símbolo no topo, menu acessível e conta preservada", async ({
   page,
 }) => {
@@ -96,6 +205,11 @@ test("mobile: somente símbolo no topo, menu acessível e conta preservada", asy
   await expect(
     page.getByRole("button", { name: "Sair da conta", exact: true }),
   ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Fechar menu Marcon", exact: true })
+    .click();
+  await expect(trigger).toHaveAttribute("aria-expanded", "false");
+  await trigger.click();
   await page.keyboard.press("Escape");
   await expect(trigger).toBeFocused();
   await expect(trigger).toHaveAttribute("aria-expanded", "false");
@@ -124,11 +238,9 @@ test("histórico: tabelas com quantidade separada e detalhes funcionais", async 
   page,
 }) => {
   await page.goto("/admin/history");
-  const requests = page
-    .getByRole("table")
-    .filter({
-      has: page.locator("caption", { hasText: "Histórico de requisições" }),
-    });
+  const requests = page.getByRole("table").filter({
+    has: page.locator("caption", { hasText: "Histórico de requisições" }),
+  });
   await expect(
     requests.getByRole("columnheader", { name: "Número", exact: true }),
   ).toBeVisible();

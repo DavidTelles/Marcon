@@ -1,0 +1,488 @@
+.shell.shell {
+  --dashboard-rule: color-mix(in srgb, var(--line) 35%, transparent);
+  --dashboard-muted: color-mix(in srgb, var(--ink) 85%, var(--white));
+  background: var(--canvas);
+}
+.logoClose {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 5px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+}
+.logoClose > span {
+  width: 32px;
+}
+.shell.shell :global(.sidebar) {
+  background: var(--brand-bg);
+  border: 0;
+  color: var(--on-brand);
+}
+.shell.shell :global(.brand) {
+  border-color: color-mix(in srgb, var(--on-brand) 14%, transparent);
+}
+.shell.shell :global(.brand strong),
+.shell.shell :global(.user strong) {
+  color: var(--on-brand);
+}
+.shell.shell :global(.brand small),
+.shell.shell :global(.user small) {
+  color: var(--on-brand-muted);
+}
+.shell.shell :global(.sidebar > nav) {
+  padding: 8px 10px;
+}
+.shell.shell :global(.nav-caption) {
+  margin: 16px 10px 8px;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--on-brand-muted);
+  text-transform: uppercase;
+}
+.shell.shell :global(.nav-link) {
+  color: var(--on-brand-muted);
+  font-weight: 500;
+  border-radius: 7px;
+  margin-block: 2px;
+}
+.shell.shell :global(.nav-link.active) {
+  color: var(--on-brand);
+  background: color-mix(in srgb, var(--on-brand) 12%, transparent);
+  box-shadow: inset 3px 0 var(--accent);
+}
+.shell.shell :global(#dashboard-submenu) {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  margin: 4px 0 8px 12px;
+  border-left: 1px solid color-mix(in srgb, var(--on-brand) 22%, transparent);
+  border-radius: 0;
+  padding: 0 0 0 8px;
+}
+.shell.shell :global(#dashboard-submenu a) {
+  color: var(--on-brand-muted);
+  gap: 8px;
+  font-weight: 500;
+  border-radius: 6px;
+}
+.shell.shell :global(#dashboard-submenu a[aria-current="page"]) {
+  color: var(--on-brand);
+  background: color-mix(in srgb, var(--on-brand) 14%, transparent);
+  box-shadow: none;
+  font-weight: 650;
+}
+.shell.shell :global(.sidebar-bottom) {
+  padding: 12px;
+}
+.shell.shell :global(.side-note) {
+  display: none;
+}
+.shell.shell :global(.user) {
+  border-top: 1px solid color-mix(in srgb, var(--on-brand) 14%, transparent);
+  padding: 14px 4px 0;
+}
+.shell.shell :global(.avatar) {
+  background: color-mix(in srgb, var(--on-brand) 12%, transparent);
+  color: var(--on-brand);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+}
+.shell.shell :global(.topbar) {
+  background: var(--white);
+  color: var(--ink);
+  border-bottom: 1px solid var(--dashboard-rule);
+  box-shadow: none;
+}
+.shell.shell :global(.workspace-top-brand) {
+  display: none;
+}
+.shell.shell :global(.topbar .top-left strong),
+.shell.shell :global(.topbar .top-left b),
+.shell.shell :global(.topbar .top-left > span),
+.shell.shell :global(.topbar .role-control),
+.shell.shell :global(.topbar .workspace-profile),
+.shell.shell :global(.topbar .icon-button) {
+  color: var(--ink);
+}
+.shell.shell :global(.topbar .workspace-location > span) {
+  color: var(--dashboard-muted);
+  font-size: 12px;
+}
+.shell.shell :global(.topbar .workspace-logout) {
+  color: var(--ink);
+  background: var(--white);
+  border-color: var(--dashboard-rule);
+}
+.shell.shell :global(.workspace-logout span) {
+  display: none;
+}
+.shell.shell :global(.panel),
+.shell.shell :global(.stat),
+.shell.shell :global(.dashboard-metrics > article) {
+  background: var(--white);
+  border: 1px solid var(--dashboard-rule);
+  box-shadow: none;
+  border-radius: 10px;
+}
+.shell.shell :global(.ops-panel > .panel-head) {
+  margin: 0 0 16px;
+  padding: 0 0 14px;
+  border-bottom: 1px solid var(--dashboard-rule);
+  background: transparent;
+}
+.shell.shell :global(.dashboard-title) {
+  font-size: clamp(22px, 2.1vw, 28px);
+  font-weight: 650;
+  letter-spacing: -0.035em;
+}
+.shell.shell :global(.panel-head p),
+.shell.shell :global(.heading p) {
+  color: var(--dashboard-muted);
+  margin-top: 5px;
+}
+.shell.shell :global(.dashboard-popover > summary) {
+  padding: 7px 12px;
+  min-height: 33px;
+  border: 1px solid var(--dashboard-rule);
+  background: var(--white);
+  border-radius: 6px;
+}
+.shell.shell :global(.dashboard-filters) {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  margin: 0 0 12px;
+}
+.shell.shell :global(.dashboard-filters > summary) {
+  width: fit-content;
+  padding: 7px 12px;
+  min-height: 33px;
+  border: 1px solid var(--dashboard-rule);
+  border-radius: 6px;
+  font-size: 12px;
+}
+.shell.shell :global(.dashboard-filters[open] .ops-form) {
+  padding: 16px;
+  margin-top: 10px;
+  border: 1px solid var(--dashboard-rule);
+  border-radius: 8px;
+  background: var(--canvas);
+}
+.shell.shell :global(.dashboard-context) {
+  color: var(--dashboard-muted);
+  font-size: 11px;
+  line-height: 1.5;
+  margin-block: 8px 16px;
+}
+.shell.shell :global(.dashboard-live-bar) {
+  padding: 0;
+  gap: 10px;
+  margin-block: 10px;
+  color: var(--dashboard-muted);
+  font-size: 11px;
+}
+.shell.shell :global(.dashboard-live-bar > span:nth-child(2)) {
+  font-size: 11px;
+}
+.shell.shell :global(.dashboard-live-state) {
+  font-size: 11px;
+}
+.shell.shell :global(.dashboard-live-state i) {
+  box-shadow: none;
+  width: 6px;
+  height: 6px;
+}
+.shell.shell :global(.dashboard-indicators) {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  margin: 0;
+}
+.shell.shell :global(.dashboard-indicators > summary) {
+  padding-block: 6px;
+  font-size: 11px;
+  min-height: 28px;
+  color: var(--dashboard-muted);
+}
+.shell.shell :global(.dashboard-metrics) {
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 10px 0 18px;
+}
+.shell.shell :global(.dashboard-metrics > article),
+.shell.shell :global(.admin-summary .stat) {
+  position: relative;
+  padding: 14px 16px;
+  border-radius: 8px;
+}
+.shell.shell :global(.dashboard-metric-button) {
+  width: 100%;
+  text-align: left;
+  gap: 5px;
+}
+.shell.shell :global(.dashboard-metric-button > span),
+.shell.shell :global(.admin-summary .stat > span) {
+  font-size: 12px;
+  color: var(--dashboard-muted);
+  font-weight: 500;
+}
+.shell.shell :global(.dashboard-metric-button > strong),
+.shell.shell :global(.admin-summary .stat > strong) {
+  font-size: 28px;
+  letter-spacing: -0.03em;
+  font-weight: 650;
+  color: var(--ink);
+  margin: 4px 0;
+  line-height: 1.15;
+}
+.shell.shell :global(.dashboard-metric-button > small) {
+  color: var(--dashboard-muted);
+  font-size: 11px;
+}
+.shell.shell :global(.dashboard-definition) {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+  width: 22px;
+}
+.shell.shell :global(.dashboard-definition summary) {
+  display: grid;
+  place-items: center;
+  min-height: 22px;
+  width: 22px;
+  padding: 0;
+  font-size: 11px;
+  color: var(--dashboard-muted);
+  font-weight: 650;
+  background: var(--canvas);
+  border: 1px solid var(--dashboard-rule);
+  border-radius: 50%;
+  list-style: none;
+}
+.shell.shell :global(.dashboard-definition summary::-webkit-details-marker) {
+  display: none;
+}
+.shell.shell :global(.dashboard-definition[open]) {
+  z-index: 5;
+}
+.shell.shell :global(.dashboard-definition-body) {
+  position: absolute;
+  top: 30px;
+  right: 0;
+  width: 260px;
+  max-width: calc(100vw - 64px);
+  padding: 14px;
+  background: var(--white);
+  border: 1px solid var(--dashboard-rule);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px var(--shadow-color);
+  color: var(--ink);
+}
+.shell.shell :global(.dashboard-definition p) {
+  font-size: 12px;
+}
+.shell.shell :global(.dashboard-definition small) {
+  font-size: 11px;
+}
+.shell.shell :global(.dashboard-metric-icon) {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  color: var(--blue);
+  background: var(--tint);
+  pointer-events: none;
+}
+.shell.shell :global(.dashboard-metric-button > span) {
+  padding-right: 28px;
+}
+.shell.shell :global(.dashboard-stock-integrated),
+.shell.shell :global(.dashboard-request-integrated) {
+  border-color: var(--dashboard-rule);
+}
+.shell.shell :global(.dashboard-stock-integrated > .panel-head),
+.shell.shell :global(.dashboard-request-integrated > .panel-head) {
+  padding: 14px 0 8px;
+  border: 0;
+  background: transparent;
+}
+.shell.shell :global(.decision-table) {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.shell.shell :global(.ops-scroll),
+.shell.shell :global(.table-wrap) {
+  border-color: var(--dashboard-rule);
+  margin-block: 12px;
+}
+.shell.shell :global(th) {
+  background: var(--canvas);
+  color: var(--dashboard-muted);
+  font-size: 11px;
+  font-weight: 650;
+  padding: 10px 12px;
+  white-space: nowrap;
+}
+.shell.shell :global(td) {
+  border-bottom-color: var(--dashboard-rule);
+  padding: 11px 12px;
+  line-height: 1.5;
+}
+.shell.shell :global(td small),
+.shell.shell :global(caption) {
+  color: var(--dashboard-muted);
+  font-size: 11px;
+}
+.shell.shell :global(td strong) {
+  font-weight: 600;
+}
+.shell.shell :global(tbody tr:nth-child(even)) {
+  background: color-mix(in srgb, var(--canvas) 35%, var(--white));
+}
+.shell.shell :global(.dashboard-badge),
+.shell.shell :global(.badge) {
+  border: 0;
+  background: var(--tint);
+  color: var(--blue);
+  padding: 3px 7px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 500;
+}
+.shell.shell :global(.dashboard-badge[data-status="Entregue"]),
+.shell.shell :global(.badge-entregue),
+.shell.shell :global(.dashboard-badge[data-status="Disponível"]) {
+  color: var(--success);
+  background: var(--success-bg);
+}
+.shell.shell :global(.dashboard-badge.urgent),
+.shell.shell :global(.dashboard-badge[data-status="Indisponível"]) {
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+.shell.shell :global(.dashboard-badge[data-status="Abaixo do mínimo"]) {
+  color: var(--warning);
+  background: var(--warning-bg);
+}
+.shell.shell :global(.history-type-tabs) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-block: 12px;
+}
+.shell.shell :global(.history-type-tabs button[aria-pressed="true"]) {
+  background: var(--button-bg);
+  color: var(--button-text);
+  border-color: var(--button-bg);
+}
+.shell.shell :global(.stock-flow-detail > summary) {
+  min-height: 24px;
+  font-size: 11px;
+  padding: 0;
+}
+.shell.shell :global(.stock-flow-detail) {
+  min-width: 0;
+}
+@media (max-width: 1100px) {
+  .shell.shell :global(.workspace-location > span),
+  .shell.shell :global(.role-control > strong) {
+    display: none;
+  }
+}
+@media (max-width: 800px) {
+  .shell.shell :global(.topbar) {
+    background: var(--brand-bg);
+  }
+  .shell.shell :global(.topbar .icon-button) {
+    color: var(--on-brand);
+  }
+  .shell.shell :global(.sidebar .icon-button) {
+    color: var(--on-brand);
+  }
+  .shell.shell :global(.sidebar) {
+    z-index: 91;
+  }
+  .shell.shell :global(.overlay) {
+    z-index: 90;
+  }
+  .shell.shell :global(.sidebar-bottom a) {
+    color: var(--on-brand);
+  }
+  .shell.shell :global(.sidebar-bottom .workspace-logout) {
+    color: var(--on-brand);
+    background: transparent;
+    border-color: color-mix(in srgb, var(--on-brand) 30%, transparent);
+  }
+  .shell.shell :global(#dashboard-submenu a),
+  .shell.shell :global(.nav-link) {
+    min-height: 44px;
+  }
+  .shell.shell :global(.dashboard-metrics) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .shell.shell :global(.dashboard-popover > summary),
+  .shell.shell :global(.dashboard-filters > summary) {
+    min-height: 44px;
+  }
+  .shell.shell :global(.dashboard-live-bar > span:nth-child(2)) {
+    display: none;
+  }
+  .shell.shell :global(.dashboard-definition) {
+    position: static;
+    width: auto;
+    margin-top: 4px;
+  }
+  .shell.shell :global(.dashboard-definition summary) {
+    width: 44px;
+    min-height: 44px;
+    border: 0;
+    background: transparent;
+  }
+  .shell.shell :global(.dashboard-definition-body) {
+    position: static;
+    width: auto;
+    max-width: 100%;
+    box-shadow: none;
+    padding: 10px;
+  }
+}
+@media (max-width: 480px) {
+  .shell.shell :global(.dashboard-metric-button > strong) {
+    font-size: 24px;
+  }
+  .shell.shell :global(.dashboard-metric-icon) {
+    display: none;
+  }
+  .shell.shell :global(.dashboard-metric-button > span) {
+    padding-right: 0;
+  }
+  .shell.shell :global(.dashboard-metrics > article) {
+    padding: 12px;
+  }
+}
+@media (max-width: 360px) {
+  .shell.shell :global(.dashboard-metrics) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media print {
+  .shell.shell :global(.dashboard-metric-icon),
+  .shell.shell :global(.dashboard-live-bar) {
+    display: none;
+  }
+}

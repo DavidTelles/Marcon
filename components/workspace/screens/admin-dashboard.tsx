@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useDemoStore } from "../demo-store";
 import { balanceOf, WAREHOUSES } from "@/lib/inventory";
 import { badge } from "../ui";
+import { DashboardOverview } from "../operations/dashboard-overview";
 
 export function AdminDashboard({
   dashboardView,
@@ -46,7 +47,24 @@ export function AdminDashboard({
           ["Requisições", requests.length],
           ["Em acompanhamento", pending.length],
           ["Entregues", requests.filter((r) => r.status === "Entregue").length],
+          ...(view === "geral"
+            ? [["Peças abaixo do mínimo", critical.length]]
+            : []),
         ];
+  const inventory = [
+    ...new Set(stock.map((part) => part.unit ?? "un")),
+  ].flatMap((unit) =>
+    WAREHOUSES.map((warehouse) => ({
+      warehouse,
+      unit,
+      available: stock
+        .filter((part) => (part.unit ?? "un") === unit)
+        .reduce(
+          (sum, part) => sum + balanceOf(balances, part.code, warehouse),
+          0,
+        ),
+    })),
+  );
   const parts =
     routePart &&
     routePart !== "all" &&
@@ -83,13 +101,18 @@ export function AdminDashboard({
           ))}
         </div>
         {view === "geral" && (
-          <div className="overview-status">
-            <span>Peças abaixo do mínimo</span>
-            <strong>{critical.length}</strong>
-            <Link href="/admin/dashboard?dashboard=estoque&metric=stock">
-              Consultar estoque
-            </Link>
-          </div>
+          <DashboardOverview
+            requestDescription="Registros disponíveis"
+            inventory={inventory}
+            records={requests.map((r) => ({
+              id: String(r.id),
+              item: r.material,
+              quantity: r.quantity,
+              unit: stock.find((part) => part.code === r.code)?.unit ?? "un",
+              status: r.status,
+              person: r.person,
+            }))}
+          />
         )}
         {view === "bloco" && (
           <div className="focus-grid">

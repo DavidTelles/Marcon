@@ -1,0 +1,153 @@
+.overview {
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  gap: 24px;
+  padding-top: 18px;
+  border-top: 1px solid var(--dashboard-rule, var(--line));
+}
+.overview section {
+  min-width: 0;
+}
+.overview header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.overview h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+}
+.overview p {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--dashboard-muted, var(--subtle));
+}
+.overview a {
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  padding: 4px;
+}
+.unitGroup {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.unit {
+  font-size: 10px;
+  font-weight: 650;
+  color: var(--dashboard-muted, var(--subtle));
+}
+.barRow {
+  display: grid;
+  grid-template-columns: minmax(80px, 1fr) minmax(50px, 1.3fr) auto;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+}
+.barRow strong {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.barRow strong small {
+  color: var(--dashboard-muted, var(--subtle));
+  font-weight: 400;
+}
+.barRow button,
+.tableWrap button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+}
+.barRow button {
+  min-height: 24px;
+}
+.tableWrap button {
+  font-weight: 600;
+}
+.track {
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--tint);
+  overflow: hidden;
+}
+.track i {
+  display: block;
+  height: 100%;
+  background: var(--blue);
+  border-radius: inherit;
+}
+.tableWrap {
+  min-width: 0;
+}
+.tableWrap table {
+  min-width: 0;
+  width: 100%;
+}
+.tableWrap th,
+.tableWrap td {
+  padding: 10px 8px;
+}
+.tableWrap td:first-child {
+  width: 47%;
+}
+.tableWrap td small {
+  display: block;
+}
+.empty {
+  padding: 18px 0;
+}
+@media (max-width: 1100px) {
+  .overview {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+  }
+}
+@media (max-width: 700px) {
+  .barRow button,
+  .overview a {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+  }
+  .tableWrap table,
+  .tableWrap tbody {
+    display: block;
+  }
+  .tableWrap thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .tableWrap tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--dashboard-rule, var(--line));
+  }
+  .tableWrap td {
+    width: auto !important;
+    border: 0 !important;
+    padding: 4px 0 !important;
+  }
+  .tableWrap td:first-child {
+    grid-column: 1 / -1;
+  }
+  .tableWrap button {
+    min-height: 44px;
+  }
+  .tableWrap td:last-child {
+    text-align: right;
+  }
+}
