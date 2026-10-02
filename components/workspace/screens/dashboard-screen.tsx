@@ -230,12 +230,12 @@ export function DashboardScreen({
               value: row.value,
               color: (
                 {
-                  Pendente: "#b7791f",
-                  "Em análise": "#3a71e6",
-                  Aprovada: "#1d419c",
-                  Entregue: "#218238",
-                  Cancelada: "#7b879a",
-                  "Cancelamento solicitado": "#b54d43",
+                  Pendente: "var(--warning)",
+                  "Em análise": "var(--bright)",
+                  Aprovada: "var(--blue)",
+                  Entregue: "var(--success)",
+                  Cancelada: "var(--subtle)",
+                  "Cancelamento solicitado": "var(--danger)",
                 } as Record<string, string>
               )[row.name],
             }))}

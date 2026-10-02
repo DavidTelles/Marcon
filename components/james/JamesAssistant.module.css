@@ -1,5 +1,5 @@
 .root {
-  --james-blue: #153b9e;
+  --james-blue: var(--blue);
   position: relative;
   z-index: 80;
 }
@@ -10,11 +10,11 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  background: white;
-  border: 1px solid #cbd5ec;
+  background: var(--white);
+  border: 1px solid var(--line);
   border-radius: 18px;
   padding: 12px;
-  box-shadow: 0 8px 26px #102e6630;
+  box-shadow: 0 8px 26px var(--shadow-color);
   color: var(--james-blue);
   cursor: pointer;
 }
@@ -30,18 +30,18 @@
   width: min(420px, calc(100vw - 24px));
   max-width: none;
   max-height: calc(100dvh - 24px);
-  color: #172b52;
+  color: var(--ink);
 }
 .dialog::backdrop {
-  background: #07132b66;
+  background: color-mix(in srgb, var(--brand-bg) 40%, transparent);
   backdrop-filter: blur(2px);
   animation: dim 0.4s ease-out;
 }
 .panel {
-  background: #fff;
-  border: 1px solid #dbe3f4;
+  background: var(--white);
+  border: 1px solid var(--line);
   border-radius: 22px;
-  box-shadow: 0 24px 80px #071b4a50;
+  box-shadow: 0 24px 80px var(--shadow-color);
   display: flex;
   flex-direction: column;
   max-height: calc(100dvh - 24px);
@@ -56,7 +56,7 @@
   padding: 20px;
   padding-right: 104px;
   min-height: 118px;
-  border-bottom: 1px solid #dbe3f4;
+  border-bottom: 1px solid var(--line);
 }
 .panel h2 {
   font-size: 22px;
@@ -84,40 +84,40 @@
 .symbol > span {
   max-width: 68px;
   transform: translateZ(16px);
-  filter: drop-shadow(0 5px 3px #102e6630);
+  filter: drop-shadow(0 5px 3px var(--shadow-color));
 }
 .plinth {
   position: absolute;
   inset: 0;
-  border: 1px solid #b5c7e8;
+  border: 1px solid var(--line);
   border-radius: inherit;
   transform: translateZ(-10px);
-  background: #d6e0f3;
+  background: var(--tint);
   box-shadow:
-    1px 2px #c6d4ef,
-    2px 4px #bbcce9,
-    3px 6px #afc3e5,
-    4px 8px #9eb6df,
-    8px 16px 20px #08245335;
+    1px 2px var(--shadow-color),
+    2px 4px var(--shadow-color),
+    3px 6px var(--shadow-color),
+    4px 8px var(--shadow-color),
+    8px 16px 20px var(--shadow-color);
   pointer-events: none;
 }
 .halo {
   position: absolute;
   inset: -10px;
-  border: 1px solid #497aff44;
+  border: 1px solid color-mix(in srgb, var(--line) 27%, transparent);
   border-radius: 50%;
   transform: translateZ(-15px) rotateX(68deg);
-  box-shadow: 0 0 12px #366fde22;
+  box-shadow: 0 0 12px var(--shadow-color);
   pointer-events: none;
 }
 .root[data-hearing="true"] .halo {
-  box-shadow: 0 0 18px #366fde88;
+  box-shadow: 0 0 18px var(--shadow-color);
   animation: sound-wave 0.7s ease-out 2;
 }
 .root[data-hearing="true"] .launcher {
   box-shadow:
-    0 0 0 3px #366fde40,
-    0 8px 26px #102e6630;
+    0 0 0 3px var(--shadow-color),
+    0 8px 26px var(--shadow-color);
 }
 .root[data-state="processing"] .halo {
   animation: scan-light 1.4s ease-in-out 3;
@@ -125,7 +125,7 @@
 .transcript {
   padding: 6px 16px;
   margin: 0;
-  background: #edf3ff;
+  background: var(--white);
   font-size: 13px;
   overflow-wrap: anywhere;
   max-height: 60px;
@@ -150,20 +150,20 @@
 }
 .root[data-state="listening"] .symbol {
   box-shadow:
-    0 0 0 4px #196b9240,
-    0 10px 24px #102e6640;
+    0 0 0 4px var(--shadow-color),
+    0 10px 24px var(--shadow-color);
 }
 .root[data-state="processing"] .symbol {
   transform: perspective(600px) rotateY(12deg);
   box-shadow:
-    0 0 0 4px #d89b3540,
-    0 10px 24px #102e6640;
+    0 0 0 4px var(--shadow-color),
+    0 10px 24px var(--shadow-color);
 }
 .root[data-state="speaking"] .symbol {
   transform: perspective(600px) rotateY(0);
   box-shadow:
-    0 0 0 4px #2e7d5540,
-    0 10px 24px #102e6640;
+    0 0 0 4px var(--shadow-color),
+    0 10px 24px var(--shadow-color);
 }
 .messages {
   overflow: auto;
@@ -185,11 +185,11 @@
   line-height: 1.55;
 }
 .user {
-  background: #eaf0ff;
+  background: var(--canvas);
   margin-left: 24px;
 }
 .answer {
-  background: #f4f6fa;
+  background: var(--white);
 }
 .messages summary {
   cursor: pointer;
@@ -203,28 +203,28 @@
   padding: 12px 16px 16px;
   display: grid;
   gap: 8px;
-  border-top: 1px solid #dbe3f4;
+  border-top: 1px solid var(--line);
 }
 .panel input:not([type="checkbox"]) {
   width: 100%;
   min-width: 0;
-  border: 1px solid #aebbd7;
+  border: 1px solid var(--line);
   border-radius: 8px;
   padding: 10px;
   font: inherit;
 }
 .panel button {
   min-height: 44px;
-  border: 1px solid #b4c3df;
+  border: 1px solid var(--line);
   border-radius: 9px;
   padding: 8px 12px;
-  background: #fff;
+  background: var(--white);
   color: var(--james-blue);
   cursor: pointer;
 }
 .panel button[type="submit"] {
   background: var(--james-blue);
-  color: white;
+  color: var(--on-brand);
 }
 .panel button:disabled {
   opacity: 0.5;
@@ -242,10 +242,10 @@
   font-size: 13px;
 }
 .voiceFallback {
-  border: 1px solid #cbd5ec;
+  border: 1px solid var(--line);
   border-radius: 10px;
   padding: 10px;
-  background: #f4f7ff;
+  background: var(--white);
   font-size: 13px;
   line-height: 1.5;
   overflow-wrap: anywhere;
@@ -269,11 +269,11 @@
   font-size: 13px;
 }
 .error {
-  color: #9e2020;
-  background: #fff0f0;
+  color: var(--danger);
+  background: var(--white);
 }
 .root :focus-visible {
-  outline: 3px solid #b7760d;
+  outline: 3px solid var(--danger);
   outline-offset: 3px;
 }
 .symbol {
@@ -363,7 +363,7 @@
 .orbit {
   position: absolute;
   inset: -5px;
-  border: 1px solid #497aff66;
+  border: 1px solid color-mix(in srgb, var(--line) 40%, transparent);
   border-radius: 24px;
   transform: rotate(-10deg);
   pointer-events: none;
@@ -375,7 +375,7 @@
   width: 3px;
   height: 3px;
   border-radius: 50%;
-  background: #3b66c8;
+  background: var(--blue);
   opacity: 0;
   pointer-events: none;
 }
@@ -387,8 +387,8 @@
 }
 .root[data-state="confirming"] .symbol {
   box-shadow:
-    0 0 0 3px #b37a2540,
-    0 12px 28px #102e6630;
+    0 0 0 3px var(--shadow-color),
+    0 12px 28px var(--shadow-color);
 }
 .dialog[open] .particle,
 .root[data-state="listening"] .particle {
@@ -415,16 +415,16 @@
 }
 .panel > .actions {
   padding: 8px 16px;
-  background: #f0f4fc;
+  background: var(--white);
 }
 .pause {
   position: fixed;
   right: 16px;
   bottom: 90px;
-  background: white;
-  color: #153b9e;
+  background: var(--white);
+  color: var(--blue);
   padding: 10px;
-  border: 1px solid #bbc9e4;
+  border: 1px solid var(--line);
   border-radius: 10px;
 }
 @keyframes energy {
@@ -468,7 +468,7 @@
   position: sticky;
   top: 0;
   z-index: 1;
-  background: white;
+  background: var(--white);
 }
 .root[data-compact] .messages {
   overflow: visible;
@@ -513,12 +513,12 @@
   justify-content: center;
 }
 .tip {
-  background: white;
-  border: 1px solid #cbd5ec;
+  background: var(--white);
+  border: 1px solid var(--line);
   border-radius: 14px;
   padding: 10px;
   font-size: 13px;
-  box-shadow: 0 6px 20px #102e6615;
+  box-shadow: 0 6px 20px var(--shadow-color);
   margin-bottom: 8px;
 }
 .tip p {
@@ -527,9 +527,9 @@
 }
 .tip button {
   min-height: 40px;
-  background: white;
-  color: #153b9e;
-  border: 1px solid #cbd5ec;
+  background: var(--white);
+  color: var(--blue);
+  border: 1px solid var(--line);
   border-radius: 8px;
   padding: 5px;
   margin: 2px;
@@ -552,14 +552,14 @@
   max-width: 100%;
   min-width: 0;
   padding: 8px;
-  border: 1px solid #b4c3df;
+  border: 1px solid var(--line);
   border-radius: 8px;
-  background: white;
+  background: var(--white);
 }
 .root[data-state="error"] .symbol {
   box-shadow:
-    0 0 0 3px #a4363640,
-    0 12px 28px #102e6630;
+    0 0 0 3px var(--shadow-color),
+    0 12px 28px var(--shadow-color);
 }
 @media (prefers-reduced-motion: reduce), (update: slow) {
   .root {
@@ -605,4 +605,13 @@
   .panel select {
     font-size: 16px;
   }
+}
+
+@media (max-width: 800px) {
+  .root { width: min(180px, calc(100vw - 24px)); }
+  .root[data-dock="inline"] { left: max(12px, calc(50% - 90px)); }
+  .root .launcher { gap: 6px; padding: 9px; border-radius: 13px; font-size: 12px; min-height: 44px; }
+  .symbol { scale: .75; transform-origin: top right; }
+  .panel header { padding: 15px; padding-right: 80px; min-height: 89px; }
+  .panel h2 { font-size: 18px; }
 }

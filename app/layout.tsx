@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./theme.css";
+import { ThemeSync } from "@/components/workspace/theme-toggle";
 import { DemoProvider } from "@/components/workspace/demo-store";
 import { databaseEnabled } from "@/lib/db";
 
@@ -19,8 +21,12 @@ export default async function RootLayout({
   const user = await currentUser();
   const showJames = !!user;
   return (
-    <html lang="pt-BR">
+    <html lang="pt-BR" suppressHydrationWarning>
+      <head>
+        <script id="marcon-theme" dangerouslySetInnerHTML={{ __html: `try{document.documentElement.dataset.theme=localStorage.getItem("marcon-workspace-theme")==="dark"?"dark":"light"}catch{document.documentElement.dataset.theme="light"}` }} />
+      </head>
       <body>
+        <ThemeSync />
         <DemoProvider
           persistent={databaseEnabled()}
           key={user?.id ?? "anonymous"}

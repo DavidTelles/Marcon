@@ -29,7 +29,7 @@ export function InsightChart({
   const segments = safeRows.map((row, index) => {
     const start = angle;
     angle += total ? (row.value / total) * 360 : 0;
-    return `${row.color ?? ["#25c5b8", "#3a71e6", "#ffba55", "#ff6f78", "#8c70e8"][index % 5]} ${start}deg ${angle}deg`;
+    return `${row.color ?? `var(--chart-${index % 6 + 1})`} ${start}deg ${angle}deg`;
   });
   return (
     <section className={`insight-chart panel ${className}`} aria-label={title}>
@@ -46,7 +46,7 @@ export function InsightChart({
             style={{
               background: total
                 ? `conic-gradient(${segments.join(", ")})`
-                : "#e1e5ef",
+                : "var(--line)",
             }}
             aria-hidden="true"
           >
@@ -68,7 +68,7 @@ export function InsightChart({
                   >
                     <span
                       className="insight-dot"
-                      style={{ background: row.color ?? "var(--blue)" }}
+                      style={{ background: row.color ?? `var(--chart-${index % 6 + 1})` }}
                       aria-hidden="true"
                     />
                     <span>{row.label}</span>
@@ -81,14 +81,7 @@ export function InsightChart({
                       className="insight-dot"
                       style={{
                         background:
-                          row.color ??
-                          [
-                            "#25c5b8",
-                            "#3a71e6",
-                            "#ffba55",
-                            "#ff6f78",
-                            "#8c70e8",
-                          ][index % 5],
+                          row.color ?? `var(--chart-${index % 6 + 1})`,
                       }}
                     />{" "}
                     <span>{row.label}</span>
@@ -101,10 +94,7 @@ export function InsightChart({
                   style={{
                     width: `${(row.value / max) * 100}%`,
                     background:
-                      row.color ??
-                      ["#25c5b8", "#3a71e6", "#ffba55", "#ff6f78", "#8c70e8"][
-                        index % 5
-                      ],
+                      row.color ?? `var(--chart-${index % 6 + 1})`,
                   }}
                 />
               </div>

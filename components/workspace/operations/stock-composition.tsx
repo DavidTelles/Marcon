@@ -6,7 +6,7 @@ import type { DashboardReport } from "@/lib/dashboard-report";
 export function itemColor(code: string) {
   let hash = 0;
   for (const char of code) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
-  return `hsl(${(hash * 137.508) % 360} 58% 43%)`;
+  return `var(--chart-${hash % 6 + 1})`;
 }
 
 export function StockComposition({ rows, onWarehouse, onItem }: {

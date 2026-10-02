@@ -76,7 +76,9 @@ export function OperationsPanel({
   }
   const urlParams = useSearchParams(),
     jamesQuery =
-      planning || mode === "dashboard" || urlParams.get("james") === "1" ? urlParams.toString() : "";
+      planning || mode === "dashboard" || urlParams.get("james") === "1"
+        ? urlParams.toString()
+        : "";
   const incoming = new URLSearchParams(jamesQuery);
   const jamesFilters = Object.fromEntries(
     [...incoming].filter(([k]) =>
@@ -292,7 +294,14 @@ export function OperationsPanel({
     compra: ["buy", "critical", "withdrawals"],
   };
   const displayed = (report?.metrics ?? []).filter((m) =>
-    ids[view].includes(m.id),
+    (view === "bloco"
+      ? ["requests", "pending", "delivery"]
+      : view === "estoque"
+        ? ["stock", "critical", "idle"]
+        : view === "requisicoes"
+          ? ["requests", "pending", "delivery"]
+          : ids[view]
+    ).includes(m.id),
   );
   const openMetric = (id: Metric) => {
     setSelected(null);
@@ -326,7 +335,153 @@ export function OperationsPanel({
     );
   const records = report && (
     <>
-      {report.details.records.length ? (
+      {report.details.records.length && role === "funcionario" ? (
+        <div
+          className="ops-scroll employee-queue-scroll"
+          role="region"
+          aria-label="Minhas requisições"
+          tabIndex={0}
+        >
+          <table>
+            <caption>Pedidos ordenados por urgência e data de criação</caption>
+            <thead>
+              <tr>
+                <th>Pedido / material</th>
+                <th>Quantidade</th>
+                <th>Bloco</th>
+                <th>Data</th>
+                <th>Prioridade</th>
+                <th>Situação</th>
+                <th>Ação</th>
+              </tr>
+            </thead>
+            <tbody>
+              {report.details.records.map((r) => (
+                <tr key={r.id}>
+                  <td>
+                    <strong>{r.item}</strong>
+                    <small>
+                      #{r.id} · {r.code}
+                    </small>
+                  </td>
+                  <td data-label="Quantidade">
+                    {r.quantity} {r.unit}
+                  </td>
+                  <td data-label="Bloco">{r.block}</td>
+                  <td data-label="Data">{dates(r.date)}</td>
+                  <td data-label="Prioridade">
+                    <span
+                      className={
+                        "dashboard-badge " +
+                        (r.priority === "Urgente" ? "urgent" : "")
+                      }
+                    >
+                      {r.priority || "Não informada"}
+                    </span>
+                  </td>
+                  <td data-label="Situação">
+                    <span className="dashboard-badge" data-status={r.status}>
+                      {r.status}
+                    </span>
+                  </td>
+                  <td data-label="Ação">
+                    <button
+                      className="button secondary"
+                      onClick={() => {
+                        setSelected(r);
+                        setDetailOpen(true);
+                      }}
+                    >
+                      Abrir registros #{r.id}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : report.details.records.length &&
+        (mode === "historico" || ["requisicoes", "bloco"].includes(view)) ? (
+        <div
+          className="ops-scroll history-table"
+          role="region"
+          aria-label="Registros de requisições"
+          tabIndex={0}
+        >
+          <table>
+            <caption>
+              {mode === "historico"
+                ? "Histórico de requisições"
+                : "Acompanhamento das requisições"}
+            </caption>
+            <thead>
+              <tr>
+                {[
+                  "Número",
+                  "Material",
+                  "Quantidade",
+                  "Solicitante",
+                  "Bloco",
+                  "Data",
+                  "Prioridade",
+                  "Situação",
+                  "Detalhes",
+                ].map((label) => (
+                  <th scope="col" key={label}>
+                    {label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {report.details.records.map((r) => (
+                <tr key={r.kind + r.id}>
+                  <td data-label="Número">#{r.id}</td>
+                  <td data-label="Material">
+                    <strong>{r.item}</strong>
+                    <small>{r.code}</small>
+                  </td>
+                  <td data-label="Quantidade">
+                    {r.quantity.toLocaleString("pt-BR")} {r.unit}
+                  </td>
+                  <td data-label="Solicitante">
+                    {r.person || "Não informado"}
+                  </td>
+                  <td data-label="Bloco">{r.block || "—"}</td>
+                  <td data-label="Data">{dates(r.date)}</td>
+                  <td data-label="Prioridade">
+                    <span
+                      className={
+                        "dashboard-badge " +
+                        (r.priority === "Urgente" ? "urgent" : "")
+                      }
+                    >
+                      {r.priority || "—"}
+                    </span>
+                  </td>
+                  <td data-label="Situação">
+                    <span className="dashboard-badge" data-status={r.status}>
+                      {r.status}
+                    </span>
+                  </td>
+                  <td data-label="Detalhes">
+                    <button
+                      className="link-button"
+                      aria-label={"Abrir registros #" + r.id}
+                      onClick={() => {
+                        setSelected(r);
+                        setDetailOpen(true);
+                      }}
+                    >
+                      Detalhes
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : report.details.records.length ? (
         <div className="dashboard-records">
           {report.details.records.map((r) => (
             <article key={r.id} className="dashboard-record">
@@ -375,41 +530,217 @@ export function OperationsPanel({
       {pagination(report.details.total, report.pages)}
     </>
   );
+  const stockPanel = (integrated: boolean) =>
+    report && (
+      <section
+        className={
+          integrated ? "dashboard-stock-integrated" : "panel ops-panel"
+        }
+      >
+        <div className="panel-head">
+          <div>
+            <h2>
+              {planning ? "Recomendação de compra" : "Peças por almoxarifado"}
+            </h2>
+            <p>
+              Saldo atual. Movimentações no período {report.methodology.period}.
+            </p>
+          </div>
+        </div>
+        <details className="decision-table" open={!planning}>
+          <summary>
+            {planning
+              ? "Ver tabela detalhada de estoque e previsão"
+              : "Ver tabela detalhada de estoque"}
+          </summary>
+          <div
+            className="ops-scroll"
+            role="region"
+            aria-label="Estoque e previsão"
+            tabIndex={0}
+          >
+            <table>
+              <caption>Valores exatos por unidade cadastrada</caption>
+              <thead>
+                <tr>
+                  {[
+                    "Peça",
+                    "Almoxarifado",
+                    "Físico",
+                    "Reservado",
+                    "Disponível",
+                    "Mínimo",
+                    "Disponibilidade",
+                    "Movimentações",
+                    ...(planning
+                      ? [
+                          "Prazo / previsão",
+                          "Compra / transferência",
+                          "Preço e fonte",
+                          "Metodologia",
+                        ]
+                      : []),
+                  ].map((h) => (
+                    <th key={h} scope="col">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {report.rows.map((r) => (
+                  <tr key={r.code + r.warehouse}>
+                    <td data-label="Item / local">
+                      <strong>
+                        {r.code} · {r.item}
+                      </strong>
+                      <p>
+                        {r.location} · {r.unit}
+                      </p>
+                    </td>
+                    <td data-label="Almoxarifado">{r.warehouse}</td>
+                    <td data-label="Físico">{r.physical}</td>
+                    <td data-label="Reservado">{r.reserved}</td>
+                    <td data-label="Disponível">{r.available}</td>
+                    <td data-label="Mínimo">
+                      {r.configuredMinimum}
+                      {planning && (
+                        <small>
+                          Sugerido: {r.minimum} · alvo: {r.target}
+                        </small>
+                      )}
+                    </td>
+                    <td data-label="Disponibilidade">
+                      <span
+                        className="dashboard-badge"
+                        data-status={
+                          r.available <= 0
+                            ? "Indisponível"
+                            : r.available < r.configuredMinimum
+                              ? "Abaixo do mínimo"
+                              : "Disponível"
+                        }
+                      >
+                        {r.available <= 0
+                          ? "Indisponível"
+                          : r.available < r.configuredMinimum
+                            ? "Abaixo do mínimo"
+                            : "Disponível"}
+                      </span>
+                    </td>
+                    <td data-label="Movimentações">
+                      Entradas: {r.entries}
+                      <br />
+                      Retiradas: {r.withdrawals}
+                      <br />
+                      Devoluções: {r.returns}
+                    </td>
+                    {planning && (
+                      <>
+                        <td data-label="Prazo / previsão">
+                          {r.leadDays} dias / {r.forecast} {r.unit}
+                        </td>
+                        <td data-label="Compra / transferência">
+                          Comprar: {r.buy} {r.unit}
+                          <br />
+                          Transferir: {r.transfer} {r.unit}
+                          <small>
+                            Custo interno:{" "}
+                            {r.cost.toLocaleString("pt-BR", {
+                              style: "currency",
+                              currency: "BRL",
+                            })}
+                          </small>
+                        </td>
+                        <td data-label="Preço e fonte">
+                          {r.unitPrice === null
+                            ? "Indisponível"
+                            : r.unitPrice.toLocaleString("pt-BR", {
+                                style: "currency",
+                                currency: "BRL",
+                              })}
+                          <small>
+                            {r.priceLabel} · Data: {dates(r.priceDate)}
+                          </small>
+                        </td>
+                        <td data-label="Metodologia">
+                          <span className="dashboard-badge">
+                            {r.analysis.confidence}
+                          </span>
+                          <details>
+                            <summary>Explicar cálculo</summary>
+                            <p>
+                              {r.analysis.method} · {r.analysis.days} dias · MAE{" "}
+                              {r.analysis.mae?.toFixed(2) ?? "não validado"} ·
+                              WAPE{" "}
+                              {r.analysis.wape === null
+                                ? "não validado"
+                                : (r.analysis.wape * 100).toFixed(1) + "%"}
+                            </p>
+                            <p>{r.analysis.reason}</p>
+                            <p>
+                              Compra = max(0, {r.target} − {r.available} −{" "}
+                              {r.incoming} − {r.transfer}) = {r.buy}.
+                            </p>
+                          </details>
+                        </td>
+                      </>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {!report.rows.length && (
+            <p className="dashboard-empty">
+              Nenhum item/local corresponde aos filtros.
+            </p>
+          )}
+          {pagination(
+            report.rowTotal,
+            Math.max(1, Math.ceil(report.rowTotal / report.filters.pageSize)),
+          )}
+        </details>
+      </section>
+    );
   return (
     <div className="dashboard-suite">
-      {!planning && mode !== "dashboard" && (
-        <nav className="dashboard-tabs" aria-label="Dashboards">
-          {views.map((v) => (
-            <button
-              key={v}
-              className={view === v ? "active" : ""}
-              aria-current={view === v ? "page" : undefined}
-              onClick={() => {
-                setSelected(null);
-                update({
-                  dashboard: v,
-                  metric: ["compra", "estoque"].includes(v)
-                    ? "stock"
-                    : "requests",
-                  page: "1",
-                  status: "",
-                  priority: "",
-                });
-              }}
-            >
-              {v === "compra"
-                ? "Recomendação de compra"
-                : v === "geral"
-                  ? "Geral"
-                  : v === "bloco"
-                    ? "Por bloco"
-                    : v === "estoque"
-                      ? "Estoque"
-                      : "Requisições"}
-            </button>
-          ))}
-        </nav>
-      )}
+      {!planning &&
+        mode !== "dashboard" &&
+        mode !== "historico" &&
+        role !== "funcionario" && (
+          <nav className="dashboard-tabs" aria-label="Dashboards">
+            {views.map((v) => (
+              <button
+                key={v}
+                className={view === v ? "active" : ""}
+                aria-current={view === v ? "page" : undefined}
+                onClick={() => {
+                  setSelected(null);
+                  update({
+                    dashboard: v,
+                    metric: ["compra", "estoque"].includes(v)
+                      ? "stock"
+                      : "requests",
+                    page: "1",
+                    status: "",
+                    priority: "",
+                  });
+                }}
+              >
+                {v === "compra"
+                  ? "Recomendação de compra"
+                  : v === "geral"
+                    ? "Geral"
+                    : v === "bloco"
+                      ? "Por bloco"
+                      : v === "estoque"
+                        ? "Estoque"
+                        : "Requisições"}
+              </button>
+            ))}
+          </nav>
+        )}
       <section className="panel ops-panel">
         <div className="panel-head">
           <div>
@@ -418,14 +749,20 @@ export function OperationsPanel({
                 ? "Compra preditiva"
                 : planning === "distribution"
                   ? "Recomendação de estoque"
-                  : dashboardTitles[view]}
+                  : mode === "historico"
+                    ? "Histórico"
+                    : role === "funcionario"
+                      ? "Minhas requisições"
+                      : dashboardTitles[view]}
             </h1>
             <p>
               {planning === "purchase"
                 ? "Revise compras por consumo efetivamente baixado, mínimos, prazo e entradas confirmadas."
                 : planning === "distribution"
                   ? "Aproxime os materiais dos blocos que os consomem, usando caminhos do mapa publicado. Confirme toda transferência."
-                  : "Veja o que precisa de atenção e acompanhe seus materiais."}
+                  : role === "funcionario"
+                    ? "Acompanhe seus pedidos, confira as etapas e consulte os detalhes."
+                    : "Veja o que precisa de atenção e acompanhe seus materiais."}
             </p>
             <p>
               {report?.scope ??
@@ -598,6 +935,21 @@ export function OperationsPanel({
             </button>
           </form>
         </details>
+        {role === "funcionario" && report && !loading && (
+          <section
+            className="employee-queue"
+            aria-labelledby="employee-queue-title"
+          >
+            <div className="panel-head">
+              <div>
+                <h2 id="employee-queue-title">Fila de requisições</h2>
+                <p>Seus pedidos por urgência, seguidos dos mais antigos.</p>
+              </div>
+              <span className="count">{report.details.total} registros</span>
+            </div>
+            {records}
+          </section>
+        )}
         {error && (
           <div role="alert">
             <p>{error}</p>
@@ -651,8 +1003,16 @@ export function OperationsPanel({
               Período: {report.methodology.period} · Escopo: {report.scope} ·
               Atualização: {dates(report.generatedAt)}
             </p>
-            <details open={!planning}>
-              <summary>Ver indicadores do período</summary>
+            <details
+              hidden={mode === "historico"}
+              className="dashboard-indicators"
+              open={!planning && role !== "funcionario"}
+            >
+              <summary>
+                {view === "geral"
+                  ? "Indicadores essenciais"
+                  : "Ver indicadores do período"}
+              </summary>
               <div className="ops-metrics dashboard-metrics">
                 {displayed.map((m) => (
                   <article className="ops-metric" key={m.id}>
@@ -700,15 +1060,102 @@ export function OperationsPanel({
             </details>
           </>
         )}
+        {report &&
+          !loading &&
+          !planning &&
+          role !== "funcionario" &&
+          ["requisicoes", "bloco"].includes(view) && (
+            <section className="dashboard-request-integrated">
+              <div className="panel-head">
+                <div>
+                  <h2>
+                    {mode === "historico"
+                      ? "Histórico de requisições"
+                      : "Acompanhamento das requisições"}
+                  </h2>
+                  <p>
+                    Consulte situação, solicitante e detalhes de cada material.
+                  </p>
+                </div>
+              </div>
+              {records}
+            </section>
+          )}
+        {view === "estoque" && !planning && !loading && stockPanel(true)}
+        {report &&
+          !loading &&
+          view === "estoque" &&
+          can(role, "stock") &&
+          report.incoming.some((row) => row.status === "Confirmada") && (
+            <section className="dashboard-stock-integrated">
+              <h2>Entradas confirmadas</h2>
+              <p>Previsões não alteram saldo até a conferência.</p>
+              {report.incoming
+                .filter((r) => r.status === "Confirmada")
+                .map((r) => (
+                  <form
+                    className="ops-form"
+                    key={r.id}
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const f = new FormData(e.currentTarget);
+                      void act(
+                        {
+                          type: "receiveInbound",
+                          id: r.id,
+                          qrCode: String(f.get("code")),
+                          quantity: Number(f.get("quantity")),
+                        },
+                        `Confirmar recebimento de ${r.quantity} unidades de ${r.code}?`,
+                      );
+                    }}
+                  >
+                    <p>
+                      {r.code} · {r.quantity} un. · {r.warehouse} · {r.supplier}{" "}
+                      · {String(r.due_date).slice(0, 10)}
+                    </p>
+                    <label>
+                      Código recebido
+                      <input name="code" required />
+                    </label>
+                    <label>
+                      Quantidade recebida
+                      <input name="quantity" type="number" min="1" required />
+                    </label>
+                    <button className="button primary" disabled={busy}>
+                      Conferir recebimento
+                    </button>
+                    <button
+                      type="button"
+                      className="button secondary"
+                      disabled={busy}
+                      onClick={() =>
+                        void act(
+                          { type: "cancelInbound", id: r.id },
+                          "Cancelar esta entrada prevista?",
+                        )
+                      }
+                    >
+                      Cancelar entrada prevista
+                    </button>
+                  </form>
+                ))}
+            </section>
+          )}
       </section>
-      {report && !loading && !planning && (
-        <DashboardCharts
-          report={report}
-          onWarehouse={(warehouse) => update({ warehouse, page: "1" })}
-          onItem={(code) => update({ code, page: "1" })}
-          onMetric={openMetric}
-        />
-      )}
+      {report &&
+        !loading &&
+        !planning &&
+        !["estoque", "requisicoes"].includes(view) &&
+        !(role === "admin" && ["geral", "bloco"].includes(view)) &&
+        mode !== "historico" && (
+          <DashboardCharts
+            report={report}
+            onWarehouse={(warehouse) => update({ warehouse, page: "1" })}
+            onItem={(code) => update({ code, page: "1" })}
+            onMetric={openMetric}
+          />
+        )}
       {report && !loading && (
         <>
           {planning && (
@@ -743,7 +1190,7 @@ export function OperationsPanel({
               }
             />
           )}
-          {view === "geral" && (
+          {view === "geral" && mode !== "dashboard" && (
             <details className="panel ops-panel dashboard-quality">
               <summary>Sobre os dados e recomendações</summary>
               {report.quality.map((q) => (
@@ -768,176 +1215,9 @@ export function OperationsPanel({
               </p>
             </details>
           )}
-          {["requisicoes", "bloco"].includes(view) && (
-            <section className="panel ops-panel">
-              <div className="panel-head">
-                <div>
-                  <h2>Fila de requisições</h2>
-                  <p>
-                    Urgência, seguida da data mais antiga. Cada registro é uma
-                    linha de item. Prazo: não cadastrado.
-                  </p>
-                </div>
-              </div>
-              {records}
-            </section>
-          )}
-          {["estoque", "compra"].includes(view) && (
-            <section className="panel ops-panel">
-              <div className="panel-head">
-                <div>
-                  <h2>
-                    {view === "compra"
-                      ? "Recomendação de compra"
-                      : "Saldos por item e local"}
-                  </h2>
-                  <p>
-                    Saldo atual. Movimentações no período{" "}
-                    {report.methodology.period}.
-                  </p>
-                </div>
-              </div>
-              <details className="decision-table" open={!planning}>
-                <summary>
-                  {planning
-                    ? "Ver tabela detalhada de estoque e previsão"
-                    : "Ver tabela detalhada de estoque"}
-                </summary>
-                <div
-                  className="ops-scroll"
-                  role="region"
-                  aria-label="Estoque e previsão"
-                  tabIndex={0}
-                >
-                  <table>
-                    <caption>Valores exatos por unidade cadastrada</caption>
-                    <thead>
-                      <tr>
-                        {[
-                          "Item / local",
-                          "Físico",
-                          "Reservado",
-                          "Disponível",
-                          "Mínimo",
-                          "Movimentações",
-                          ...(planning
-                            ? [
-                                "Prazo / previsão",
-                                "Compra / transferência",
-                                "Preço e fonte",
-                                "Metodologia",
-                              ]
-                            : []),
-                        ].map((h) => (
-                          <th key={h} scope="col">
-                            {h}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {report.rows.map((r) => (
-                        <tr key={r.code + r.warehouse}>
-                          <td data-label="Item / local">
-                            <strong>
-                              {r.code} · {r.item}
-                            </strong>
-                            <p>
-                              {r.warehouse} · {r.location} · {r.unit}
-                            </p>
-                          </td>
-                          <td data-label="Físico">{r.physical}</td>
-                          <td data-label="Reservado">{r.reserved}</td>
-                          <td data-label="Disponível">{r.available}</td>
-                          <td data-label="Mínimo">
-                            {r.configuredMinimum}
-                            {planning && (
-                              <small>
-                                Sugerido: {r.minimum} · alvo: {r.target}
-                              </small>
-                            )}
-                          </td>
-                          <td data-label="Movimentações">
-                            Entradas: {r.entries}
-                            <br />
-                            Retiradas: {r.withdrawals}
-                            <br />
-                            Devoluções: {r.returns}
-                          </td>
-                          {planning && (
-                            <>
-                              <td data-label="Prazo / previsão">
-                                {r.leadDays} dias / {r.forecast} {r.unit}
-                              </td>
-                              <td data-label="Compra / transferência">
-                                Comprar: {r.buy} {r.unit}
-                                <br />
-                                Transferir: {r.transfer} {r.unit}
-                                <small>
-                                  Custo interno:{" "}
-                                  {r.cost.toLocaleString("pt-BR", {
-                                    style: "currency",
-                                    currency: "BRL",
-                                  })}
-                                </small>
-                              </td>
-                              <td data-label="Preço e fonte">
-                                {r.unitPrice === null
-                                  ? "Indisponível"
-                                  : r.unitPrice.toLocaleString("pt-BR", {
-                                      style: "currency",
-                                      currency: "BRL",
-                                    })}
-                                <small>
-                                  {r.priceLabel} · Data: {dates(r.priceDate)}
-                                </small>
-                              </td>
-                              <td data-label="Metodologia">
-                                <span className="dashboard-badge">
-                                  {r.analysis.confidence}
-                                </span>
-                                <details>
-                                  <summary>Explicar cálculo</summary>
-                                  <p>
-                                    {r.analysis.method} · {r.analysis.days} dias
-                                    · MAE{" "}
-                                    {r.analysis.mae?.toFixed(2) ??
-                                      "não validado"}{" "}
-                                    · WAPE{" "}
-                                    {r.analysis.wape === null
-                                      ? "não validado"
-                                      : (r.analysis.wape * 100).toFixed(1) +
-                                        "%"}
-                                  </p>
-                                  <p>{r.analysis.reason}</p>
-                                  <p>
-                                    Compra = max(0, {r.target} − {r.available} −{" "}
-                                    {r.incoming} − {r.transfer}) = {r.buy}.
-                                  </p>
-                                </details>
-                              </td>
-                            </>
-                          )}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                {!report.rows.length && (
-                  <p className="dashboard-empty">
-                    Nenhum item/local corresponde aos filtros.
-                  </p>
-                )}
-                {pagination(
-                  report.rowTotal,
-                  Math.max(
-                    1,
-                    Math.ceil(report.rowTotal / report.filters.pageSize),
-                  ),
-                )}
-              </details>
-            </section>
-          )}
+          {planning &&
+            ["estoque", "compra"].includes(view) &&
+            stockPanel(false)}
           {planning === "purchase" &&
             ["estoque", "requisicoes"].includes(view) &&
             can(role, "stock") && (
@@ -1050,62 +1330,6 @@ export function OperationsPanel({
               >
                 Confirmar recomendação para revisão
               </button>
-            </section>
-          )}
-          {view === "estoque" && can(role, "stock") && (
-            <section className="panel ops-panel">
-              <h2>Entradas confirmadas</h2>
-              <p>Previsões não alteram saldo até a conferência.</p>
-              {report.incoming
-                .filter((r) => r.status === "Confirmada")
-                .map((r) => (
-                  <form
-                    className="ops-form"
-                    key={r.id}
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      const f = new FormData(e.currentTarget);
-                      void act(
-                        {
-                          type: "receiveInbound",
-                          id: r.id,
-                          qrCode: String(f.get("code")),
-                          quantity: Number(f.get("quantity")),
-                        },
-                        `Confirmar recebimento de ${r.quantity} unidades de ${r.code}?`,
-                      );
-                    }}
-                  >
-                    <p>
-                      {r.code} · {r.quantity} un. · {r.warehouse} · {r.supplier}{" "}
-                      · {String(r.due_date).slice(0, 10)}
-                    </p>
-                    <label>
-                      Código recebido
-                      <input name="code" required />
-                    </label>
-                    <label>
-                      Quantidade recebida
-                      <input name="quantity" type="number" min="1" required />
-                    </label>
-                    <button className="button primary" disabled={busy}>
-                      Conferir recebimento
-                    </button>
-                    <button
-                      type="button"
-                      className="button secondary"
-                      disabled={busy}
-                      onClick={() =>
-                        void act(
-                          { type: "cancelInbound", id: r.id },
-                          "Cancelar esta entrada prevista?",
-                        )
-                      }
-                    >
-                      Cancelar entrada prevista
-                    </button>
-                  </form>
-                ))}
             </section>
           )}
         </>

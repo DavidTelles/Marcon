@@ -437,8 +437,8 @@ export function WarehouseDashboard({
           title="Fluxo de materiais"
           description="Unidades recebidas e retiradas no período filtrado."
           rows={[
-            { label: "Entradas", value: received, color: "#218238" },
-            { label: "Saídas", value: dispatched, color: "#1d419c" },
+            { label: "Entradas", value: received, color: "var(--success)" },
+            { label: "Saídas", value: dispatched, color: "var(--blue)" },
           ]}
           unit="unidades"
         />

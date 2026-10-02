@@ -21,7 +21,11 @@ import { StaffCreateScreen } from "./screens/staff-create-screen";
 import { StockScreen } from "./screens/stock-screen";
 import { ReturnsScreen } from "./screens/returns-screen";
 import { DashboardScreen } from "./screens/dashboard-screen";
+import { AdminDashboard } from "./screens/admin-dashboard";
 import dashboardStyles from "./dashboard.module.css";
+import appearance from "./appearance.module.css";
+import compactStyles from "./compact.module.css";
+import { ThemeToggle, useWorkspaceTheme } from "./theme-toggle";
 import { WarehouseDashboard } from "./screens/warehouse-dashboard";
 import { RequestsScreen } from "./screens/requests-screen";
 import { type Request, type Part } from "@/lib/demo-data";
@@ -43,7 +47,6 @@ import {
   LayoutDashboard,
   Lightbulb,
   LogOut,
-  Menu,
   Plus,
   UsersRound,
   X,
@@ -57,7 +60,6 @@ const roles: Record<
     name: "Admin",
     pages: [
       { id: "dashboard", label: "Dashboard" },
-      { id: "requisicoes", label: "Ver requisições" },
       { id: "mapa", label: "Planta e rotas" },
       { id: "compra", label: "Compra preditiva" },
       { id: "recomendacoes", label: "Recomendação de estoque" },
@@ -135,6 +137,7 @@ export default function Workspace({
   dashboardView?: string;
 }) {
   const router = useRouter();
+  const theme = useWorkspaceTheme();
   const searchParams = useSearchParams();
   const selectedDashboard = searchParams.get("dashboard") ??
     (dashboardView === "block" || role === "lider" ? "bloco" :
@@ -144,6 +147,7 @@ export default function Workspace({
   const employeeBlock = useEmployeeBlock();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [dashboardExpanded, setDashboardExpanded] = useState(page === "dashboard");
   const {
     requests,
     setRequests,
@@ -189,7 +193,8 @@ export default function Workspace({
           ? roleLanding[role]
           : roleLanding[role];
   const active =
-    current.pages.find((item) => item.id === page) ?? current.pages[0];
+    current.pages.find((item) => item.id === page) ??
+    (page === "requisicoes" ? { id: page, label: "Requisições" } : current.pages[0]);
   const roleRequests = requests.filter((item) =>
     role === "funcionario"
       ? item.person === employeeName || item.person === "Você"
@@ -445,7 +450,7 @@ export default function Workspace({
     );
   }
   return (
-    <div className={`shell ${page === "dashboard" ? dashboardStyles.dashboard : ""}`}>
+    <div data-theme={theme} className={`shell ${appearance.workspace} ${compactStyles.compact} ${role === "funcionario" && page === "historico" ? appearance.employeeHistory : ""} ${page === "dashboard" ? dashboardStyles.dashboard : ""}`}>
       <a className="workspace-skip" href="#workspace-content">
         Ir para o conteúdo
       </a>
@@ -455,6 +460,7 @@ export default function Workspace({
         aria-hidden="true"
       />
       <aside
+        id="workspace-menu"
         ref={sidebar}
         inert={isMobile && !drawerOpen}
         className={"sidebar " + (drawerOpen ? "open" : "")}
@@ -480,17 +486,24 @@ export default function Workspace({
             <div key={item.id}>
             <button
               className={"nav-link " + (active.id === item.id ? "active" : "")}
-              onClick={() => navigate(item.id)}
+              onClick={() => {
+                if (item.id === "dashboard") {
+                  setDashboardExpanded((expanded) => !expanded);
+                } else {
+                  navigate(item.id);
+                }
+              }}
               aria-current={active.id === item.id ? "page" : undefined}
-              aria-expanded={item.id === "dashboard" ? page === "dashboard" : undefined}
+              aria-expanded={item.id === "dashboard" ? dashboardExpanded : undefined}
               aria-controls={item.id === "dashboard" ? "dashboard-submenu" : undefined}
             >
               <span aria-hidden="true">
                 <NavIcon page={item.id} />
               </span>
               {item.label}
+              {item.id === "dashboard" && <span className={compactStyles.dashboardArrow} aria-hidden="true">{dashboardExpanded ? "↓" : ">"}</span>}
             </button>
-            {item.id === "dashboard" && page === "dashboard" && (
+            {item.id === "dashboard" && dashboardExpanded && (
               <nav id="dashboard-submenu" className={dashboardStyles.submenu} aria-label="Visões da dashboard">
                 {[["geral", "Geral"], ["bloco", "Por bloco"], ["estoque", "Estoque"], ["requisicoes", "Requisições"]]
                   .filter(([view]) => role !== "lider" || ["bloco", "requisicoes"].includes(view))
@@ -508,6 +521,11 @@ export default function Workspace({
           ))}
         </nav>
         <div className="sidebar-bottom">
+          {isMobile && <div className={compactStyles.mobileAccount}>
+            <ThemeToggle />
+            <Link href="/profile" onClick={() => setDrawerOpen(false)}>Editar perfil</Link>
+            <form action="/api/logout" method="post"><button type="submit" className="workspace-logout"><LogOut size={16} aria-hidden="true" />Sair da conta</button></form>
+          </div>}
           <div className="side-note">
             <strong>Seu espaço, seu ritmo.</strong>
             <p>Organize materiais e acompanhe solicitações em um só lugar.</p>
@@ -540,12 +558,15 @@ export default function Workspace({
             </Link>
             <button
               ref={menuButton}
-              className="icon-button menu"
+              className={`icon-button menu ${compactStyles.logoMenu}`}
+              type="button"
               onClick={() => setDrawerOpen(true)}
               aria-label="Abrir menu"
               aria-expanded={drawerOpen}
+              aria-controls="workspace-menu"
+              title="Abrir menu Marcon"
             >
-              <Menu size={22} />
+              <BrandLogo compact decorative />
             </button>
             <span className="workspace-location">
               <span>
@@ -555,6 +576,7 @@ export default function Workspace({
             </span>
           </div>
           <div className="role-control">
+            <ThemeToggle />
             <strong>{current.name}</strong>
             <Link href="/profile" className="workspace-profile">
               Editar perfil
@@ -591,7 +613,8 @@ export default function Workspace({
               movements={movements}
             />
           )}
-          {!persistent && page === "dashboard" && role !== "almoxarifado" && (
+          {!persistent && page === "dashboard" && role === "admin" && <AdminDashboard dashboardView={dashboardView} routePart={routePart} />}
+          {!persistent && page === "dashboard" && role !== "almoxarifado" && role !== "admin" && (
             <DashboardScreen
               role={role}
               current={current}

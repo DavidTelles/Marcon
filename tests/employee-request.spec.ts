@@ -87,6 +87,31 @@ test("employee catalog and request form fit narrow screens", async ({
   }
 });
 
+test("employee history keeps the queue visible and remembers the accessible theme control", async ({ page, baseURL }) => {
+  const response = await page.request.post("/api/login", {
+    headers: { origin: baseURL! },
+    data: { identity: "ana@marcon.demo", password: "Marcon@123" },
+  });
+  expect(response.status()).toBe(200);
+  await page.goto("/employee/history");
+  await expect(page.getByRole("heading", { name: "Fila de requisições" })).toBeVisible();
+  const theme = page.getByRole("button", { name: "Modo escuro", exact: true });
+  await expect(theme).toHaveAttribute("aria-pressed", "false");
+  await theme.click();
+  await expect(page.locator(".shell")).toHaveAttribute("data-theme", "dark");
+  await page.reload();
+  await expect(theme).toHaveAttribute("aria-pressed", "true");
+  for (const width of [320, 375, 768, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(theme).toBeVisible();
+    if (width <= 768) await expect(page.getByRole("complementary", { name: "Menu principal" })).not.toBeInViewport();
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
+  }
+  await theme.focus();
+  await page.keyboard.press("Space");
+  await expect(page.locator(".shell")).toHaveAttribute("data-theme", "light");
+});
+
 test("employee area requires an employee session", async ({ page }) => {
   await page.goto("/employee/request");
   await expect(page).toHaveURL("/login");

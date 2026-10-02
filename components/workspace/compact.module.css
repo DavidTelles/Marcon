@@ -1,0 +1,401 @@
+/* Shared density: reduce large dimensions by roughly a quarter, with readable
+   type and full touch targets on small screens. Never scale the viewport. */
+.compact.compact {
+  font-size: 13px;
+  line-height: 1.5;
+}
+.compact.compact :global(.sidebar) {
+  width: 200px;
+}
+.compact.compact :global(.brand) {
+  height: 66px;
+  padding: 16px;
+  gap: 8px;
+}
+.compact.compact :global(.brand strong) {
+  font-size: 14px;
+}
+.compact.compact :global(.brand > span) {
+  width: 33px;
+}
+.compact.compact :global(.nav-caption) {
+  margin: 18px 16px 9px;
+}
+.compact.compact :global(.sidebar nav) {
+  padding-inline: 9px;
+}
+.compact.compact :global(.nav-link) {
+  min-height: 39px;
+  padding: 8px 10px;
+  font-size: 13px;
+  border-radius: 9px;
+  gap: 9px;
+}
+.compact.compact :global(.nav-link svg) {
+  width: 15px;
+  height: 15px;
+}
+.dashboardArrow {
+  margin-left: auto;
+  font-size: 18px;
+  line-height: 1;
+}
+.compact.compact :global(#dashboard-submenu) {
+  margin: 4px 0 10px 16px;
+  padding: 6px;
+  gap: 3px;
+  border-radius: 9px;
+}
+.compact.compact :global(#dashboard-submenu a) {
+  min-height: 33px;
+  padding: 7px 10px;
+  font-size: 12px;
+}
+.compact.compact :global(.topbar) {
+  min-height: 54px;
+  padding: 6px clamp(14px, 2.25vw, 31px);
+  gap: 9px;
+}
+.compact.compact :global(.content) {
+  padding: clamp(14px, 2.25vw, 30px);
+}
+.compact.compact :global(.heading) {
+  margin-bottom: 20px;
+}
+.compact.compact :global(.heading h1),
+.compact.compact :global(.dashboard-title) {
+  font-size: clamp(22px, 2.25vw, 28px);
+  line-height: 1.25;
+}
+.compact.compact :global(.heading p) {
+  font-size: 13px;
+}
+.compact.compact :global(.panel),
+.compact.compact :global(.stat),
+.compact.compact :global(.dashboard-metrics > article) {
+  border-radius: 12px;
+  box-shadow: 0 2px 10px var(--shadow-color);
+}
+.compact.compact :global(.panel-head) {
+  padding: 15px 18px 12px;
+  gap: 12px;
+}
+.compact.compact :global(.panel-head h2) {
+  font-size: 16px;
+}
+.compact.compact :global(.panel-head p) {
+  font-size: 12px;
+  line-height: 1.5;
+}
+.compact.compact :global(.stats),
+.compact.compact :global(.dashboard-metrics),
+.compact.compact :global(.dashboard-grid),
+.compact.compact :global(.dashboard-analytics),
+.compact.compact :global(.focus-grid) {
+  gap: 12px;
+  margin-block: 18px;
+}
+.compact.compact :global(.stat),
+.compact.compact :global(.dashboard-metrics > article) {
+  padding: 15px;
+}
+.compact.compact :global(.stat > strong),
+.compact.compact :global(.dashboard-metrics button strong) {
+  font-size: 26px;
+  line-height: 1.25;
+}
+.compact.compact :global(.stat > span:not(.stat-icon)) {
+  font-size: 13px;
+}
+.compact.compact :global(.stat > small) {
+  font-size: 12px;
+}
+.compact.compact :global(.stat-icon),
+.compact.compact :global(.activity-icon) {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+.compact.compact :global(.button),
+.compact.compact :global(.dashboard-tabs button),
+.compact.compact :global(.dashboard-subnav button),
+.compact.compact :global(.trend-period button) {
+  min-height: 33px;
+  padding: 7px 12px;
+  font-size: 13px;
+  border-radius: 8px;
+  gap: 6px;
+}
+.compact.compact :global(.button svg),
+.compact.compact :global(.icon-button svg) {
+  width: 16px;
+  height: 16px;
+}
+.compact.compact :global(.icon-button) {
+  width: 33px;
+  height: 33px;
+}
+.compact.compact :global(.workspace-logout) {
+  padding: 7px 9px;
+  font-size: 12px;
+}
+.compact.compact :global(.ops-panel) {
+  padding: 18px;
+  overflow: visible;
+  max-height: none;
+}
+.compact.compact :global(.ops-panel > .panel-head) {
+  margin: -18px -18px 15px;
+}
+.compact.compact :global(.dashboard-suite) {
+  gap: 15px;
+}
+.compact.compact :global(.dashboard-metrics) {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
+}
+.compact.compact :global(.dashboard-metric-button) {
+  padding: 0;
+  min-height: 0;
+}
+.compact.compact :global(.dashboard-metric-button::after) {
+  display: none;
+}
+.compact.compact :global(.dashboard-definition) {
+  margin-top: 9px;
+  font-size: 12px;
+}
+.compact.compact :global(.dashboard-filters) {
+  padding: 9px 12px;
+  margin-block: 12px;
+}
+.compact.compact :global(.dashboard-live-bar) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-block: 12px;
+  padding: 9px 0;
+  gap: 9px;
+  font-size: 12px;
+}
+.compact.compact :global(.dashboard-live-bar > button) {
+  margin-left: auto;
+}
+.compact.compact :global(.dashboard-context) {
+  font-size: 12px;
+  margin-block: 9px;
+}
+.compact.compact :global(.ops-form),
+.compact.compact :global(.filter-grid),
+.compact.compact :global(.form-grid) {
+  gap: 12px;
+}
+.compact.compact :global(input:not([type="checkbox"]):not([type="radio"])),
+.compact.compact :global(select),
+.compact.compact :global(textarea) {
+  min-height: 33px;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+.compact.compact :global(.inventory-row),
+.compact.compact :global(.activity),
+.compact.compact :global(.quick-link) {
+  padding-block: 12px;
+}
+.compact.compact :global(.dashboard-stock-integrated) {
+  margin-top: 18px;
+  border-top: 1px solid var(--line);
+}
+.compact.compact :global(.dashboard-request-integrated) {
+  margin-top: 18px;
+  border-top: 1px solid var(--line);
+}
+.compact.compact :global(.dashboard-request-integrated > .panel-head) {
+  padding-inline: 0;
+}
+.compact.compact :global(.dashboard-stock-integrated > .panel-head) {
+  padding-inline: 0;
+}
+.compact.compact :global(.overview-status) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  background: var(--tint);
+  border-radius: 8px;
+}
+.compact.compact :global(.overview-status a) {
+  margin-left: auto;
+  color: var(--blue);
+}
+.compact.compact :global(.admin-summary) {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+}
+.compact.compact :global(.ops-scroll),
+.compact.compact :global(.table-wrap) {
+  max-height: none;
+  overflow-x: auto;
+}
+.compact.compact :global(table) {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.compact.compact :global(.history-table table) {
+  min-width: 860px;
+}
+.compact.compact :global(.history-table td:first-child),
+.compact.compact :global(.history-table small) {
+  min-width: 0;
+}
+.compact.compact :global(th) {
+  background: var(--tint);
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: left;
+  padding: 11px 12px;
+}
+.compact.compact :global(td) {
+  padding: 12px;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--line);
+}
+.compact.compact :global(td small) {
+  display: block;
+  color: var(--subtle);
+  font-size: 12px;
+  margin-top: 3px;
+}
+.compact.compact :global(tbody tr:nth-child(even)) {
+  background: color-mix(in srgb, var(--canvas) 60%, var(--white));
+}
+.compact.compact :global(tbody tr:hover) {
+  background: var(--tint);
+}
+.compact.compact :global(caption) {
+  text-align: left;
+  font-size: 12px;
+  color: var(--subtle);
+  padding: 10px 12px;
+}
+.compact.compact :global(.badge),
+.compact.compact :global(.dashboard-badge) {
+  font-size: 12px;
+  padding: 4px 7px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+.compact.compact :global(.dashboard-badge[data-status="Abaixo do mínimo"]) {
+  color: var(--warning);
+}
+.compact.compact :global(.dashboard-badge[data-status="Indisponível"]) {
+  color: var(--danger);
+}
+.compact.compact :global(.dashboard-badge[data-status="Disponível"]) {
+  color: var(--success);
+}
+.mobileAccount {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border-top: 1px solid var(--line);
+}
+.mobileAccount a {
+  color: var(--blue);
+}
+.compact.compact .logoMenu {
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--on-brand) 45%, transparent);
+  border-radius: 10px;
+  cursor: pointer;
+}
+.compact.compact .logoMenu:hover {
+  background: color-mix(in srgb, var(--on-brand) 12%, transparent);
+}
+.logoMenu > span {
+  width: 32px;
+}
+@media (max-width: 800px) {
+  .compact.compact :global(.sidebar) {
+    width: min(260px, calc(100vw - 48px));
+  }
+  .compact.compact :global(.topbar) {
+    height: 56px;
+    min-height: 56px;
+    padding: 6px 12px;
+  }
+  .compact.compact :global(.topbar .top-left) {
+    width: 100%;
+  }
+  .compact.compact :global(.topbar .top-left > :not(.menu)),
+  .compact.compact :global(.topbar .role-control) {
+    display: none;
+  }
+  .compact.compact .logoMenu {
+    width: 44px;
+    height: 44px;
+    display: grid;
+  }
+  .compact.compact :global(.nav-link),
+  .compact.compact :global(#dashboard-submenu a),
+  .compact.compact :global(.button),
+  .compact.compact :global(.icon-button),
+  .compact.compact :global(summary),
+  .compact.compact :global(.link-button) {
+    min-height: 44px;
+  }
+  .compact.compact :global(.content) {
+    padding: 16px 12px 100px;
+  }
+}
+@media (max-width: 700px) {
+  .compact.compact :global(input:not([type="checkbox"]):not([type="radio"])),
+  .compact.compact :global(select),
+  .compact.compact :global(textarea) {
+    font-size: 16px;
+    min-height: 44px;
+  }
+  .compact.compact :global(.ops-panel) {
+    padding: 14px;
+  }
+  .compact.compact :global(.ops-panel > .panel-head) {
+    margin: -14px -14px 12px;
+    padding: 14px;
+  }
+  .compact.compact :global(.ops-scroll) {
+    overflow: visible;
+  }
+  .compact.compact :global(.history-table table) {
+    min-width: 0;
+  }
+  .compact.compact :global(.history-table td) {
+    white-space: normal;
+  }
+  .compact.compact :global(.stats),
+  .compact.compact :global(.dashboard-metrics) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .compact.compact :global(.dashboard-metrics button strong) {
+    font-size: 22px;
+  }
+}
+@media (max-width: 380px) {
+  .compact.compact :global(.dashboard-metrics) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media print {
+  .compact.compact :global(.sidebar),
+  .compact.compact :global(.topbar) {
+    display: none;
+  }
+  .compact.compact :global(.content) {
+    padding: 0;
+  }
+  .compact.compact :global(.ops-scroll) {
+    overflow: visible;
+  }
+}

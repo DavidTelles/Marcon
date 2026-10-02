@@ -153,7 +153,7 @@ export function DeliveryRoute({ request }: { request: Request }) {
                     className="route-path"
                     pathLength="1"
                     fill="none"
-                    stroke="#1559db"
+                    stroke="var(--blue)"
                     strokeWidth="6"
                     points={data.route.nodes
                       .map((id) => {

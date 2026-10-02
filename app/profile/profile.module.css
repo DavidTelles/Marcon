@@ -1,53 +1,64 @@
 .page {
   min-height: 100svh;
   padding: 0 0 clamp(20px, 4vw, 56px);
-  background: #f6f8fc;
-  color: #0f2038;
+  background: var(--canvas);
+  color: var(--ink);
 }
-.topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 76px; padding: 12px clamp(20px, 4vw, 56px); color: white; background: linear-gradient(110deg, #172f5d, #1d419c); }
-.brandLink { display: inline-flex; align-items: center; gap: 10px; color: white; text-decoration: none; font-size: 12px; font-weight: 700; letter-spacing: .12em; }
-.topbarLink { min-height: 44px; display: inline-flex; align-items: center; padding: 0 14px; border: 1px solid #ffffff55; border-radius: 8px; color: white; text-decoration: none; font-weight: 600; }
-.topbarLink:hover { background: #ffffff22; }
+.page .topbar { min-height: 57px; padding: 9px clamp(15px, 3vw, 42px); }
+.page .container { gap: clamp(14px, 1.9vw, 21px); }
+.page .header h1 { font-size: clamp(23px, 2.6vw, 29px); }
+.page .card { padding: clamp(15px, 2.4vw, 27px); border-radius: 14px; }
+.page .grid, .page .passwordGrid { gap: 15px; }
+.page .cardSection + .cardSection { margin-top: 23px; padding-top: 21px; }
+.page .sectionHeading { margin-bottom: 15px; }
+.page .sectionHeading h2 { font-size: 16px; }
+.page .button, .page .field input { min-height: 35px; padding: 8px 12px; font-size: 13px; }
+@media (max-width: 800px) {
+  .page .topbar { min-height: 56px; padding: 6px 12px; }
+  .topbar > :not(:global(.mobile-brand-menu)) { display: none; }
+  .page .button, .page .field input { min-height: 44px; }
+  .page .field input { font-size: 16px; }
+}
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 76px; padding: 12px clamp(20px, 4vw, 56px); color: var(--on-brand); background: linear-gradient(110deg, var(--brand-bg), var(--brand-bg)); }
+.brandLink { display: inline-flex; align-items: center; gap: 10px; color: var(--on-brand); text-decoration: none; font-size: 12px; font-weight: 700; letter-spacing: .12em; }
+.topbarActions { display: flex; align-items: center; gap: 10px; }
+.topbarLink { min-height: 44px; display: inline-flex; align-items: center; padding: 0 14px; border: 1px solid color-mix(in srgb, var(--line) 33%, transparent); border-radius: 8px; color: var(--on-brand); text-decoration: none; font-weight: 600; }
 .container { padding-inline: 16px; }
 .container { width: min(100%, 960px); margin-inline: auto; display: grid; gap: clamp(18px, 2.5vw, 28px); }
 .header { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; min-width: 0; }
 .header > div { min-width: 0; }
-.eyebrow { color: #1d419c; font-size: 11px; font-weight: 800; letter-spacing: .12em; }
+.eyebrow { color: var(--blue); font-size: 11px; font-weight: 800; letter-spacing: .12em; }
 .header h1 { margin: 8px 0 6px; font-size: clamp(28px, 3.5vw, 38px); line-height: 1.15; letter-spacing: -.03em; }
-.header p { margin: 0; color: #526177; line-height: 1.5; }
-.back { flex: none; margin-top: 9px; color: #1d419c; font-weight: 700; text-decoration: none; white-space: nowrap; }
-.back:hover { text-decoration: underline; }
-.card { min-width: 0; padding: clamp(20px, 3.2vw, 36px); border: 1px solid #e1e5ef; border-radius: 18px; background: #fff; box-shadow: 0 10px 30px #0f20380b; }
+.header p { margin: 0; color: var(--subtle); line-height: 1.5; }
+.back { flex: none; margin-top: 9px; color: var(--blue); font-weight: 700; text-decoration: none; white-space: nowrap; }
+.card { min-width: 0; padding: clamp(20px, 3.2vw, 36px); border: 1px solid var(--line); border-radius: 18px; background: var(--white); box-shadow: 0 10px 30px var(--shadow-color); }
 .card { background: var(--surface-raised); box-shadow: var(--surface-shadow); }
 .back { min-height: 44px; display: inline-flex; align-items: center; }
 @media (max-width: 640px) { .field input { font-size: 16px; } }
-.cardSection + .cardSection { margin-top: 30px; padding-top: 28px; border-top: 1px solid #e8ecf3; }
+.cardSection + .cardSection { margin-top: 30px; padding-top: 28px; border-top: 1px solid var(--line); }
 .sectionHeading { margin-bottom: 20px; }
 .sectionHeading h2 { margin: 0 0 5px; font-size: 18px; line-height: 1.3; }
-.sectionHeading p { margin: 0; color: #526177; line-height: 1.5; }
+.sectionHeading p { margin: 0; color: var(--subtle); line-height: 1.5; }
 .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
 .passwordGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
-.field { display: flex; flex-direction: column; gap: 8px; min-width: 0; color: #334765; font-size: 13px; font-weight: 700; }
-.field input { display: block; width: 100%; min-width: 0; min-height: 46px; padding: 10px 13px; border: 1px solid #c9d3e2; border-radius: 9px; color: #0f2038; background: #fff; font: inherit; font-size: 14px; font-weight: 500; }
-.field input::placeholder { color: #71809a; opacity: 1; }
-.field input:hover { border-color: #9aabc4; }
-.field input:focus { border-color: #3a71e6; }
-.field input:disabled { background: #f6f8fc; color: #71809a; }
-.field input[aria-invalid="true"] { border-color: #b42318; }
-.hint { margin: 8px 0 0; color: #66758b; font-size: 12px; line-height: 1.5; }
+.field { display: flex; flex-direction: column; gap: 8px; min-width: 0; color: var(--subtle); font-size: 13px; font-weight: 700; }
+.field input { display: block; width: 100%; min-width: 0; min-height: 46px; padding: 10px 13px; border: 1px solid var(--line); border-radius: 9px; color: var(--ink); background: var(--white); font: inherit; font-size: 14px; font-weight: 500; }
+.field input::placeholder { color: var(--subtle); opacity: 1; }
+.field input:focus { border-color: var(--line); }
+.field input:disabled { background: var(--white); color: var(--subtle); }
+.field input[aria-invalid="true"] { border-color: var(--danger); }
+.hint { margin: 8px 0 0; color: var(--subtle); font-size: 12px; line-height: 1.5; }
 .actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 26px; }
-.button { display: inline-flex; align-items: center; justify-content: center; min-height: 46px; padding: 10px 20px; border: 0; border-radius: 9px; background: #1d419c; color: #fff; font: inherit; font-weight: 700; text-align: center; cursor: pointer; }
-.button:hover:not(:disabled) { background: #173781; }
+.button { display: inline-flex; align-items: center; justify-content: center; min-height: 46px; padding: 10px 20px; border: 0; border-radius: 9px; background: var(--button-bg); color: var(--button-text); font: inherit; font-weight: 700; text-align: center; cursor: pointer; }
 .button:disabled { opacity: .55; cursor: not-allowed; }
 .feedback { margin: 16px 0 0; line-height: 1.5; overflow-wrap: anywhere; }
-.error { color: #b42318; }
-.success { color: #157a33; }
-.notice { margin: 0; padding: 14px 16px; border: 1px solid #d9e3f1; border-radius: 9px; background: #fff; color: #526177; line-height: 1.5; }
+.error { color: var(--danger); }
+.success { color: var(--success); }
+.notice { margin: 0; padding: 14px 16px; border: 1px solid var(--line); border-radius: 9px; background: var(--white); color: var(--subtle); line-height: 1.5; }
 .passkeyFields { max-width: 440px; }
-.unavailable { max-width: 680px; padding: 16px; border: 1px solid #d9e3f1; border-radius: 10px; background: #f6f8fc; color: #334765; line-height: 1.5; }
+.unavailable { max-width: 680px; padding: 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--white); color: var(--subtle); line-height: 1.5; }
 .unavailable p { margin: 6px 0 0; }
-.secondaryButton { min-height: 40px; margin-top: 14px; padding: 8px 14px; border: 1px solid #b9c8df; border-radius: 8px; background: #fff; color: #1d419c; font: inherit; font-weight: 700; cursor: pointer; }
-.secondaryButton:hover { background: #eaf0ff; }
+.secondaryButton { min-height: 40px; margin-top: 14px; padding: 8px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--white); color: var(--blue); font: inherit; font-weight: 700; cursor: pointer; }
 @media (max-width: 760px) {
   .passwordGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .passwordGrid > :first-child { grid-column: 1 / -1; }

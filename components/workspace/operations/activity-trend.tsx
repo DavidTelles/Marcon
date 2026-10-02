@@ -92,8 +92,8 @@ export function ActivityTrend({
           >
             <defs>
               <linearGradient id={gradient} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#3a71e6" stopOpacity=".24" />
-                <stop offset="100%" stopColor="#3a71e6" stopOpacity=".01" />
+                <stop offset="0%" stopColor="var(--bright)" stopOpacity=".24" />
+                <stop offset="100%" stopColor="var(--bright)" stopOpacity=".01" />
               </linearGradient>
             </defs>
             {[0, 0.5, 1].map((fraction) => (

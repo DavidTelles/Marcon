@@ -406,7 +406,7 @@ export function MapEditor() {
                 y1={w.y1 * 700}
                 x2={w.x2 * 1000}
                 y2={w.y2 * 700}
-                stroke="#b42318"
+                stroke="var(--danger)"
                 strokeWidth="5"
               />
             ))}
@@ -420,7 +420,7 @@ export function MapEditor() {
                   y1={a.y * 700}
                   x2={b.x * 1000}
                   y2={b.y * 700}
-                  stroke={e.blocked ? "#b42318" : "#16803e"}
+                  stroke={e.blocked ? "var(--danger)" : "var(--success)"}
                   strokeWidth="4"
                   strokeDasharray={e.blocked ? "8 6" : undefined}
                 />
@@ -436,7 +436,7 @@ export function MapEditor() {
                     return `${n.x * 1000},${n.y * 700}`;
                   })
                   .join(" ")}
-                stroke="#164af0"
+                stroke="var(--blue)"
                 strokeWidth="7"
                 fill="none"
               />
@@ -454,7 +454,7 @@ export function MapEditor() {
                   cy={n.y * 700}
                   r={selected === n.id ? 12 : 9}
                   fill={
-                    selected === n.id || n.uncertain ? "#b96a00" : "#164af0"
+                    selected === n.id || n.uncertain ? "#b96a00" : "var(--blue)"
                   }
                 />
                 <text
@@ -464,7 +464,7 @@ export function MapEditor() {
                   paintOrder="stroke"
                   stroke="white"
                   strokeWidth="4"
-                  fill="#12254c"
+                  fill="var(--ink)"
                 >
                   {n.label}
                 </text>

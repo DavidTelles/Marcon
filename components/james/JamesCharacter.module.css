@@ -6,6 +6,10 @@
   pointer-events: none;
   --signal: #689dff;
 }
+
+@media (max-width: 800px) {
+  .scene[data-compact] { zoom: .75; }
+}
 .robot {
   position: absolute;
   inset: 0;

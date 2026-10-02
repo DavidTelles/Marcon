@@ -664,27 +664,6 @@ export default function JamesAssistant({ userId }: { userId: string }) {
               ref={symbol}
               className={styles.symbol}
               aria-hidden="true"
-              onPointerMove={(e) => {
-                if (
-                  matchMedia(
-                    "(prefers-reduced-motion: reduce), (pointer: coarse)",
-                  ).matches
-                )
-                  return;
-                const b = e.currentTarget.getBoundingClientRect();
-                e.currentTarget.style.setProperty(
-                  "--light-x",
-                  `${(100 * (e.clientX - b.x)) / b.width}%`,
-                );
-                e.currentTarget.style.setProperty(
-                  "--light-y",
-                  `${(100 * (e.clientY - b.y)) / b.height}%`,
-                );
-              }}
-              onPointerLeave={(e) => {
-                e.currentTarget.style.removeProperty("--light-x");
-                e.currentTarget.style.removeProperty("--light-y");
-              }}
             >
               <div className={styles.orbit} />
               <div className={styles.halo} />

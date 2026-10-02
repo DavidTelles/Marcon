@@ -120,7 +120,7 @@ export function RequestsScreen({
         <div className="panel-head">
           <div>
             <h2>
-              {page === "historico"
+              {role === "funcionario" ? "Fila de requisições" : page === "historico"
                 ? "Histórico de requisições"
                 : "Requisições"}
             </h2>
@@ -143,6 +143,8 @@ export function RequestsScreen({
             </button>
           </div>
         </div>
+        <details className="request-table-filters" open={role !== "funcionario"}>
+        <summary>Filtrar e organizar pedidos</summary>
         <div className="filter-grid request-filter-grid">
           <label>
             Busca geral
@@ -244,6 +246,7 @@ export function RequestsScreen({
             Limpar filtros
           </button>
         </div>
+        </details>
         {warehouseQueue && selected && (
           <div className="fulfillment-panel">
             <div className="fulfillment-title">
@@ -313,9 +316,12 @@ export function RequestsScreen({
           <>
             <div className="table-wrap">
               <table>
+                <caption>{page === "historico" ? "Histórico de requisições" : "Requisições e situação atual"}</caption>
                 <thead>
                   <tr>
+                    <th scope="col">Número</th>
                     <th>Peça</th>
+                    <th scope="col">Quantidade</th>
                     <th>Solicitante</th>
                     <th>Bloco</th>
                     <th>Data</th>
@@ -331,12 +337,14 @@ export function RequestsScreen({
                 <tbody>
                   {visibleRows.map((item) => (
                     <tr key={item.id}>
+                      <td>#{item.id}</td>
                       <td>
                         <strong>{item.material}</strong>
                         <small>
-                          #{item.id} · {item.quantity} un.
+                          {item.code || "Código não informado"}
                         </small>
                       </td>
+                      <td>{item.quantity} un.</td>
                       <td>{item.person}</td>
                       <td>{item.block}</td>
                       <td>{item.date}</td>

@@ -1,9 +1,9 @@
 .dashboard {
-  --glass-border: #cbd8ec;
+  --glass-border: var(--line);
   font-size: 16px;
   line-height: 1.5;
   background:
-    radial-gradient(ellipse at 85% 0%, #dfeafa 0, transparent 48%), #f4f7fb;
+    radial-gradient(ellipse at 85% 0%, var(--canvas) 0, transparent 48%), var(--white);
 }
 .submenu {
   display: grid;
@@ -11,9 +11,9 @@
   margin: 6px 12px 14px 28px;
   padding: 8px;
   border-radius: 14px;
-  background: linear-gradient(145deg, #f6f9ff, #edf3fc);
-  border: 1px solid #dde6f4;
-  box-shadow: inset 0 1px 0 #fff;
+  background: linear-gradient(145deg, var(--white), var(--canvas));
+  border: 1px solid var(--line);
+  box-shadow: inset 0 1px 0 var(--highlight-color);
 }
 .submenu a {
   display: flex;
@@ -21,24 +21,23 @@
   min-height: 44px;
   padding: 10px 14px;
   border-radius: 9px;
-  color: #17366f;
+  color: var(--blue);
   text-decoration: none;
   font-size: 14px;
   font-weight: 600;
 }
-.submenu a:hover { background: #e1eafa; color: #102d65; }
 .submenu a[aria-current="page"] {
-  background: #dce7fa;
-  color: #102d65;
-  box-shadow: inset 3px 0 0 #214994, inset 0 1px 0 #ffffffb0;
+  background: var(--canvas);
+  color: var(--ink);
+  box-shadow: inset 3px 0 0 var(--shadow-color), inset 0 1px 0 var(--highlight-color);
 }
-.submenu a:focus-visible { outline: 3px solid #85b2ff; outline-offset: 2px; }
+.submenu a:focus-visible { outline: 3px solid var(--line); outline-offset: 2px; }
 .dashboard :global(.dashboard-composition) { grid-column: 1 / -1; }
 .dashboard :global(.dashboard-composition-bars) { display: grid; gap: 8px; }
 .dashboard :global(.dashboard-composition .dashboard-stock-track) { height: 18px; }
 .dashboard :global(.dashboard-composition .dashboard-stock-track i) {
-  box-shadow: inset 0 2px 0 #ffffff25, inset 0 -2px 0 #0000000b;
-  border-right: 2px solid #ffffffb0;
+  box-shadow: inset 0 2px 0 var(--highlight-color), inset 0 -2px 0 var(--shadow-color);
+  border-right: 2px solid color-mix(in srgb, var(--line) 69%, transparent);
   box-sizing: border-box;
 }
 .dashboard :global(.dashboard-composition .dashboard-stock-track i:last-child) { border-right: 0; }
@@ -54,15 +53,14 @@
   gap: 10px;
   min-height: 56px;
   padding: 12px;
-  border: 1px solid #d7e1f0;
+  border: 1px solid var(--line);
   border-radius: 12px;
-  background: #f6f9fe;
+  background: var(--white);
   color: var(--ink);
   text-align: left;
   font: inherit;
   font-size: 14px;
 }
-.dashboard :global(.dashboard-piece-legend button:hover) { background: #edf3fc; }
 .dashboard :global(.dashboard-piece-legend i) { width: 14px; height: 14px; border-radius: 4px; flex-shrink: 0; }
 .dashboard :global(.dashboard-piece-legend button > span) { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .dashboard :global(.dashboard-piece-legend small) { display: block; color: var(--subtle); }
@@ -72,8 +70,8 @@
   padding: clamp(18px, 3vw, 40px);
 }
 .dashboard :global(.sidebar) {
-  background: #ffffffeb;
-  border-right-color: #dce4f0;
+  background: color-mix(in srgb, var(--white) 92%, transparent);
+  border-right-color: var(--line);
 }
 .dashboard :global(.sidebar .side-note) {
   display: none;
@@ -86,26 +84,26 @@
   min-height: 52px;
   margin-block: 2px;
   border-radius: 14px;
-  color: #465872;
+  color: var(--subtle);
   font-size: 15px;
   line-height: 1.4;
   padding-block: 10px;
 }
 .dashboard :global(.nav-link.active) {
-  background: linear-gradient(120deg, #e2ebfc, #f2f6fd);
+  background: linear-gradient(120deg, var(--canvas), var(--white));
   color: var(--blue);
   box-shadow:
-    inset 0 1px 0 #fff,
+    inset 0 1px 0 var(--highlight-color),
     inset 3px 0 0 var(--blue),
-    0 3px 12px #1d419c0b;
+    0 3px 12px var(--shadow-color);
 }
 .dashboard :global(.brand small),
 .dashboard :global(.user small) {
   font-size: 12px;
 }
 .dashboard :global(.topbar) {
-  background: linear-gradient(115deg, #173781, #1d419c);
-  box-shadow: 0 4px 20px #17378110;
+  background: linear-gradient(115deg, var(--brand-bg), var(--brand-bg));
+  box-shadow: 0 4px 20px var(--shadow-color);
 }
 .dashboard :global(.heading h1) {
   font-size: clamp(28px, 3vw, 38px);
@@ -120,10 +118,10 @@
 .dashboard :global(.dashboard-metrics > article) {
   border: 1px solid var(--glass-border);
   border-radius: 22px;
-  background: linear-gradient(145deg, #fffffff5, #f9fbfff2);
+  background: linear-gradient(145deg, color-mix(in srgb, var(--white) 96%, transparent), color-mix(in srgb, var(--white) 95%, transparent));
   box-shadow:
-    inset 0 1px 0 #fff,
-    0 6px 24px #15387506;
+    inset 0 1px 0 var(--highlight-color),
+    0 6px 24px var(--shadow-color);
   min-width: 0;
 }
 .dashboard :global(.panel-head) {
@@ -177,10 +175,10 @@
   align-items: center;
   gap: 16px;
   padding: 20px 24px;
-  border: 1px solid #c4d5f4;
+  border: 1px solid var(--line);
   border-radius: 20px;
-  background: linear-gradient(110deg, #e8f0ffdc, #ffffffdb);
-  box-shadow: inset 0 1px 0 #fff;
+  background: linear-gradient(110deg, color-mix(in srgb, var(--canvas) 86%, transparent), color-mix(in srgb, var(--white) 86%, transparent));
+  box-shadow: inset 0 1px 0 var(--highlight-color);
 }
 .dashboard :global(.dashboard-next-step > div) {
   flex: 1;
@@ -204,24 +202,24 @@
   padding: 12px 18px;
   font-size: 15px;
   font-weight: 600;
-  background: linear-gradient(145deg, #fffffff5, #edf3fcce);
+  background: linear-gradient(145deg, color-mix(in srgb, var(--white) 96%, transparent), color-mix(in srgb, var(--canvas) 81%, transparent));
   color: var(--blue);
-  border: 1px solid #c4d2e9;
+  border: 1px solid var(--line);
   box-shadow:
-    inset 0 1px 0 #fff,
-    0 3px 8px #1d419c08;
+    inset 0 1px 0 var(--highlight-color),
+    0 3px 8px var(--shadow-color);
 }
 .dashboard :global(.button.primary),
 .dashboard :global(.dashboard-tabs button.active),
 .dashboard :global(.dashboard-subnav button.active),
 .dashboard :global(.trend-period button[aria-pressed="true"]) {
-  color: white;
-  background: linear-gradient(145deg, #3159ad, #1d419c 70%);
-  border-color: #214793;
+  color: var(--button-text);
+  background: linear-gradient(145deg, var(--button-bg), var(--button-bg) 70%);
+  border-color: var(--line);
   box-shadow:
-    inset 0 1px 0 #ffffff60,
-    inset 0 -1px 0 #142c69,
-    0 4px 12px #1d419c18;
+    inset 0 1px 0 var(--highlight-color),
+    inset 0 -1px 0 var(--shadow-color),
+    0 4px 12px var(--shadow-color);
 }
 .dashboard :global(.dashboard-analytics) {
   display: grid;
@@ -239,16 +237,15 @@
   padding: 20px 24px 24px;
   gap: 20px;
 }
-.dashboard :global(.insight-ring),
-.dashboard :global(.insight-chart:hover .insight-ring) {
+.dashboard :global(.insight-ring) {
   width: 150px;
   transform: none;
-  box-shadow: inset 0 2px 3px #ffffff45, 0 8px 24px #17378113;
+  box-shadow: inset 0 2px 3px var(--highlight-color), 0 8px 24px var(--shadow-color);
   animation: none;
 }
 .dashboard :global(.insight-ring-center) {
-  background: radial-gradient(circle at 30% 25%, #fff, #f5f8fe);
-  box-shadow: 0 2px 8px #17378112, inset 0 1px 0 white;
+  background: radial-gradient(circle at 30% 25%, var(--white), var(--white));
+  box-shadow: 0 2px 8px var(--shadow-color), inset 0 1px 0 var(--highlight-color);
   width: 76%;
 }
 .dashboard :global(.insight-ring-center strong) {
@@ -307,7 +304,7 @@
 }
 .dashboard :global(.dashboard-chart text) {
   font-size: 15px;
-  fill: #526177;
+  fill: var(--subtle);
 }
 .dashboard :global(.trend-data) {
   padding: 0 24px 16px;
@@ -348,11 +345,11 @@
 .dashboard :global(.dashboard-bar-track) {
   height: 8px;
   box-shadow: none;
-  background: #e8edf5;
+  background: var(--canvas);
 }
 .dashboard :global(.metric-track .entry),
 .dashboard :global(.dashboard-bar-track span) {
-  background: linear-gradient(90deg, #1d419c, #5d83d0);
+  background: linear-gradient(90deg, var(--blue), var(--accent));
 }
 .dashboard :global(.dashboard-bars) {
   filter: none;
@@ -388,21 +385,21 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  color: #216c35;
+  color: var(--success);
   font-weight: 600;
 }
 .dashboard :global(.dashboard-live-state i) {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #218238;
-  box-shadow: 0 0 0 4px #21823812;
+  background: var(--success);
+  box-shadow: 0 0 0 4px var(--shadow-color);
 }
 .dashboard :global(.dashboard-live-state.unavailable) {
-  color: #a54536;
+  color: var(--danger);
 }
 .dashboard :global(.dashboard-live-state.unavailable i) {
-  background: #a54536;
+  background: var(--danger-bg);
 }
 .dashboard :global(.dashboard-live-bar > button) {
   margin-left: auto;
@@ -411,7 +408,7 @@
   margin: 12px 0 20px;
   padding: 14px 18px;
   border-radius: 14px;
-  background: #eef3fc;
+  background: var(--canvas);
 }
 .dashboard :global(.dashboard-chart-inspector output) {
   display: block;
@@ -453,15 +450,15 @@
   height: 12px;
   border-radius: 8px;
   overflow: hidden;
-  background: #e8edf5;
+  background: var(--canvas);
   grid-column: 1 / -1;
-  box-shadow: inset 0 1px 3px #1737810a;
+  box-shadow: inset 0 1px 3px var(--shadow-color);
 }
 .dashboard :global(.available) {
-  background: linear-gradient(90deg, #1d419c, #5d83d0);
+  background: linear-gradient(90deg, var(--blue), var(--accent));
 }
 .dashboard :global(.reserved) {
-  background: #ba852b;
+  background: var(--danger-bg);
 }
 .dashboard :global(.dashboard-chart-choice) {
   display: grid;
@@ -484,10 +481,6 @@
 }
 .dashboard :global(.dashboard-chart-choice:disabled) {
   cursor: default;
-}
-.dashboard :global(.dashboard-chart-choice:not(:disabled):hover) {
-  border-color: #c4d2e9;
-  background: #eef3fc;
 }
 .dashboard :global(.dashboard-item-choice) {
   min-height: 48px;
@@ -512,10 +505,6 @@
   font: inherit;
   text-align: left;
 }
-.dashboard :global(.insight-choice:hover) {
-  background: #eef3fc;
-  border-color: #c4d2e9;
-}
 @media (prefers-reduced-motion: no-preference) {
   .submenu {
     animation: dashboard-reveal 240ms ease-out both;
@@ -535,8 +524,7 @@
     transform-origin: left center;
     animation: dashboard-grow 650ms cubic-bezier(.22, 1, .36, 1) both;
   }
-  .dashboard :global(.insight-ring),
-  .dashboard :global(.insight-chart:hover .insight-ring) {
+  .dashboard :global(.insight-ring) {
     animation: dashboard-ring-reveal 650ms cubic-bezier(.22, 1, .36, 1) both;
   }
   .dashboard :global(.dashboard-chart polyline) {
@@ -629,10 +617,10 @@
   border: 1px solid var(--line);
   border-radius: 14px;
   padding: 4px 16px;
-  background: #f6f9fd;
+  background: var(--white);
 }
 .dashboard :global(:is(a, button, summary):focus-visible) {
-  outline: 3px solid #3a71e6;
+  outline: 3px solid var(--line);
   outline-offset: 4px;
 }
 @supports (backdrop-filter: blur(12px)) {
@@ -645,17 +633,12 @@
     backdrop-filter: blur(12px);
   }
 }
-@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+@media (prefers-reduced-motion: no-preference) {
   .dashboard :global(.stat),
   .dashboard :global(.quick-link) {
     transition:
       border-color 180ms ease,
       box-shadow 180ms ease;
-  }
-  .dashboard :global(.dashboard-drilldown:hover),
-  .dashboard :global(.quick-link:hover) {
-    border-color: #8aa8df;
-    box-shadow: 0 8px 24px #1d419c10;
   }
 }
 @media (max-width: 1200px) {
@@ -732,13 +715,13 @@
   .dashboard :global(.sidebar),
   .dashboard :global(.panel),
   .dashboard :global(.stat) {
-    background: white;
+    background: var(--white);
     backdrop-filter: none;
   }
 }
 @media print {
   .dashboard {
-    background: white;
+    background: var(--white);
   }
   .dashboard :global(.dashboard-next-step),
   .dashboard :global(.trend-period),
@@ -747,7 +730,7 @@
   }
   .dashboard :global(.panel),
   .dashboard :global(.stat) {
-    background: white;
+    background: var(--white);
     box-shadow: none;
     break-inside: avoid;
   }

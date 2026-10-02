@@ -6,6 +6,7 @@ import LoginForm from "./login-form";
 import styles from "./login.module.css";
 import { databaseEnabled } from "@/lib/db";
 import { roleLanding } from "@/lib/workspace-routes";
+import { ThemeToggle } from "@/components/workspace/theme-toggle";
 
 export default async function LoginPage() {
   const user = await currentUser();
@@ -23,7 +24,10 @@ export default async function LoginPage() {
       <section className={styles.accessPanel} aria-labelledby="login-title">
         <header className={styles.accessHeader}>
           <span>Portal do colaborador</span>
-          <span className={styles.demoBadge}>{databaseEnabled() ? "Acesso seguro" : "Demonstração"}</span>
+          <div className={styles.accessControls}>
+            <span className={styles.demoBadge}>{databaseEnabled() ? "Acesso seguro" : "Demonstração"}</span>
+            <ThemeToggle />
+          </div>
         </header>
         <div className={styles.formContainer}>
           <div className={styles.heading}>

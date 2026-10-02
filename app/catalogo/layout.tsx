@@ -6,6 +6,8 @@ import { databaseEnabled } from "@/lib/db";
 import { roleLanding } from "@/lib/workspace-routes";
 import { BrandLogo } from "@/app/components/brand-logo";
 import styles from "./catalog.module.css";
+import { ThemeToggle } from "@/components/workspace/theme-toggle";
+import { MobileBrandMenu } from "@/components/workspace/mobile-brand-menu";
 
 export default async function CatalogLayout({
   children,
@@ -20,6 +22,7 @@ export default async function CatalogLayout({
     <div className={styles.appShell}>
       <header className={styles.topbar}>
         <div className={styles.topbarInner}>
+          <MobileBrandMenu role={user.role} />
           <Link
             href={roleLanding[user.role]}
             className={styles.brandLink}
@@ -37,6 +40,7 @@ export default async function CatalogLayout({
             </span>
           </nav>
           <div className={styles.account}>
+            <ThemeToggle />
             <span className={styles.accountName}>
               <UserRound size={16} /> {user.name.split(" ")[0]}
             </span>

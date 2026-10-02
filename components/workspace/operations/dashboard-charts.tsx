@@ -61,8 +61,8 @@ export function DashboardCharts({
     timeZone: "America/Sao_Paulo",
   });
   const flowRows = [
-    { label: "Entradas", kind: "entrada", color: "#218238" },
-    { label: "Saídas", kind: "saida", color: "#1d419c" },
+    { label: "Entradas", kind: "entrada", color: "var(--success)" },
+    { label: "Saídas", kind: "saida", color: "var(--blue)" },
   ].map(({ label, kind, color }) => ({
     label,
     color,
@@ -161,7 +161,7 @@ export function DashboardCharts({
                   className="dashboard-chart"
                   role="img"
                   aria-label={`Retiradas em ${unit} entre ${report.filters.from} e ${report.filters.to}`}
-                  onPointerMove={(event) => {
+                  onClick={(event) => {
                     const bounds = event.currentTarget.getBoundingClientRect();
                     const x =
                       ((event.clientX - bounds.left) / bounds.width) * 720;
@@ -177,10 +177,10 @@ export function DashboardCharts({
                 >
                   <defs>
                     <linearGradient id={gradient} x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#3a71e6" stopOpacity=".22" />
+                      <stop offset="0%" stopColor="var(--bright)" stopOpacity=".22" />
                       <stop
                         offset="100%"
-                        stopColor="#3a71e6"
+                        stopColor="var(--bright)"
                         stopOpacity=".01"
                       />
                     </linearGradient>
@@ -451,12 +451,12 @@ export function DashboardCharts({
                 {
                   label: "Abaixo do mínimo",
                   value: criticalCount,
-                  color: "#b7791f",
+                  color: "var(--warning)",
                 },
                 {
                   label: "Saldo adequado",
                   value: Math.max(0, stockCount - criticalCount),
-                  color: "#218238",
+                  color: "var(--success)",
                 },
               ]}
               unit="posições"

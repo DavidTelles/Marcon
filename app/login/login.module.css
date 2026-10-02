@@ -1,13 +1,22 @@
 .shell {
-  --ink: var(--color-marcon-navy);
-  --muted: var(--color-marcon-subtle);
-  --blue: var(--color-marcon-blue);
-  --line: var(--color-marcon-line);
   display: grid;
   min-height: 100svh;
   padding: 12px;
   gap: 12px;
   background: var(--color-marcon-canvas);
+}
+
+.shell .heading h1 { font-size: clamp(23px, 2.25vw, 27px); }
+.shell .brandContent h2 { font-size: clamp(28px, 2.85vw, 44px); }
+.shell .formContainer { width: min(100%, 340px); padding-block: 30px; }
+.shell .heading { margin-bottom: 23px; }
+.shell .heading p { font-size: 13px; }
+.shell .form { gap: 15px; }
+.shell .primaryButton, .shell .rfidButton { min-height: 39px; padding: 10px 12px; gap: 9px; font-size: 13px; }
+.shell .inputWrapper input { height: 42px; font-size: 14px; }
+@media (max-width: 800px) {
+  .shell .primaryButton, .shell .rfidButton, .shell .inputWrapper input { min-height: 44px; }
+  .shell .inputWrapper input { font-size: 16px; }
 }
 
 .skipLink {
@@ -18,7 +27,7 @@
   padding: 12px 16px;
   border-radius: 8px;
   color: var(--blue);
-  background: white;
+  background: var(--white);
   transform: translateY(-200%);
 }
 
@@ -34,12 +43,12 @@
   overflow: hidden;
   min-width: 0;
   padding: 24px;
-  border: 1px solid #ffffff12;
+  border: 1px solid color-mix(in srgb, var(--line) 7%, transparent);
   border-radius: 20px;
-  color: white;
+  color: var(--on-brand);
   background:
-    radial-gradient(ellipse at 85% 65%, #3a71e625, transparent 60%),
-    linear-gradient(155deg, #172f5d 0%, #0f2038 60%, #142a50 100%);
+    radial-gradient(ellipse at 85% 65%, color-mix(in srgb, var(--accent) 15%, transparent), transparent 60%),
+    linear-gradient(155deg, var(--brand-bg) 0%, var(--brand-bg) 60%, var(--brand-bg) 100%);
 }
 
 .brandHeader,
@@ -63,8 +72,8 @@
 
 .brandSubtitle {
   padding-left: 14px;
-  border-left: 1px solid #ffffff30;
-  color: #c6d0e1;
+  border-left: 1px solid color-mix(in srgb, var(--line) 19%, transparent);
+  color: var(--on-brand-muted);
   font-size: 11px;
   font-weight: 400;
   letter-spacing: 0;
@@ -74,7 +83,7 @@
   display: none;
   align-items: center;
   gap: 8px;
-  color: #c6d0e1;
+  color: var(--on-brand-muted);
   font-size: 10px;
   letter-spacing: 1.5px;
 }
@@ -94,7 +103,7 @@
 }
 
 .brandEyebrow {
-  color: #c6d0e1;
+  color: var(--on-brand-muted);
 }
 
 .brandEyebrow > span {
@@ -113,13 +122,13 @@
 }
 
 .brandContent h2 > span {
-  color: #b3c9f5;
+  color: var(--on-brand-muted);
 }
 
 .brandContent > p {
   max-width: 360px;
   margin: 0;
-  color: #c6d0e1;
+  color: var(--on-brand-muted);
   font-size: 14px;
   line-height: 1.8;
 }
@@ -135,7 +144,7 @@
   display: flex;
   align-items: center;
   gap: 9px;
-  color: #c6d0e1;
+  color: var(--on-brand-muted);
   font-size: 12px;
 }
 
@@ -147,12 +156,12 @@
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: #ffffff30;
+  background: color-mix(in srgb, var(--white) 19%, transparent);
 }
 .footerDots i:first-child {
   width: 20px;
   border-radius: 10px;
-  background: #a6beeb;
+  background: var(--tint);
 }
 
 /* CSS-only depth. Pointer updates are limited to one frame per event. */
@@ -172,8 +181,8 @@
   inset: 5% -10% -10%;
   opacity: 0.18;
   background-image:
-    linear-gradient(#a6beeb44 1px, transparent 1px),
-    linear-gradient(90deg, #a6beeb44 1px, transparent 1px);
+    linear-gradient(color-mix(in srgb, var(--tint) 27%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--tint) 27%, transparent) 1px, transparent 1px);
   background-size: 44px 44px;
   transform: rotateX(62deg) rotateZ(-24deg);
   mask-image: radial-gradient(ellipse, black, transparent 65%);
@@ -182,7 +191,7 @@
 .sceneRing {
   position: absolute;
   inset: 4% 3% 6%;
-  border: 1px solid #9fb9ed20;
+  border: 1px solid color-mix(in srgb, var(--line) 13%, transparent);
   border-radius: 50%;
   transform: rotateX(58deg) rotateZ(-25deg);
 }
@@ -204,17 +213,17 @@
 .accessCard {
   position: absolute;
   inset: 0;
-  border: 1px solid #a6beeb40;
+  border: 1px solid color-mix(in srgb, var(--line) 25%, transparent);
   border-radius: 16px;
 }
 
 .cardBack {
-  background: #1d419c22;
+  background: color-mix(in srgb, var(--blue) 13%, transparent);
   transform: translate3d(22px, -25px, -52px);
 }
 
 .cardMiddle {
-  background: linear-gradient(120deg, #365b9e90, #233b62b0);
+  background: linear-gradient(120deg, color-mix(in srgb, var(--blue) 56%, transparent), color-mix(in srgb, var(--brand-bg) 69%, transparent));
   transform: translate3d(12px, -13px, -26px);
 }
 
@@ -224,10 +233,10 @@
   justify-content: space-between;
   overflow: hidden;
   padding: 22px;
-  background: linear-gradient(125deg, #3966b5, #1d419c 54%, #1a3474);
+  background: linear-gradient(125deg, var(--blue), var(--blue) 54%, var(--blue));
   box-shadow:
-    0 25px 45px #020a183b,
-    inset 0 1px #ffffff22;
+    0 25px 45px var(--shadow-color),
+    inset 0 1px var(--highlight-color);
 }
 
 .accessCard::after {
@@ -238,7 +247,7 @@
   background: linear-gradient(
     110deg,
     transparent 38%,
-    #ffffff16 49%,
+    color-mix(in srgb, var(--white) 9%, transparent) 49%,
     transparent 60%
   );
   transform: translateX(60%);
@@ -269,14 +278,14 @@
   width: 32px;
   height: 25px;
   overflow: hidden;
-  border: 1px solid #d2e0ff90;
+  border: 1px solid color-mix(in srgb, var(--line) 56%, transparent);
   border-radius: 5px;
 }
 
 .cardChip > span {
   flex: 1;
-  border-right: 1px solid #d2e0ff70;
-  background: #d2e0ff15;
+  border-right: 1px solid color-mix(in srgb, var(--line) 44%, transparent);
+  background: color-mix(in srgb, var(--canvas) 8%, transparent);
 }
 .cardChip > span:last-child {
   border: 0;
@@ -288,7 +297,7 @@
   letter-spacing: -0.4px;
 }
 .cardFooter {
-  color: #d2e0ff;
+  color: var(--subtle);
   font-size: 7px;
   letter-spacing: 1px;
 }
@@ -306,7 +315,7 @@
   right: 0;
   bottom: 25px;
   padding: 13px 16px;
-  color: #c6d0e1;
+  color: var(--subtle);
   font-size: 10px;
   transform: translateZ(30px);
 }
@@ -314,12 +323,12 @@
 .floatingBadge > span {
   display: grid;
   place-items: center;
-  color: #b3c9f5;
+  color: var(--subtle);
 }
 .floatingBadge strong {
   display: block;
   margin-top: 4px;
-  color: var(--color-marcon-white);
+  color: var(--on-brand);
   font-size: 11px;
   font-weight: 600;
 }
@@ -328,7 +337,7 @@
   padding: 24px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: white;
+  background: var(--white);
   text-align: center;
 }
 
@@ -339,7 +348,7 @@
   height: 72px;
   margin: 20px auto;
   border-radius: 50%;
-  background: #edf2fb;
+  background: var(--canvas);
   color: var(--blue);
 }
 
@@ -390,6 +399,7 @@
   color: var(--muted);
   font-size: 11px;
 }
+.accessControls { display: flex; align-items: center; gap: 10px; }
 .demoBadge {
   padding: 6px 9px;
   border: 1px solid var(--line);
@@ -453,9 +463,9 @@
   min-width: 0;
   height: 54px;
   padding: 0 16px 0 44px;
-  border: 1px solid #8e9bb0;
+  border: 1px solid var(--line);
   border-radius: 10px;
-  background: #fff;
+  background: var(--white);
   color: var(--ink);
   font-size: 16px;
   transition:
@@ -467,12 +477,9 @@
   color: var(--muted);
   font-size: 14px;
 }
-.inputWrapper input:hover:not(:disabled) {
-  border-color: var(--muted);
-}
 .inputWrapper input:focus-visible {
   border-color: var(--blue);
-  outline: 2px solid #1d419c25;
+  outline: 2px solid color-mix(in srgb, var(--line) 15%, transparent);
   outline-offset: 2px;
 }
 .inputWrapper input[aria-invalid="true"] {
@@ -499,11 +506,6 @@
   color: var(--muted);
 }
 
-.revealButton:hover {
-  background: var(--color-marcon-canvas);
-  color: var(--blue);
-}
-
 .primaryButton,
 .rfidButton {
   display: flex;
@@ -525,13 +527,9 @@
 .primaryButton {
   margin-top: 4px;
   border: 1px solid var(--blue);
-  background: var(--blue);
-  color: white;
-  box-shadow: 0 4px 10px #1d419c14;
-}
-.primaryButton:hover:not(:disabled) {
-  background: #17357d;
-  transform: translateY(-1px);
+  background: var(--button-bg);
+  color: var(--button-text);
+  box-shadow: 0 4px 10px var(--shadow-color);
 }
 .primaryButton:active:not(:disabled),
 .rfidButton:active:not(:disabled) {
@@ -558,17 +556,13 @@
 .rfidButton {
   flex-wrap: wrap;
   gap: 8px;
-  border: 1px solid #8e9bb0;
+  border: 1px solid var(--line);
   background: transparent;
   color: var(--ink);
   font-size: 13px;
 }
 .rfidButton > svg {
   color: var(--blue);
-}
-.rfidButton:hover:not(:disabled) {
-  border-color: var(--blue);
-  background: #1d419c06;
 }
 .rfidButton[aria-describedby="face-access-note"]:disabled {
   cursor: not-allowed;
@@ -578,22 +572,22 @@
   padding: 18px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: white;
+  background: var(--white);
 }
 .faceTest h2 { margin: 0 0 8px; color: var(--ink); font-size: 19px; }
 .faceTest p { color: var(--muted); font-size: 12px; line-height: 1.6; }
-.faceTest video { display: block; width: 100%; aspect-ratio: 4 / 3; border-radius: 9px; background: #0f2038; object-fit: cover; transform: scaleX(-1); }
+.faceTest video { display: block; width: 100%; aspect-ratio: 4 / 3; border-radius: 9px; background: var(--brand-bg); object-fit: cover; transform: scaleX(-1); }
 .faceTestActions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px; }
-.faceTestActions button { min-height: 44px; padding: 9px 14px; border: 1px solid var(--blue); border-radius: 8px; background: white; color: var(--blue); font: inherit; font-weight: 600; cursor: pointer; }
-.faceTestActions button:first-child { background: var(--blue); color: white; }
-.faceTestError { color: #b42318 !important; }
+.faceTestActions button { min-height: 44px; padding: 9px 14px; border: 1px solid var(--blue); border-radius: 8px; background: var(--white); color: var(--blue); font: inherit; font-weight: 600; cursor: pointer; }
+.faceTestActions button:first-child { background: var(--button-bg); color: var(--button-text); }
+.faceTestError { color: var(--danger) !important; }
 .rfidNote + .rfidButton {
   margin-top: 16px;
 }
 .simulationTag {
   padding: 4px 6px;
   border-radius: 4px;
-  background: #e1e5ef;
+  background: var(--tint);
   color: var(--blue);
   font-size: 10px;
   font-weight: 500;
@@ -675,9 +669,9 @@
 
 .rfidSelected {
   padding: 18px;
-  border: 1px solid #c5d1e9;
+  border: 1px solid var(--line);
   border-radius: 12px;
-  background: #edf2fb;
+  background: var(--canvas);
 }
 .selectedHeader {
   display: flex;
@@ -691,7 +685,7 @@
   width: 38px;
   height: 38px;
   border-radius: 50%;
-  background: #dbe5f8;
+  background: var(--canvas);
   color: var(--blue);
   font-size: 12px;
   font-weight: 600;
@@ -731,9 +725,9 @@
   gap: 9px;
   margin: 0;
   padding: 12px;
-  border: 1px solid #b4231825;
+  border: 1px solid color-mix(in srgb, var(--danger) 15%, transparent);
   border-radius: 8px;
-  background: #fff2f0;
+  background: var(--white);
   color: var(--color-marcon-danger);
   font-size: 13px;
   line-height: 1.6;

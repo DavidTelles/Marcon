@@ -9,6 +9,8 @@ import { BrandLogo } from "@/app/components/brand-logo";
 import { roleLanding } from "@/lib/workspace-routes";
 import { FaceRegister } from "./face-register";
 import { PasskeyRegister } from "./passkey-register";
+import { ThemeToggle } from "@/components/workspace/theme-toggle";
+import { MobileBrandMenu } from "@/components/workspace/mobile-brand-menu";
 
 export default function ProfileForm({ name: initialName, email: initialEmail, role, persistent }: {
   name: string; email: string; role: AccountRole; persistent: boolean;
@@ -51,8 +53,9 @@ export default function ProfileForm({ name: initialName, email: initialEmail, ro
 
   return <main className={styles.page}>
     <header className={styles.topbar}>
+      <MobileBrandMenu role={role} />
       <Link href={roleLanding[role]} className={styles.brandLink} aria-label="Marcon — página inicial"><BrandLogo compact decorative /><span>SMARTWAY</span></Link>
-      <Link href={roleLanding[role]} className={styles.topbarLink}>Página inicial</Link>
+      <div className={styles.topbarActions}><ThemeToggle /><Link href={roleLanding[role]} className={styles.topbarLink}>Página inicial</Link></div>
     </header>
     <div className={styles.container}>
       <div className={styles.header}>
