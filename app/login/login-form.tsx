@@ -158,7 +158,7 @@ export default function LoginForm({ children, demoMode = true }: { children: Rea
               outras formas de acesso
               <span />
             </div>
-            <button className={styles.rfidButton} type="button" onClick={() => { setPassword(""); setCameraActive(true); }} aria-describedby="camera-access-note">
+            <button className={styles.rfidButton} type="button" disabled={demoMode || isBusy || !identity.trim()} onClick={() => { setPassword(""); setCameraActive(true); }} aria-describedby="camera-access-note">
               <ScanFace size={20} aria-hidden="true" /><span>Entrar com reconhecimento facial</span>
             </button>
             <p id="camera-access-note" className={styles.rfidNote}>{demoMode ? "Acesso facial disponível com Neon configurado." : "Informe e-mail ou matrícula. Cadastre seu rosto no perfil após entrar com senha."}</p>
