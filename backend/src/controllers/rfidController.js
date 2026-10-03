@@ -1,5 +1,4 @@
 const asyncHandler = require('../utils/asyncHandler');
-const { success } = require('../utils/response');
 const { rfidService } = require('../services/container');
 
 const ingest = asyncHandler(async (req, res) => {

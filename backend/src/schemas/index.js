@@ -51,6 +51,19 @@ const addItemBody = z.object({
     id: z.union([z.string(), z.number()]).optional(),
     sku: z.string().min(1).optional(),
     name: z.string().min(1),
+    code: z.string().min(1).max(64).optional(),
+    requestKey: z.string().regex(/^[\w-]{16,64}$/).optional(),
+    qr_code: z.string().min(1).max(128).optional(),
+    unit: z.string().min(1).max(24).optional(),
+    category: z.string().min(1).max(80).optional(),
+    location: z.string().min(1).max(80).optional(),
+    pack_size: z.coerce.number().int().positive().optional(),
+    lead_days: z.coerce.number().int().positive().optional(),
+    reference_unit_price: z.coerce.number().nonnegative().optional(),
+    capacity: z.coerce.number().int().positive().nullable().optional(),
+    map_node_id: z.string().max(64).nullable().optional(),
+    local_minimum: z.coerce.number().int().nonnegative().optional(),
+    reason: z.string().optional(),
     amount: z.coerce.number().int().nonnegative().optional(),
     quantity: z.coerce.number().int().nonnegative().optional(),
     warehouse_id: z.coerce.number().int().positive().optional(),
@@ -64,6 +77,7 @@ const addItemBody = z.object({
 const requestBody = z.object({
   body: z.object({
     id: z.any().optional(),
+    requestKey: z.string().regex(/^[\w-]{16,64}$/).optional(),
     id_item: z.coerce.number().int().positive().optional(),
     id_employee: z.coerce.number().int().positive().optional(),
     product_id: z.coerce.number().int().positive().optional(),
@@ -89,7 +103,10 @@ const movementBody = z.object({
     warehouse_id: z.coerce.number().int().positive(),
     warehouse_to_id: z.coerce.number().int().positive().optional(),
     quantity: z.coerce.number().int().positive(),
-    notes: z.string().optional()
+    notes: z.string().optional(),
+    requestKey: z.string().regex(/^[\w-]{16,64}$/),
+    request_id: z.coerce.number().int().positive().optional(),
+    qr_code: z.string().min(1).max(128).optional()
   })
 });
 

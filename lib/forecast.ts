@@ -90,7 +90,39 @@ export type StockTarget = {
   minimum: number;
   incoming: number;
   capacity: number | null;
+  physical?: number;
+  unit?: string;
+  step?: number;
+  daily?: number;
 };
+// Only delivered stock events contribute. Apt inspected returns offset their
+// own withdrawal document; unmatched returns never create negative demand.
+export function netConsumption<T extends { kind: string; quantity: number; request_id?: unknown; part_id?: unknown }>(events: T[]): T[] {
+  const returns = new Map<string, number>();
+  const key = (e: T) => `${e.part_id}:${e.request_id}`;
+  for (const e of events)
+    if (e.kind === "devolucao" && e.request_id != null)
+      returns.set(key(e), (returns.get(key(e)) ?? 0) + Math.max(0, Number(e.quantity)));
+  return events.filter((e) => e.kind === "saida").map((e) => {
+    const offset = e.request_id == null ? 0 : Math.min(Number(e.quantity), returns.get(key(e)) ?? 0);
+    if (offset) returns.set(key(e), returns.get(key(e))! - offset);
+    return { ...e, quantity: Math.max(0, Number(e.quantity) - offset) };
+  });
+}
+export function coverageTarget(series: number[], lead: number, minimum: number, horizon = 7, margin = 0.2): Forecast {
+  const clean = series.map((v) => Number.isFinite(v) && v > 0 ? v : 0);
+  const daily = mean(clean), active = clean.filter((v) => v > 0).length;
+  const irregular = daily > 0 && Math.sqrt(mean(clean.map((v) => (v - daily) ** 2))) / daily > 1;
+  return {
+    method: "Média diária observada com cobertura e margem",
+    daily, days: clean.length,
+    minimum: Math.max(minimum, Math.ceil(daily * lead * (1 + margin))),
+    target: Math.max(minimum, Math.ceil(daily * (lead + horizon) * (1 + margin))),
+    mae: null, wape: null,
+    confidence: clean.length < 30 || active < 7 ? "Dados insuficientes" : irregular ? "Baixa" : "Moderada",
+    reason: `Alvo = max(mínimo cadastrado, teto(consumo líquido / dias × (prazo + ${horizon} dias) × (1 + ${margin}))). ${irregular ? "Demanda irregular. " : ""}${active ? "Regra de cobertura; sem previsão avançada." : "Sem baixas observadas; ausência de registro não comprova ausência de necessidade."}`,
+  };
+}
 export function suggestTransfers(
   locations: StockTarget[],
   routeCost: (source: StockTarget, destination: StockTarget) => number = () =>
@@ -110,25 +142,22 @@ export function suggestTransfers(
   }[] = [];
   for (const dest of [...locations].sort(
     (a, b) =>
-      b.target -
-      b.available -
-      b.incoming -
-      (a.target - a.available - a.incoming),
+      Number(b.available < b.minimum) - Number(a.available < a.minimum) ||
+      Math.max(0, b.target - b.available - b.incoming) / Math.max(1, b.target) -
+      Math.max(0, a.target - a.available - a.incoming) / Math.max(1, a.target) ||
+      a.code.localeCompare(b.code) || a.warehouse.localeCompare(b.warehouse),
   )) {
     if (!eligible(dest)) continue;
     let need = Math.max(
       0,
-      Math.min(
-        dest.target,
-        (dest.capacity ?? Infinity) - (dest.reserved ?? 0),
-      ) -
-        dest.available -
-        dest.incoming,
+      Math.min(dest.target - dest.available - dest.incoming,
+        (dest.capacity ?? Infinity) - (dest.physical ?? dest.available + (dest.reserved ?? 0)) - dest.incoming),
     );
     for (const source of supply
       .filter(
         (s) =>
           s.code === dest.code &&
+          s.unit === dest.unit &&
           s.warehouse !== dest.warehouse &&
           Number.isFinite(routeCost(s, dest)),
       )
@@ -136,7 +165,11 @@ export function suggestTransfers(
         (a, b) =>
           routeCost(a, dest) - routeCost(b, dest) || b.excess - a.excess,
       )) {
-      const q = Math.min(need, source.excess);
+      const a = source.step ?? 1, b = dest.step ?? 1;
+      if (![a, b].every((n) => Number.isSafeInteger(n) && n > 0)) continue;
+      const gcd = (x: number, y: number): number => y === 0 ? x : gcd(y, x % y);
+      const step = a / gcd(a, b) * b;
+      const q = Math.floor(Math.min(need, source.excess) / step) * step;
       if (q > 0) {
         result.push({
           code: dest.code,
@@ -144,7 +177,7 @@ export function suggestTransfers(
           to: dest.warehouse,
           quantity: q,
           reason:
-            "Excesso disponível acima do alvo na origem; repor o destino antes de comprar.",
+            "O destino possui cobertura insuficiente; a origem mantém seu mínimo e sua cobertura após a transferência.",
         });
         source.excess -= q;
         need -= q;

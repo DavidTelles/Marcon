@@ -2,11 +2,11 @@
 import { useRef, useState } from "react";
 import { TransferQueue } from "./transfer-queue";
 import { useDemoStore } from "../demo-store";
-import { WAREHOUSES } from "@/lib/inventory";
 import { CodeScanner } from "./code-scanner";
+import { transports } from "@/lib/routing";
 export function StockOperations() {
-  const { stock, runAction } = useDemoStore();
-  const requestKey = useRef("");
+  const { stock, runAction, warehouseOptions } = useDemoStore();
+  const submission = useRef<{ signature: string; key: string } | null>(null);
   const [mode, setMode] = useState("stockEntry"),
     [code, setCode] = useState(""),
     [busy, setBusy] = useState(false),
@@ -18,9 +18,7 @@ export function StockOperations() {
     setBusy(true);
     setMessage("");
     try {
-      requestKey.current ||= crypto.randomUUID();
-      await runAction({
-        requestKey: requestKey.current,
+      const payload = {
         type: mode,
         code: d.get("part"),
         warehouse: d.get("warehouse"),
@@ -32,9 +30,13 @@ export function StockOperations() {
         dueDate: d.get("dueDate"),
         supplier: d.get("supplier"),
         reference: d.get("reference"),
-      });
+        ...(mode === "transfer" ? { objective: d.get("objective"), transport: d.get("transport") } : {}),
+      };
+      const signature = JSON.stringify(payload);
+      if (submission.current?.signature !== signature) submission.current = { signature, key: crypto.randomUUID() };
+      await runAction({ ...payload, requestKey: submission.current.key });
       setMessage("Operação registrada no Neon.");
-      requestKey.current = "";
+      submission.current = null;
       f.reset();
       setCode("");
     } catch (e) {
@@ -81,7 +83,7 @@ export function StockOperations() {
         <label>
           Almoxarifado / origem
           <select name="warehouse">
-            {WAREHOUSES.map((w) => (
+            {warehouseOptions.map((w) => (
               <option key={w}>{w}</option>
             ))}
           </select>
@@ -90,7 +92,7 @@ export function StockOperations() {
           <label>
             Destino
             <select name="to">
-              {WAREHOUSES.map((w) => (
+              {warehouseOptions.map((w) => (
                 <option key={w}>{w}</option>
               ))}
             </select>
@@ -112,6 +114,8 @@ export function StockOperations() {
         </label>
         {mode === "transfer" && (
           <>
+            <label>Objetivo da rota<select name="objective"><option value="distance">Menor distância</option><option value="time">Menor tempo cadastrado</option></select></label>
+            <label>Transporte<select name="transport">{Object.entries(transports).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
             <CodeScanner onCode={setCode} />
             <label>
               Código lido

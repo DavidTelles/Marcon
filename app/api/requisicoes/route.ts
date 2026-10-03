@@ -6,6 +6,7 @@ import { demoRequests } from "@/lib/demo-requests";
 import { databaseEnabled } from "@/lib/db";
 import { workspaceSnapshot } from "@/lib/workspace-db";
 import { ActionError, executeWorkspaceAction } from "@/lib/workspace-actions";
+import { BackendError } from "@/lib/backend-client";
 
 export async function GET() {
   const user = await currentUser();
@@ -16,11 +17,16 @@ export async function GET() {
     );
   }
   if (databaseEnabled()) {
+    try {
     const requests = (await workspaceSnapshot(user)).requests.map((item) => ({
-      protocol: `REQ-${item.id}`, userId: user.id, itemId: item.code,
+      protocol: `REQ-${item.id}`, userId: item.requesterId, itemId: item.code,
       quantity: item.quantity, status: item.status, createdAt: item.date,
+      requestedQuantity: item.requestedQuantity, approvedQuantity: item.approvedQuantity, deliveredQuantity: item.deliveredQuantity,
     }));
     return NextResponse.json({ requests }, { headers: { "Cache-Control": "no-store" } });
+    } catch (error) {
+      return NextResponse.json({ error: error instanceof BackendError ? error.message : "Requisições indisponíveis." }, { status: error instanceof BackendError ? error.status : 503, headers: { "Cache-Control": "no-store" } });
+    }
   }
   const requests = Array.from(demoRequests.values()).filter(
     (item) => item.userId === user.id,
@@ -73,14 +79,17 @@ export async function POST(request: NextRequest) {
   }
   if (databaseEnabled()) {
     try {
+      const values = body as Record<string, unknown>;
+      if (typeof values.requestKey !== "string" || !/^[\w-]{16,64}$/.test(values.requestKey)) throw new ActionError("Informe requestKey para evitar envio duplicado.", 422);
       const result = await executeWorkspaceAction(user, {
         type: "createRequests",
-        entries: [{ code: itemId, quantity, priority: "Leve", justification: "" }],
+        requestKey: values.requestKey,
+        entries: [{ code: itemId, quantity, priority: values.priority ?? "Leve", justification: values.justification ?? "" }],
       }) as { ids: number[] };
-      return NextResponse.json({ protocol: `REQ-${result.ids[0]}`, itemId, quantity }, { status: 201 });
+      return NextResponse.json({ protocol: `REQ-${result.ids[0]}`, itemId, quantity, persistent: true }, { status: 201 });
     } catch (error) {
       if (error instanceof ActionError) return NextResponse.json({ error: error.message }, { status: error.status });
-      throw error;
+      return NextResponse.json({ error: "Não foi possível registrar a requisição. Atualize e tente novamente." }, { status: 503 });
     }
   }
   const item = findCatalogItem(itemId);
@@ -111,7 +120,7 @@ export async function POST(request: NextRequest) {
     createdAt: new Date().toISOString(),
   });
   return NextResponse.json(
-    { protocol, itemId: item.id, quantity },
+    { protocol, itemId: item.id, quantity, persistent: false },
     { status: 201 },
   );
 }

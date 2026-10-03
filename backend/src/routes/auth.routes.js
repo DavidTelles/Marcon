@@ -10,7 +10,7 @@ const { ROLES, PERMISSIONS } = require('../config/constants');
 const router = express.Router();
 const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30, standardHeaders: true });
 
-router.post('/register', validate(schemas.registerBody), authController.register);
+router.post('/register', authenticate, authorize(ROLES.ADMIN, PERMISSIONS.USERS_MANAGE), validate(schemas.registerBody), authController.register);
 router.post('/login', loginLimiter, validate(schemas.loginBody), authController.login);
 router.post('/login/rfid', loginLimiter, validate(schemas.rfidLoginBody), authController.loginRfid);
 router.post('/forgot/password', authController.forgotPassword);
@@ -27,6 +27,6 @@ router.patch(
   authorize(ROLES.ADMIN, PERMISSIONS.USERS_MANAGE),
   userController.permissions
 );
-router.post('/admin/create', authenticate, authorize(ROLES.ADMIN), userController.create);
+router.post('/admin/create', authenticate, authorize(ROLES.ADMIN, PERMISSIONS.USERS_MANAGE), userController.create);
 
 module.exports = router;

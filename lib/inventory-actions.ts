@@ -10,8 +10,11 @@ import {
   capacity,
   audit,
   movement,
+  rows,
 } from "./stock-ledger";
 import { transferAction } from "./transfer-actions";
+import { storageRoute } from "./delivery-planning";
+import type { RouteOptions } from "./routing";
 import { requestActions, executeRequestAction } from "./request-actions";
 import type { ResultSetHeader, PoolConnection } from "./db-types";
 export const inventoryActions = new Set([
@@ -94,6 +97,13 @@ export async function executeInventoryAction(
       let pId = id;
       if (id) {
         const old = await partLock(c, null, id);
+        if (unit !== old.unit) {
+          const records = await first(c, "SELECT id FROM stock_movements WHERE part_id=? LIMIT 1", [id]);
+          const documents = await first(c, "SELECT id FROM requests WHERE part_id=? LIMIT 1", [id]);
+          const inbound = await first(c, "SELECT id FROM expected_receipts WHERE part_id=? LIMIT 1", [id]);
+          const hasStock = (await stock(c, id)).some((v) => Number(v.quantity) || Number(v.reserved) || Number(v.pending_outgoing));
+          if (records || documents || inbound || hasStock) throw new ActionError("Unidade com saldo ou histórico não pode ser alterada sem conversão oficial.", 409);
+        }
         await c.execute(
           "UPDATE parts SET name=?,code=?,qr_code=?,pack_size=?,minimum_total=?,lead_days=?,reference_unit_price=?,location=?,image_url=?,unit=?,category=?,criticality=?,description=?,purpose=?,material=?,dimensions=?,approved_aliases=? WHERE id=?",
           [
@@ -109,11 +119,11 @@ export async function executeInventoryAction(
             unit,
             category,
             criticality,
-            description,
-            purpose,
-            material,
-            dimensions,
-            JSON.stringify(approvedAliases),
+            d.description === undefined ? old.description : description,
+            d.purpose === undefined ? old.purpose : purpose,
+            d.material === undefined ? old.material : material,
+            d.dimensions === undefined ? old.dimensions : dimensions,
+            d.approvedAliases === undefined ? JSON.stringify(typeof old.approved_aliases === "string" ? JSON.parse(old.approved_aliases) : old.approved_aliases ?? []) : JSON.stringify(approvedAliases),
             id,
           ],
         );
@@ -149,12 +159,12 @@ export async function executeInventoryAction(
       const b = (await stock(c, pId!)).find(
           (v) => Number(v.warehouse_id) === Number(w.id),
         )!,
-        q = integer(a.localQuantity, 0),
+        q = a.preserveQuantity === true && id ? Number(b.quantity) : integer(a.localQuantity, 0),
         delta = q - Number(b.quantity);
-      if (q < Number(b.reserved))
+      if (q < Number(b.reserved) + Number(b.pending_outgoing ?? 0))
         throw new ActionError("O saldo não pode ficar abaixo da reserva.", 409);
       const cap =
-        d.capacity === null || d.capacity === undefined || d.capacity === ""
+        d.capacity === undefined && id ? b.capacity == null ? null : Number(b.capacity) : d.capacity === null || d.capacity === undefined || d.capacity === ""
           ? null
           : integer(Number(d.capacity));
       if (cap !== null && q > cap)
@@ -164,17 +174,24 @@ export async function executeInventoryAction(
           ? reason(a.reason)
           : text(a.reason) || "Cadastro inicial do saldo"
         : "Atualização cadastral";
+      const mapNodeId = text(d.mapNodeId === undefined && id ? b.map_node_id : d.mapNodeId, 64);
+      if (mapNodeId) {
+        const map = await first(c, "SELECT graph FROM map_versions WHERE status='Publicada' LOCK IN SHARE MODE");
+        const graph = map && (typeof map.graph === "string" ? JSON.parse(map.graph) : map.graph);
+        if (!graph?.nodes?.some((n: { id: string; warehouseId?: number }) => n.id === mapNodeId && n.warehouseId === Number(w.id)))
+          throw new ActionError("Vincule a posição a um ponto do seu almoxarifado na planta publicada.", 409);
+      }
       await c.execute(
         "UPDATE inventory SET quantity=?,minimum_quantity=?,aisle=?,shelf=?,capacity=?,map_node_id=? WHERE part_id=? AND warehouse_id=?",
         [
           q,
           d.localMinimum === undefined
-            ? Number(b.minimum_quantity) || Math.max(1, Math.ceil(minimum / 4))
+            ? Number(b.minimum_quantity)
             : integer(Number(d.localMinimum), 0),
-          text(d.aisle, 80),
-          text(d.shelf, 80) || text(d.location, 80),
+          text(d.aisle === undefined && id ? b.aisle : d.aisle, 80),
+          text(d.shelf === undefined && id ? b.shelf : d.shelf, 80) || text(d.location, 80),
           cap,
-          text(d.mapNodeId, 64) || null,
+          mapNodeId || null,
           pId,
           w.id,
         ],
@@ -212,16 +229,16 @@ export async function executeInventoryAction(
           "SELECT quantity,block_id,part_id FROM requests WHERE id=? AND status='Entregue' FOR UPDATE",
           [reqId],
         );
-        const total = await first(
+        const previousReturns = await rows(
           c,
-          "SELECT COALESCE(SUM(quantity),0) AS total FROM return_records WHERE request_id=? FOR UPDATE",
+          "SELECT quantity FROM return_records WHERE request_id=? FOR UPDATE",
           [reqId],
         );
         if (
           !r ||
           Number(r.part_id) !== Number(p.id) ||
           Number(r.block_id) !== Number(b.id) ||
-          Number(total.total) + q > Number(r.quantity)
+          previousReturns.reduce((s, v) => s + Number(v.quantity), 0) + q > Number(r.quantity)
         )
           throw new ActionError(
             "Devolução excede ou não corresponde à entrega.",
@@ -272,6 +289,7 @@ export async function executeInventoryAction(
         const b = (await stock(c, Number(r.part_id))).find(
           (v) => Number(v.warehouse_id) === Number(r.warehouse_id),
         )!;
+        if (!b) throw new ActionError("Local de devolução inativo. Resolva o cadastro antes de conferir.", 409);
         capacity(b, Number(b.quantity) + Number(r.quantity));
         await c.execute(
           "UPDATE inventory SET quantity=quantity+? WHERE part_id=? AND warehouse_id=?",
@@ -317,7 +335,9 @@ export async function executeInventoryAction(
         );
       if (r.status !== "Confirmada")
         throw new ActionError("Entrada já encerrada.", 409);
+      let routeEvidence: unknown;
       if (a.type === "receiveInbound") {
+        routeEvidence = a.receivingNode ? await storageRoute(c, Number(p.id), text(a.receivingNode, 64), Number(r.warehouse_id), { objective: a.receivingObjective as RouteOptions["objective"], transport: a.receivingTransport as RouteOptions["transport"] }) : { route: null, mapVersion: null, reason: "Informe e mapeie o ponto real de recebimento para calcular o encaminhamento." };
         scan(p, a.qrCode);
         if (integer(a.quantity) !== Number(r.quantity))
           throw new ActionError("Confira a quantidade recebida.");
@@ -328,6 +348,7 @@ export async function executeInventoryAction(
         const b = (await stock(c, Number(p.id))).find(
           (v) => Number(v.warehouse_id) === Number(r.warehouse_id),
         )!;
+        if (!b) throw new ActionError("Local de recebimento inativo. Resolva o cadastro antes de receber.", 409);
         capacity(b, Number(b.quantity) + Number(r.quantity));
         await c.execute(
           "UPDATE inventory SET quantity=quantity+? WHERE part_id=? AND warehouse_id=?",
@@ -340,14 +361,14 @@ export async function executeInventoryAction(
           Number(r.warehouse_id),
           "entrada",
           Number(r.quantity),
-          `Recebimento ${r.reference}`,
+          `Entrada prevista #${id}: ${r.reference}`,
         );
       }
       await c.execute("UPDATE expected_receipts SET status=? WHERE id=?", [
         a.type === "receiveInbound" ? "Recebida" : "Cancelada",
         id,
       ]);
-      await audit(c, actorId, "inbound", id, String(a.type), {});
+      await audit(c, actorId, "inbound", id, String(a.type), { route: routeEvidence, reference: r.reference });
       return { id };
     }
     const p = await partLock(
@@ -382,7 +403,7 @@ export async function executeInventoryAction(
       const w = await place(c, a.warehouse),
         q = integer(a.quantity),
         due = text(a.dueDate, 10);
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(due) || Number.isNaN(Date.parse(due)))
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(due) || Number.isNaN(Date.parse(due)) || new Date(due).toISOString().slice(0, 10) !== due)
         throw new ActionError("Data prevista inválida.");
       const [r] = await c.execute<ResultSetHeader>(
         "INSERT INTO expected_receipts(part_id,warehouse_id,quantity,due_date,supplier,reference,created_by) VALUES(?,?,?,?,?,?,?)",
@@ -409,7 +430,7 @@ export async function executeInventoryAction(
         next = a.type === "stockEntry" ? Number(b.quantity) + q : q,
         delta = next - Number(b.quantity),
         note = reason(a.reason);
-      if (next < Number(b.reserved))
+      if (next < Number(b.reserved) + Number(b.pending_outgoing ?? 0))
         throw new ActionError(
           "O saldo não pode ficar abaixo do reservado.",
           409,

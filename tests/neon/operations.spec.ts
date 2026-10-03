@@ -5,6 +5,7 @@ import sharp from "sharp";
 import { PDFDocument } from "pdf-lib";
 import ExcelJS from "exceljs";
 import type { FacilityGraph } from "../../lib/routing";
+import { randomUUID } from "node:crypto";
 test("reservas concorrentes, cancelamento, entrega, devolução, escopos e relatórios", async ({
   playwright,
 }) => {
@@ -26,7 +27,7 @@ test("reservas concorrentes, cancelamento, entrega, devolução, escopos e relat
     return c;
   }
   async function act(c: APIRequestContext, data: object, status = 200) {
-    const r = await c.post("/api/workspace", { data });
+    const r = await c.post("/api/workspace", { data: { requestKey: randomUUID(), ...data } });
     expect(r.status(), await r.text()).toBe(status);
     return r.json();
   }
@@ -423,7 +424,7 @@ test("planta: arquivo validado, versões preservadas, publicação restrita e ro
       ).status(),
     ).toBe(200);
     const route = await warehouse.post("/api/maps", {
-      data: { action: "test", start: "a", stops: ["b"] },
+      data: { action: "test", start: "a", stops: ["b"], objective: "time" },
     });
     expect((await route.json()).route.cost).toBe(10);
     const blocked = await admin.post("/api/maps", {

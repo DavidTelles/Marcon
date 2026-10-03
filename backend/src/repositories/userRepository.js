@@ -128,6 +128,10 @@ async function getPermissionsForUser(userId) {
   }
   return [...set];
 }
+async function getPermissionOverridesForUser(userId) {
+  const rows = await query('SELECT permission,allowed FROM user_permission_overrides WHERE user_id=?', [userId]);
+  return Object.fromEntries(rows.map((row) => [row.permission, Boolean(row.allowed)]));
+}
 
 async function setPermissionOverride(userId, permissionCode, allowed) {
   await query(
@@ -140,6 +144,7 @@ async function setPermissionOverride(userId, permissionCode, allowed) {
 }
 
 module.exports = {
+  getPermissionOverridesForUser,
   publicUser,
   findById,
   findByEmail,

@@ -1,4 +1,4 @@
-import { routeLegs, type FacilityGraph, type Path } from "@/lib/routing";
+import { routeLegs, pathValid, transports, type FacilityGraph, type Path } from "@/lib/routing";
 export function RouteSummary({
   graph,
   route,
@@ -7,6 +7,7 @@ export function RouteSummary({
   route: Path;
 }) {
   const legs = routeLegs(graph, route);
+  if (!pathValid(graph, route)) return <p role="alert">Percurso desatualizado ou bloqueado. Recalcule pela planta publicada.</p>;
   return (
     <div className="map-route-summary">
       <h3>Ordem das paradas</h3>
@@ -16,9 +17,11 @@ export function RouteSummary({
         ))}
       </ol>
       <p>
-        {graph.scaleCalibrated === true
-          ? `Distância total: ${legs.reduce((s, l) => s + (l.meters ?? 0), 0).toFixed(1)} m · caminhada estimada: ${Math.ceil(route.cost / 1.2)} s.`
-          : "Sem escala calibrada: distância e tempo indisponíveis. Ordem aproximada pela geometria da imagem."}
+        Custo: {route.cost.toFixed(1)} {route.unit ?? (graph.scaleCalibrated === true ? "m" : "unidades do mapa")}.
+        {route.objective === "time" ? " Durações cadastradas por trecho." : " Tempo não estimado sem duração cadastrada."}
+        {graph.scaleCalibrated !== true && " Sem escala calibrada; distâncias em unidades do mapa."}
+        {route.approximate && " Ordem das paradas aproximada por vizinho mais próximo e 2-opt; caminhos por Dijkstra."}
+        {route.transport && ` Transporte: ${transports[route.transport]}. Respeita bloqueios e restrições cadastrados.`}
       </p>
       <details>
         <summary>Distância por trecho ({legs.length})</summary>

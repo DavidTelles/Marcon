@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import type { Request } from "@/lib/demo-data";
 import type { DeliveryPlan } from "@/lib/delivery-planning";
-import type { FacilityGraph } from "@/lib/routing";
+import { transports, type FacilityGraph, type RouteOptions } from "@/lib/routing";
 import { RouteSummary } from "./route-summary";
 import { MapViewport } from "./map-viewport";
 import { DashboardDialog } from "./dashboard-dialog";
@@ -30,6 +30,28 @@ export function DeliveryRoute({ request }: { request: Request }) {
   const [destinations, setDestinations] = useState<string[]>([]),
     [start, setStart] = useState("");
   const [revision, setRevision] = useState(0);
+  const [objective, setObjective] = useState<RouteOptions["objective"]>("distance"),
+    [transport, setTransport] = useState<RouteOptions["transport"]>("walking");
+  useEffect(() => {
+    let active = true;
+    const check = async () => {
+      if (!data?.graph || document.hidden) return;
+      try {
+        const response = await fetch("/api/maps", { cache: "no-store" });
+        if (!response.ok) throw new Error("Não foi possível verificar a planta. Recalcule a rota.");
+        const body = await response.json();
+        const published = body.maps.find((m: { status: string }) => m.status === "Publicada");
+        if (!published || Number(published.id) !== data.mapVersion) throw new Error("A planta publicada mudou. Recalcule o percurso.");
+      } catch (error) {
+        if (active) { setData(null); setError(error instanceof Error ? error.message : "Rota indisponível."); }
+      }
+    };
+    const interval = window.setInterval(() => void check(), 30_000);
+    const update = () => void check();
+    window.addEventListener("marcon:map-published", update);
+    window.addEventListener("focus", update);
+    return () => { active = false; window.clearInterval(interval); window.removeEventListener("marcon:map-published", update); window.removeEventListener("focus", update); };
+  }, [data]);
   useEffect(() => {
     const controller = new AbortController();
     fetch(`/api/maps?delivery=${request.id}&page=${page}`, {
@@ -57,6 +79,7 @@ export function DeliveryRoute({ request }: { request: Request }) {
           requestId: request.id,
           start,
           destinations,
+          objective, transport,
           manual: depart && !data?.route,
         }),
       });
@@ -68,6 +91,7 @@ export function DeliveryRoute({ request }: { request: Request }) {
       setRevision((v) => v + 1);
       setConfirm(false);
     } catch (e) {
+      setData(null);
       setError(e instanceof Error ? e.message : "Falha no cálculo.");
     } finally {
       setBusy(false);
@@ -81,6 +105,11 @@ export function DeliveryRoute({ request }: { request: Request }) {
         o percurso com os bloqueios atuais e preserva os cálculos anteriores.
       </p>
       {request.status === "Aprovada" && (
+        <>
+        <div className="ops-form">
+          <label>Objetivo<select value={objective} onChange={(e) => { setObjective(e.target.value as RouteOptions["objective"]); setData(null); }}><option value="distance">Menor distância</option><option value="time">Menor tempo cadastrado</option></select></label>
+          <label>Transporte<select value={transport} onChange={(e) => { setTransport(e.target.value as RouteOptions["transport"]); setData(null); }}>{Object.entries(transports).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+        </div>
         <button
           className="button secondary"
           disabled={busy}
@@ -88,6 +117,7 @@ export function DeliveryRoute({ request }: { request: Request }) {
         >
           {busy ? "Calculando…" : "Calcular / recalcular rota"}
         </button>
+        </>
       )}
       {error && <p role="alert">{error}</p>}
       {data && (

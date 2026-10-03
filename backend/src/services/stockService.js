@@ -1,129 +1,41 @@
 const AppError = require('../utils/AppError');
-const { withTransaction } = require('../config/db');
-const { MOVEMENT_TYPE } = require('../config/constants');
+const { executeWorkspaceAction, ActionError } = require('../workspace/workspace-actions');
 
-// Tipos aceitos pela API REST e seu equivalente no ledger unificado.
-const KIND = {
-  IN: 'entrada',
-  RETURN: 'devolucao',
-  RELEASE: 'ajuste_entrada',
-  OUT: 'saida',
-  RESERVE: 'ajuste_saida',
-  ADJUST: null, // definido pelo sinal do delta
-  TRANSFER: null // gera par transferencia_saida/transferencia_entrada
-};
-
+// REST adapts to the same official stock workflows used by the UI.
 function createStockService({ stockRepository, productRepository, warehouseRepository }) {
   async function locateProduct(productId) {
     const product = await productRepository.findById(productId);
     if (!product) throw new AppError(404, 'Peça inexistente');
     const stocks = await stockRepository.listByProduct(product.id);
-    return {
-      product,
-      locations: stocks.map((s) => ({
-        warehouse_id: s.warehouse_id,
-        warehouse_code: s.warehouse_code,
-        warehouse_name: s.warehouse_name,
-        warehouse_type: s.warehouse_type,
-        quantity: Number(s.quantity),
-        corridor: s.corridor,
-        shelf: s.shelf,
-        available: Number(s.quantity) > 0
-      }))
-    };
+    return { product, locations: stocks.map((s) => ({ ...s, quantity: Number(s.quantity),
+      reserved: Number(s.reserved || 0), available: Number(s.quantity) - Number(s.reserved || 0) - Number(s.committed || 0) })) };
   }
-
-  async function insertMovement(conn, { partId, warehouseId, kind, quantity, userId, requestId, notes }) {
-    if (!quantity) return;
-    await conn.execute(
-      'INSERT INTO stock_movements (part_id, warehouse_id, kind, quantity, actor_id, reason, request_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [partId, warehouseId, kind, quantity, userId, notes || 'Movimentação via API', requestId || null]
-    );
-  }
-
-  async function lockInventory(conn, partId, warehouseId) {
-    const [rows] = await conn.execute(
-      'SELECT * FROM inventory WHERE part_id = ? AND warehouse_id = ? FOR UPDATE',
-      [partId, warehouseId]
-    );
-    if (rows[0]) return rows[0];
-    await conn.execute(
-      'INSERT INTO inventory (part_id, warehouse_id, quantity, minimum_quantity) VALUES (?, ?, 0, 0)',
-      [partId, warehouseId]
-    );
-    const [created] = await conn.execute(
-      'SELECT * FROM inventory WHERE part_id = ? AND warehouse_id = ? FOR UPDATE',
-      [partId, warehouseId]
-    );
-    return created[0];
-  }
-
-  async function changeQuantity({ product_id, warehouse_id, quantity, type, user_id, request_id, notes, warehouse_to_id }) {
-    if (!Number.isInteger(quantity) || quantity <= 0) {
-      throw new AppError(400, 'Quantidade inválida');
-    }
+  async function changeQuantity({ product_id, warehouse_id, warehouse_to_id, quantity, type, request_id, notes, actor, requestKey, qr_code }) {
+    if (!actor) throw new AppError(401, 'Sessão ausente');
+    if (!Number.isSafeInteger(quantity) || quantity <= 0) throw new AppError(400, 'Quantidade inválida');
     const product = await productRepository.findById(product_id);
-    if (!product) throw new AppError(404, 'Peça inexistente');
+    if (!product || product.is_active === false) throw new AppError(404, 'Peça inexistente ou inativa');
     const warehouse = await warehouseRepository.findById(warehouse_id);
-    if (!warehouse) throw new AppError(404, 'Almoxarifado inexistente');
-
-    return withTransaction(async (conn) => {
-      if (type === 'TRANSFER') {
-        if (!warehouse_to_id) throw new AppError(400, 'warehouse_to_id é obrigatório na transferência');
-        const dest = await warehouseRepository.findById(warehouse_to_id);
-        if (!dest) throw new AppError(404, 'Almoxarifado de destino inexistente');
-        if (Number(warehouse.id) === Number(dest.id)) throw new AppError(400, 'Origem e destino devem ser diferentes');
-        const origin = await lockInventory(conn, product.id, warehouse.id);
-        if (Number(origin.quantity) < quantity) {
-          throw new AppError(409, 'Quantidade insuficiente no almoxarifado de origem');
-        }
-        const destination = await lockInventory(conn, product.id, dest.id);
-        await conn.execute('UPDATE inventory SET quantity = quantity - ? WHERE part_id = ? AND warehouse_id = ?', [quantity, product.id, warehouse.id]);
-        await conn.execute('UPDATE inventory SET quantity = quantity + ? WHERE part_id = ? AND warehouse_id = ?', [quantity, product.id, dest.id]);
-        await insertMovement(conn, { partId: product.id, warehouseId: warehouse.id, kind: 'transferencia_saida', quantity, userId: user_id, requestId: request_id, notes });
-        await insertMovement(conn, { partId: product.id, warehouseId: dest.id, kind: 'transferencia_entrada', quantity, userId: user_id, requestId: request_id, notes });
-        return {
-          origin_quantity: Number(origin.quantity) - quantity,
-          destination_quantity: Number(destination.quantity) + quantity
-        };
-      }
-
-      if (!(type in KIND)) throw new AppError(400, 'Tipo de movimentação inválido');
-      const stock = await lockInventory(conn, product.id, warehouse.id);
-      const current = Number(stock.quantity);
-      let next = current;
-      if (['IN', 'RETURN', 'RELEASE'].includes(type)) next = current + quantity;
-      else if (['OUT', 'RESERVE'].includes(type)) {
-        if (current < quantity) throw new AppError(409, 'Quantidade insuficiente');
-        next = current - quantity;
-      } else if (type === 'ADJUST') {
-        next = quantity;
-      }
-      await conn.execute('UPDATE inventory SET quantity = ? WHERE part_id = ? AND warehouse_id = ?', [next, product.id, warehouse.id]);
-      const delta = next - current;
-      const kind = type === 'ADJUST' ? (delta >= 0 ? MOVEMENT_TYPE.ADJUST_IN : MOVEMENT_TYPE.ADJUST_OUT) : KIND[type];
-      await insertMovement(conn, {
-        partId: product.id,
-        warehouseId: warehouse.id,
-        kind,
-        quantity: Math.abs(delta) || quantity,
-        userId: user_id,
-        requestId: request_id,
-        notes
-      });
-      return { quantity: next };
-    });
+    if (!warehouse || warehouse.is_active === false) throw new AppError(404, 'Almoxarifado inexistente ou inativo');
+    let action;
+    if (type === 'TRANSFER') {
+      const destination = await warehouseRepository.findById(warehouse_to_id);
+      if (!destination || destination.is_active === false) throw new AppError(404, 'Destino inexistente ou inativo');
+      action = { type: 'transfer', code: product.code, from: warehouse.name, to: destination.name, quantity, reason: notes, requestKey };
+    } else if (type === 'IN') {
+      action = { type: 'stockEntry', code: product.code, warehouse: warehouse.name, quantity, reason: notes, requestKey };
+    } else if (type === 'OUT') {
+      if (!Number.isSafeInteger(request_id) || !qr_code) throw new AppError(422, 'Saída requer request_id aprovado, qr_code e quantidade conferida');
+      action = { type: 'changeRequestStatus', id: request_id, status: 'Entregue', qrCode: qr_code, confirmedQuantity: quantity, requestKey };
+    } else throw new AppError(400, 'Use o fluxo oficial para esta movimentação');
+    try {
+      const result = await executeWorkspaceAction(actor, action);
+      return { ...result, ...(type === 'TRANSFER' ? { status: 'Solicitada' } : {}) };
+    } catch (error) {
+      if (error instanceof ActionError) throw new AppError(error.status, error.message);
+      throw error;
+    }
   }
-
-  async function listStock(filters) {
-    return stockRepository.list(filters);
-  }
-
-  async function listMovements(filters) {
-    return stockRepository.listMovements(filters);
-  }
-
-  return { locateProduct, changeQuantity, listStock, listMovements };
+  return { locateProduct, changeQuantity, listStock: (filters) => stockRepository.list(filters), listMovements: (filters) => stockRepository.listMovements(filters) };
 }
-
 module.exports = { createStockService };

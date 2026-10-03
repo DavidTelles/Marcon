@@ -16,13 +16,6 @@ import { ItemArt } from "./item-art";
 import styles from "./catalog.module.css";
 
 type LoadState = "loading" | "ready" | "error";
-const categories = [
-  "Todos",
-  "Proteção",
-  "Ferramentas",
-  "Elétrica",
-  "Escritório",
-] as const;
 const normalize = (text: string) =>
   text
     .normalize("NFD")
@@ -32,6 +25,7 @@ const normalize = (text: string) =>
 
 export function CatalogView() {
   const [items, setItems] = useState<CatalogItem[]>([]);
+  const categories = useMemo(() => ["Todos", ...new Set(items.map((item) => item.category).filter(Boolean))], [items]);
   const [state, setState] = useState<LoadState>("loading");
   const [attempt, setAttempt] = useState(0);
   const [query, setQuery] = useState("");

@@ -478,7 +478,7 @@ async function prepare(c: PoolConnection, user: Account, op: JamesOperation) {
     const current = Number(balance?.quantity ?? 0);
     const next =
       op.name === "stockEntry" ? current + op.quantity! : op.quantity!;
-    if (next < Number(balance?.reserved ?? 0))
+    if (next < Number(balance?.reserved ?? 0) + Number(balance?.pending_outgoing ?? 0))
       throw new ActionError("Saldo não pode ficar abaixo das reservas.", 409);
     return {
       actor,
@@ -617,6 +617,36 @@ export async function executeJamesOperation(
   key: string,
   expectedSummary: string,
 ) {
+  if (operation.name !== "planRoute") {
+    // Release preview locks before calling Express, which owns the business
+    // transaction. Holding a part/user lock here deadlocks that API call.
+    const prepared = await transaction(async (c) => {
+      const actor = await first(c, "SELECT id FROM users WHERE employee_no=? AND active=TRUE", [user.id]);
+      if (!actor) throw new ActionError("Sessão inválida.", 401);
+      const hash = createHash("sha256").update(JSON.stringify({ james: operation })).digest("hex");
+      const saved = await first(c, "SELECT payload_hash,result FROM request_submissions WHERE actor_id=? AND request_key=?", [actor.id, key]);
+      if (saved && saved.payload_hash !== hash) throw new ActionError("Confirmação incompatível.", 409);
+      if (saved?.result) return { cached: typeof saved.result === "string" ? JSON.parse(saved.result) : saved.result };
+      // Recovery when the remote write committed but the HTTP response was lost.
+      const backendKey = "op-" + createHash("sha256").update(JSON.stringify(key)).digest("hex").slice(0, 60);
+      const remote = operation.name === "transfer"
+        ? await first(c, "SELECT id FROM stock_transfers WHERE request_key=? AND performed_by=?", [key, actor.id])
+        : await first(c, "SELECT result FROM request_submissions WHERE actor_id=? AND request_key=?", [actor.id, backendKey]);
+      if (remote && (remote.id || remote.result)) return { cached: { result: remote.id ? { id: remote.id } : typeof remote.result === "string" ? JSON.parse(remote.result) : remote.result, reply: "Concluído: " + expectedSummary, operationCompleted: true } };
+      const current = await prepare(c, user, operation);
+      if (current.summary !== expectedSummary) throw new ActionError("Os dados mudaram desde a revisão. Peça um novo resumo antes de confirmar.", 409);
+      return { action: current.action, actorId: actor.id, hash };
+    });
+    if ("cached" in prepared) return prepared.cached;
+    const result = await executeWorkspaceAction(user, { ...prepared.action, requestKey: key });
+    const response = { result, reply: "Concluído: " + expectedSummary, operationCompleted: true };
+    // The backend idempotency result is authoritative even if this cache fails.
+    await transaction(async (c) => {
+      await c.execute("INSERT IGNORE INTO request_submissions(actor_id,request_key,payload_hash) VALUES(?,?,?)", [prepared.actorId, key, prepared.hash]);
+      await c.execute("UPDATE request_submissions SET result=? WHERE actor_id=? AND request_key=? AND payload_hash=?", [JSON.stringify(response), prepared.actorId, key, prepared.hash]);
+    });
+    return response;
+  }
   return transaction(async (c) => {
     const actor = await first(
       c,
@@ -663,13 +693,7 @@ export async function executeJamesOperation(
       reply = plan.route
         ? `Rota registrada: ${plan.labels.join(" → ")}. Custo: ${plan.route.cost} ${plan.metric}. Versão ${plan.mapVersion}. Nenhuma baixa de estoque.`
         : `Operação manual: ${plan.reason} Decisão registrada no histórico, sem baixa de estoque.`;
-    } else
-      // A ação roda na API do backend (transação própria); aqui só registramos
-      // a submissão idempotente no banco local.
-      result = await executeWorkspaceAction(
-        user,
-        { ...prepared.action, requestKey: key },
-      );
+    }
     const response = { result, reply, operationCompleted: true };
     await c.execute(
       "UPDATE request_submissions SET result=? WHERE actor_id=? AND request_key=?",

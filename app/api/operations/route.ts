@@ -6,14 +6,14 @@ import { operationsReport } from "@/lib/operations-report";
 import { BackendError } from "@/lib/backend-client";
 export const runtime = "nodejs";
 export async function GET(request: NextRequest) {
+  const user = await currentUser();
+  if (!user)
+    return NextResponse.json({ error: "Faça login." }, { status: 401 });
   if (!databaseEnabled())
     return NextResponse.json(
       { error: "Planejamento real requer Neon configurado." },
       { status: 503 },
     );
-  const user = await currentUser();
-  if (!user)
-    return NextResponse.json({ error: "Faça login." }, { status: 401 });
   try {
     const q = request.nextUrl.searchParams;
     if (q.has("planning")) {
@@ -56,6 +56,8 @@ export async function GET(request: NextRequest) {
       block: q.get("block") ?? undefined,
       requester: q.get("requester") ?? undefined,
       code: q.get("code") ?? undefined,
+      horizon: q.has("horizon") ? Number(q.get("horizon")) : undefined,
+      margin: q.has("margin") ? Number(q.get("margin")) : undefined,
     });
     const format = q.get("format");
     if (format === "pdf" || format === "xlsx") {

@@ -3,15 +3,12 @@
   label: string;
   x: number;
   y: number;
-  kind:
-    | "warehouse"
-    | "block"
-    | "aisle"
-    | "door"
-    | "shelf"
-    | "delivery"
-    | "junction"
-    | "access";
+  kind: keyof typeof mapKinds;
+  floor?: number;
+  access?: string;
+  blocked?: boolean;
+  restricted?: boolean;
+  allowedTransport?: Transport[];
   uncertain?: boolean;
   suggestion?: string;
   suggestedLabel?: string;
@@ -23,6 +20,11 @@ export type MapEdge = {
   to: string;
   blocked: boolean;
   seconds?: number;
+  distance?: number;
+  distanceUnit?: "m" | "map";
+  oneWay?: boolean;
+  vertical?: boolean;
+  allowedTransport?: Transport[];
 };
 export type Wall = { x1: number; y1: number; x2: number; y2: number };
 export type FacilityGraph = {
@@ -36,7 +38,10 @@ export type FacilityGraph = {
   scaleCalibrated?: boolean;
   obstacles?: { width: number; height: number; cells: string };
 };
-export type Path = { nodes: string[]; cost: number; stops?: string[] };
+export const transports = { walking: "A pé", cart: "Carrinho", forklift: "Empilhadeira" } as const;
+export type Transport = keyof typeof transports;
+export type RouteOptions = { objective?: "distance" | "time"; transport?: Transport; final?: string };
+export type Path = { nodes: string[]; cost: number; stops?: string[]; unit?: "m" | "unidades do mapa" | "s"; objective?: "distance" | "time"; transport?: Transport; approximate?: boolean };
 export const mapKinds = {
   warehouse: "Almoxarifado",
   aisle: "Corredor",
@@ -45,6 +50,24 @@ export const mapKinds = {
   access: "Acesso",
   block: "Bloco",
   delivery: "Entrega",
+  shelf: "Acesso à prateleira",
+  local_stock: "Estoque local",
+  sector: "Setor",
+  production_line: "Linha de produção",
+  gate: "Portão",
+  passage: "Passagem",
+  pickup: "Coleta",
+  replenishment: "Reposição",
+  receiving: "Recebimento",
+  shipping: "Expedição",
+  loading: "Carga / descarga",
+  office: "Escritório",
+  administrative: "Área administrativa",
+  stairs: "Escada",
+  elevator: "Elevador",
+  ramp: "Rampa",
+  support: "Área de apoio",
+  custom: "Personalizado",
 } as const;
 export function nextPointLabel(g: FacilityGraph, kind: keyof typeof mapKinds) {
   let number = 1;
@@ -75,17 +98,14 @@ export function passageClear(
   return true;
 }
 export function routeLegs(g: FacilityGraph, path: Path) {
+  if (!pathValid(g, path)) return [];
   return path.nodes.slice(1).map((id, i) => {
     const a = g.nodes.find((n) => n.id === path.nodes[i])!,
       b = g.nodes.find((n) => n.id === id)!;
     return {
       from: a.label,
       to: b.label,
-      meters:
-        g.scaleCalibrated === true
-          ? Math.hypot((a.x - b.x) * g.width, (a.y - b.y) * g.height) *
-            g.metersPerPixel
-          : null,
+      meters: g.scaleCalibrated === true ? edgeDistance(g, a, b, g.edges.find((e) => e.from === a.id && e.to === b.id || !e.oneWay && e.to === a.id && e.from === b.id)!) : null,
     };
   });
 }
@@ -136,6 +156,7 @@ export function graphProblems(g: FacilityGraph): string[] {
     return ["Dimensões ou escala inválidas."];
   const errors: string[] = [],
     ids = new Set<string>();
+  if (typeof g.reviewed !== "boolean" || g.scaleCalibrated !== undefined && typeof g.scaleCalibrated !== "boolean") return ["Estado de revisão ou calibração inválido."];
   const mask = g.obstacles;
   if (
     mask &&
@@ -159,16 +180,11 @@ export function graphProblems(g: FacilityGraph): string[] {
       typeof n.label !== "string" ||
       !n.label.trim() ||
       n.label.length > 120 ||
-      ![
-        "warehouse",
-        "block",
-        "aisle",
-        "door",
-        "shelf",
-        "delivery",
-        "junction",
-        "access",
-      ].includes(n.kind) ||
+      !Object.hasOwn(mapKinds, n.kind) ||
+      (n.floor !== undefined && (!Number.isInteger(n.floor) || Math.abs(n.floor) > 200)) ||
+      (n.access !== undefined && (typeof n.access !== "string" || n.access.length > 120)) ||
+      [n.blocked, n.restricted].some((v) => v !== undefined && typeof v !== "boolean") ||
+      !validTransport(n.allowedTransport) ||
       ![n.x, n.y].every((v) => Number.isFinite(v) && v >= 0 && v <= 1) ||
       [n.warehouseId, n.blockId].some(
         (v) => v !== undefined && (!Number.isSafeInteger(v) || v < 1),
@@ -185,6 +201,7 @@ export function graphProblems(g: FacilityGraph): string[] {
       )
     )
       return ["Parede inválida."];
+  const directions = new Set<string>();
   for (const edge of g.edges) {
     if (!edge || typeof edge.blocked !== "boolean")
       return ["Caminho inválido."];
@@ -194,13 +211,18 @@ export function graphProblems(g: FacilityGraph): string[] {
       !a ||
       !b ||
       a === b ||
-      (edge.seconds !== undefined &&
-        (!Number.isFinite(edge.seconds) ||
-          edge.seconds <= 0 ||
-          edge.seconds > 86400))
+      [edge.seconds, edge.distance].some((v) => v !== undefined && (!Number.isFinite(v) || v < 0 || v > 1e9)) ||
+      (edge.distanceUnit !== undefined && !["m", "map"].includes(edge.distanceUnit)) ||
+      [edge.oneWay, edge.vertical].some((v) => v !== undefined && typeof v !== "boolean") ||
+      !validTransport(edge.allowedTransport) ||
+      ((a.floor ?? 0) !== (b.floor ?? 0) && !edge.vertical) ||
+      (edge.vertical && edge.distance === undefined)
     )
       return ["Caminho ou tempo inválido."];
-    if (!edge.blocked && !passageClear(g, a, b))
+    const keys = [`${edge.from}:${edge.to}`, ...(!edge.oneWay ? [`${edge.to}:${edge.from}`] : [])];
+    if (keys.some((k) => directions.has(k))) return ["Conexão duplicada no mesmo sentido."];
+    keys.forEach((k) => directions.add(k));
+    if (!edge.blocked && !edge.vertical && !passageClear(g, a, b))
       errors.push(
         `Caminho ${a.label} → ${b.label} cruza uma parede ou obstáculo. Corrija os pontos e a passagem.`,
       );
@@ -211,13 +233,18 @@ export function shortestPath(
   g: FacilityGraph,
   from: string,
   to: string,
+  options: RouteOptions = {},
 ): Path | null {
+  const objective = options.objective ?? "distance", transport = options.transport ?? "walking";
   if (
+    !["distance", "time"].includes(objective) || !Object.hasOwn(transports, transport) ||
     graphProblems(g).length ||
     !g.nodes.some((n) => n.id === from) ||
     !g.nodes.some((n) => n.id === to)
   )
     return null;
+  const usable = (n: MapNode) => !n.blocked && !n.restricted && (!n.allowedTransport || n.allowedTransport.includes(transport));
+  if (![from, to].every((id) => usable(g.nodes.find((n) => n.id === id)!))) return null;
   const costs = new Map(g.nodes.map((n) => [n.id, Infinity])),
     previous = new Map<string, string>(),
     todo = new Set(costs.keys());
@@ -228,28 +255,21 @@ export function shortestPath(
     todo.delete(current);
     if (current === to) break;
     for (const edge of g.edges) {
-      if (edge.blocked) continue;
+      if (edge.blocked || edge.allowedTransport && !edge.allowedTransport.includes(transport)) continue;
       const next =
         edge.from === current
           ? edge.to
-          : edge.to === current
+          : !edge.oneWay && edge.to === current
             ? edge.from
             : null;
       if (!next || !todo.has(next)) continue;
       const a = g.nodes.find((n) => n.id === current)!,
         b = g.nodes.find((n) => n.id === next)!;
-      // New calibrated maps use metres; uncalibrated maps use pixels. Legacy maps retain time weights.
-      const cost =
-        costs.get(current)! +
-        (g.scaleCalibrated === true
-          ? Math.hypot((a.x - b.x) * g.width, (a.y - b.y) * g.height) *
-            g.metersPerPixel
-          : g.scaleCalibrated === false
-            ? Math.hypot((a.x - b.x) * g.width, (a.y - b.y) * g.height)
-            : (edge.seconds ??
-              (Math.hypot((a.x - b.x) * g.width, (a.y - b.y) * g.height) *
-                g.metersPerPixel) /
-                1.2));
+      if (!usable(b)) continue;
+      // Missing durations make a segment unavailable for the time objective.
+      const weight = objective === "time" ? edge.seconds : edgeDistance(g, a, b, edge);
+      if (weight === undefined || !Number.isFinite(weight)) continue;
+      const cost = costs.get(current)! + weight;
       if (cost < costs.get(next)!) {
         costs.set(next, cost);
         previous.set(next, current);
@@ -263,19 +283,42 @@ export function shortestPath(
     if (!p) return null;
     nodes.unshift(p);
   }
-  return { nodes, cost: costs.get(to)! };
+  return { nodes, cost: costs.get(to)!, objective, transport, unit: objective === "time" ? "s" : g.scaleCalibrated === true ? "m" : "unidades do mapa" };
+}
+export function pathValid(g: FacilityGraph, path: Path) {
+  if (graphProblems(g).length || !path.nodes.length) return false;
+  const transport = path.transport ?? "walking";
+  const usable = (n: MapNode) => !n.blocked && !n.restricted && (!n.allowedTransport || n.allowedTransport.includes(transport));
+  if (!path.nodes.every((id) => g.nodes.some((n) => n.id === id && usable(n)))) return false;
+  return path.nodes.slice(1).every((id, i) => g.edges.some((e) =>
+    !e.blocked && (!e.allowedTransport || e.allowedTransport.includes(transport)) &&
+    (path.objective !== "time" || e.seconds !== undefined) &&
+    (path.objective === "time" || Number.isFinite(edgeDistance(g, g.nodes.find((n) => n.id === path.nodes[i])!, g.nodes.find((n) => n.id === id)!, e))) &&
+    (e.from === path.nodes[i] && e.to === id || !e.oneWay && e.to === path.nodes[i] && e.from === id)));
+}
+function validTransport(value: unknown) {
+  return value === undefined || Array.isArray(value) && value.length <= 3 && value.every((v) => typeof v === "string" && Object.hasOwn(transports, v));
+}
+function edgeDistance(g: FacilityGraph, a: MapNode, b: MapNode, edge: MapEdge) {
+  if (edge.distance !== undefined && edge.distanceUnit) {
+    if (edge.distanceUnit === "m") return g.scaleCalibrated === true ? edge.distance : Infinity;
+    return edge.distance * (g.scaleCalibrated === true ? g.metersPerPixel : 1);
+  }
+  return edge?.distance ?? Math.hypot((a.x - b.x) * g.width, (a.y - b.y) * g.height) * (g.scaleCalibrated === true ? g.metersPerPixel : 1);
 }
 export function planStops(
   g: FacilityGraph,
   start: string,
   stops: string[],
+  options: RouteOptions = {},
 ): Path | null {
-  const pending = [...new Set(stops)].filter((s) => s !== start);
+  if (!shortestPath(g, start, start, options)) return null;
+  const pending = [...new Set(stops)].filter((s) => s !== start && s !== options.final);
   if (pending.length > 25) return null;
-  const ids = [start, ...pending],
+  const ids = [...new Set([start, ...pending, ...(options.final ? [options.final] : [])])],
     matrix = new Map<string, Path | null>();
   for (const a of ids)
-    for (const b of ids) matrix.set(`${a}:${b}`, shortestPath(g, a, b));
+    for (const b of ids) matrix.set(`${a}:${b}`, shortestPath(g, a, b, options));
   const order = [start];
   while (pending.length) {
     const from = order.at(-1)!;
@@ -288,6 +331,7 @@ export function planStops(
     if (!matrix.get(`${from}:${next}`)) return null;
     order.push(next);
   }
+  if (options.final && order.at(-1) !== options.final) order.push(options.final);
   const score = (arr: string[]) =>
     arr
       .slice(1)
@@ -299,7 +343,7 @@ export function planStops(
   for (let pass = 0; pass < 10; pass++) {
     let improved = false;
     for (let i = 1; i < order.length - 1; i++)
-      for (let j = i + 1; j < order.length; j++) {
+      for (let j = i + 1; j < order.length - (options.final ? 1 : 0); j++) {
         const candidate = [
           ...order.slice(0, i),
           ...order.slice(i, j + 1).reverse(),
@@ -313,7 +357,10 @@ export function planStops(
     if (!improved) break;
   }
   const nodes = [start];
-  for (let i = 1; i < order.length; i++)
-    nodes.push(...matrix.get(`${order[i - 1]}:${order[i]}`)!.nodes.slice(1));
-  return { nodes, cost: score(order), stops: order };
+  for (let i = 1; i < order.length; i++) {
+    const leg = matrix.get(`${order[i - 1]}:${order[i]}`);
+    if (!leg) return null;
+    nodes.push(...leg.nodes.slice(1));
+  }
+  return { ...shortestPath(g, start, start, options)!, nodes, cost: score(order), stops: order, approximate: true };
 }

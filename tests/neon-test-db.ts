@@ -15,6 +15,8 @@ class neon {
   }
 }
 
+// Preserve the legacy test type aliases during the SQL adapter migration.
+// eslint-disable-next-line @typescript-eslint/no-namespace
 namespace neon {
   export type RowDataPacket = import("../lib/db-types").RowDataPacket;
   export type ResultSetHeader = import("../lib/db-types").ResultSetHeader;

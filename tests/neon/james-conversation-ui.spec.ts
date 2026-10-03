@@ -36,6 +36,7 @@ test("James real UI: greeting, cancellation, operation confirmation, responsive 
       headers,
       data: {
         type: "createRequests",
+        requestKey: crypto.randomUUID(),
         entries: [{ code, quantity: 2, priority: "Leve", justification: "" }],
       },
     });

@@ -59,7 +59,7 @@ test("credentials, errors, password visibility and logout", async ({
   );
   await page.getByRole("button", { name: "Entrar", exact: true }).click();
   await expect(page.locator("#login-error")).toContainText("incorretos");
-  await page.getByLabel("Senha", { exact: true }).fill("Marcon@123");
+  await page.getByLabel("Senha", { exact: true }).fill("Marcon@12345");
   await page.getByRole("button", { name: "Entrar", exact: true }).click();
   await expect(page).toHaveURL("/admin/dashboard");
   await page.getByRole("button", { name: "Sair da conta" }).click();

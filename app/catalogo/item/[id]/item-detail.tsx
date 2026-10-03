@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -30,6 +30,8 @@ export function ItemDetail({
   const [state, setState] = useState<DetailState>("loading");
   const [attempt, setAttempt] = useState(0);
   const [requestState, setRequestState] = useState<RequestState>("idle");
+  const [persisted, setPersisted] = useState(false);
+  const submission = useRef<{ signature: string; key: string } | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [showRequest, setShowRequest] = useState(false);
   const [error, setError] = useState("");
@@ -69,11 +71,14 @@ export function ItemDetail({
     if (!item || requestState !== "idle") return;
     setError("");
     setRequestState("submitting");
+    const justification = String(new FormData(event.currentTarget).get("justification") ?? "");
+    const signature = JSON.stringify([item.id, quantity, justification]);
+    if (submission.current?.signature !== signature) submission.current = { signature, key: crypto.randomUUID() };
     try {
       const response = await fetch("/api/requisicoes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itemId: item.id, quantity }),
+        body: JSON.stringify({ itemId: item.id, quantity, justification, requestKey: submission.current.key }),
       });
       const result = await response.json();
       if (!response.ok) {
@@ -82,6 +87,8 @@ export function ItemDetail({
         return;
       }
       setProtocol(result.protocol);
+      setPersisted(result.persistent === true);
+      window.dispatchEvent(new CustomEvent("marcon:workspace-updated"));
       setRequestState("success");
     } catch {
       setError("Não foi possível conectar. Tente novamente.");
@@ -170,8 +177,7 @@ export function ItemDetail({
                       Protocolo {protocol} · {quantity} {item.unit}
                     </p>
                     <small>
-                      Demonstração: solicitação registrada temporariamente, sem
-                      envio ao almoxarifado.
+                      {persisted ? "Requisição registrada; aguarde aprovação e atendimento." : "Demonstração: solicitação registrada temporariamente, sem envio ao almoxarifado."}
                     </small>
                   </div>
                 </div>
@@ -234,6 +240,7 @@ export function ItemDetail({
                       </button>
                     </div>
                   </div>
+                  {quantity > 10 && <label>Justificativa<textarea name="justification" required minLength={3} maxLength={1000} /></label>}
                   {error && (
                     <p role="alert" className={styles.formError}>
                       {error}

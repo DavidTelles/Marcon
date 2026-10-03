@@ -6,15 +6,16 @@ export const WAREHOUSES = [
   "Almoxarifado 2",
   "Almoxarifado 3",
   "Almoxarifado 4",
-] as const;
-export const BLOCKS = ["Bloco A", "Bloco B", "Bloco C", "Bloco D"] as const;
-export type Warehouse = (typeof WAREHOUSES)[number];
+] as readonly string[];
+export const BLOCKS: readonly string[] = ["Bloco A", "Bloco B", "Bloco C", "Bloco D"];
+export type Warehouse = string;
 export type InventoryBalance = {
   partCode: string;
   warehouse: Warehouse;
   quantity: number;
   reserved?: number;
   available?: number;
+  committed?: number;
   minimum?: number;
   aisle?: string;
   shelf?: string;

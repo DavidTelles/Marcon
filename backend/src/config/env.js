@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-require-imports */
 const path = require('node:path');
 
 // Frontend, backend, migrations and seed use one root .env file.
@@ -10,7 +9,7 @@ const env = {
   nodeEnv: process.env.NODE_ENV || 'development',
   databaseUrl: process.env.DATABASE_URL || '',
   jwt: {
-    secret: process.env.JWT_SECRET || 'banana',
+    secret: process.env.JWT_SECRET || '',
     expiresIn: process.env.JWT_EXPIRES_IN || '8h'
   },
   rfid: {
@@ -21,8 +20,8 @@ const env = {
   corsOrigin: process.env.CORS_ORIGIN || '*'
 };
 
-if (!env.jwt.secret && env.nodeEnv !== 'test') {
-  throw new Error('JWT_SECRET is required');
+if (!env.jwt.secret || (env.nodeEnv !== 'test' && (env.jwt.secret.length < 32 || /^(change-|gere-|banana)/i.test(env.jwt.secret)))) {
+  throw new Error('JWT_SECRET aleatória com pelo menos 32 caracteres é obrigatória');
 }
 
 module.exports = env;

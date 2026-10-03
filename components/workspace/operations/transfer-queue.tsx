@@ -3,10 +3,15 @@ import { useEffect, useState } from "react";
 import { useDemoStore } from "../demo-store";
 import { DashboardDialog } from "./dashboard-dialog";
 import { CodeScanner } from "./code-scanner";
+import { DistributionMap } from "./distribution-map";
+import type { RouteOptions } from "@/lib/routing";
 type Transfer = {
   id: number;
   code: string;
   quantity: number;
+  unit: string;
+  sourceNode?: string;
+  destinationNode?: string;
   source: string;
   destination: string;
   status: string;
@@ -37,6 +42,14 @@ export function TransferQueue({
   const [items, setItems] = useState<Transfer[]>([]),
     [page, setPage] = useState(1),
     [revision, setRevision] = useState(0);
+  const [mapVersion, setMapVersion] = useState<number | null>(null);
+  const [routeOptions, setRouteOptions] = useState<Record<number, RouteOptions>>({});
+  useEffect(() => {
+    const update = () => setRevision((r) => r + 1);
+    window.addEventListener("marcon:workspace-updated", update);
+    window.addEventListener("marcon:map-published", update);
+    return () => { window.removeEventListener("marcon:workspace-updated", update); window.removeEventListener("marcon:map-published", update); };
+  }, []);
   const [loading, setLoading] = useState(true),
     [error, setError] = useState(""),
     [message, setMessage] = useState(""),
@@ -56,6 +69,7 @@ export function TransferQueue({
         const b = await r.json();
         if (!r.ok) throw new Error(b.error);
         setItems(b.transfers);
+        setMapVersion(b.mapVersion);
         setError("");
       })
       .catch((e) => {
@@ -89,6 +103,7 @@ export function TransferQueue({
         id: selected.id,
         qrCode: code,
         confirmedQuantity: Number(quantity),
+        ...routeOptions[selected.id],
         reason: "Solicitação cancelada pelo responsável",
       });
       setMessage(
@@ -122,7 +137,7 @@ export function TransferQueue({
       )}
       <h3>Transferências: solicitação → saída → recebimento</h3>
       <p>
-        A solicitação não movimenta nem reserva saldo. A saída confere novamente
+        A solicitação compromete o disponível sem movimentar o físico. A saída confere novamente
         reservas e mínimo da origem; o destino só recebe saldo após conferência.
       </p>
       <button
@@ -142,7 +157,7 @@ export function TransferQueue({
         <article className="ops-suggestion" key={t.id}>
           <div>
             <strong>
-              #{t.id} · {t.code} · {t.quantity} unidades · {t.status}
+              #{t.id} · {t.code} · {t.quantity} {t.unit} · {t.status}
             </strong>
             <p>
               {t.source} → {t.destination}
@@ -186,6 +201,7 @@ export function TransferQueue({
                 {t.received_at ?? "—"}
               </p>
             </details>
+            {["Solicitada", "Em trânsito"].includes(t.status) && <DistributionMap key={`${mapVersion}:${t.id}`} version={mapVersion} from={t.source} to={t.destination} fromNode={t.sourceNode} toNode={t.destinationNode} onStart={(_node, parameters) => setRouteOptions((old) => ({ ...old, [t.id]: parameters }))} />}
           </div>
           {["Solicitada", "Em trânsito"].includes(t.status) && (
             <button

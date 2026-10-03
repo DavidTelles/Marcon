@@ -17,8 +17,15 @@ export const permissions: Record<Account["role"], readonly Permission[]> = {
 };
 export const can = (role: Account["role"], permission: Permission) =>
   permissions[role].includes(permission);
-export function demand(user: Account, permission: Permission) {
-  if (!can(user.role, permission))
+const aliases: Record<Permission, string[]> = {
+    request: ["requests.create"], approve: ["requests.approve"], stock: ["stock.manage"],
+    people: ["users.manage"], map: [], planning: ["stock.manage"], history: [],
+};
+export function permitted(user: Account, permission: Permission, actionPermission?: string) {
+  return can(user.role, permission) && ![permission, ...(actionPermission ? [actionPermission] : aliases[permission])].some((p) => user.permissionOverrides?.[p] === false);
+}
+export function demand(user: Account, permission: Permission, actionPermission?: string) {
+  if (!permitted(user, permission, actionPermission))
     throw new ActionError("Perfil sem permissão para esta ação.", 403);
 }
 export function integer(value: unknown, min = 1) {

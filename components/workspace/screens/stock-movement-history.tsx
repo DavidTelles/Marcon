@@ -2,10 +2,9 @@
 
 import { useState } from "react";
 import { useDemoStore } from "../demo-store";
-import { WAREHOUSES } from "@/lib/inventory";
 
 export function StockMovementHistory() {
-  const { stock, movements, transfers } = useDemoStore();
+  const { stock, movements, transfers, warehouseOptions: WAREHOUSES } = useDemoStore();
   const [warehouse, setWarehouse] = useState("Todos");
   const [query, setQuery] = useState("");
   const rows = movements.filter((item) => (warehouse === "Todos" || item.warehouse === warehouse) &&

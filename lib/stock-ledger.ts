@@ -70,14 +70,17 @@ export async function stock(c: PoolConnection, part: number): Promise<Row[]> {
     "SELECT warehouse_id,quantity FROM request_reservations WHERE part_id=? FOR UPDATE",
     [part],
   );
+  const pending = await rows(c,
+    "SELECT id,source_warehouse_id,quantity FROM stock_transfers WHERE part_id=? AND status='Solicitada' ORDER BY id FOR UPDATE", [part]);
   return balances.map((b) => ({
     ...b,
     reserved: reservations
       .filter((r) => Number(r.warehouse_id) === Number(b.warehouse_id))
       .reduce((sum, r) => sum + Number(r.quantity), 0),
+    pending_outgoing: pending.filter((t) => Number(t.source_warehouse_id) === Number(b.warehouse_id)).reduce((sum, t) => sum + Number(t.quantity), 0),
   }));
 }
-export const available = (r: Row) => Number(r.quantity) - Number(r.reserved);
+export const available = (r: Row) => Number(r.quantity) - Number(r.reserved) - Number(r.pending_outgoing ?? 0);
 export async function partLock(c: PoolConnection, code: unknown, id?: unknown) {
   const p = await first(
     c,

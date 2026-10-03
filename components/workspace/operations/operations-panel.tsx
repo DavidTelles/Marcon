@@ -15,6 +15,7 @@ import { RequestOperations } from "./request-operations";
 import { DashboardDialog } from "./dashboard-dialog";
 import { DashboardCharts } from "./dashboard-charts";
 import { DistributionMap } from "./distribution-map";
+import type { RouteOptions } from "@/lib/routing";
 import { TransferQueue } from "./transfer-queue";
 import { RecommendationCards } from "./recommendation-cards";
 import { AnimatedNumber } from "./animated-number";
@@ -87,6 +88,7 @@ export function OperationsPanel({
   const { runAction } = useDemoStore(),
     first = initialView(role, mode, dashboardView);
   const router = useRouter();
+  const [receivingOrigins, setReceivingOrigins] = useState<Record<string, { node: string; parameters: RouteOptions }>>({});
   const planning =
     mode === "compra"
       ? "purchase"
@@ -959,6 +961,10 @@ export function OperationsPanel({
                 </label>
               </>
             )}
+            {planning === "distribution" && <>
+              <label>Horizonte de cobertura (dias)<input name="horizon" type="number" min="1" max="365" defaultValue={report?.filters.horizon ?? 7} /></label>
+              <label>Margem de cobertura (0,2 = 20%)<input name="margin" type="number" min="0" max="2" step="0.05" defaultValue={report?.filters.margin ?? 0.2} /></label>
+            </>}
             <button className="button primary">Aplicar filtros</button>
             <button
               type="button"
@@ -1228,9 +1234,9 @@ export function OperationsPanel({
               {report.incoming
                 .filter((r) => r.status === "Confirmada")
                 .map((r) => (
+                  <div key={r.id}>
                   <form
                     className="ops-form"
-                    key={r.id}
                     onSubmit={(e) => {
                       e.preventDefault();
                       const f = new FormData(e.currentTarget);
@@ -1240,13 +1246,16 @@ export function OperationsPanel({
                           id: r.id,
                           qrCode: String(f.get("code")),
                           quantity: Number(f.get("quantity")),
+                          receivingNode: receivingOrigins[String(r.id)]?.node,
+                          receivingObjective: receivingOrigins[String(r.id)]?.parameters.objective,
+                          receivingTransport: receivingOrigins[String(r.id)]?.parameters.transport,
                         },
-                        `Confirmar recebimento de ${r.quantity} unidades de ${r.code}?`,
+                        `Confirmar recebimento de ${r.quantity} ${r.unit} de ${r.code}?`,
                       );
                     }}
                   >
                     <p>
-                      {r.code} · {r.quantity} un. · {r.warehouse} · {r.supplier}{" "}
+                      {r.code} · {r.quantity} {r.unit} · {r.warehouse} · {r.supplier}{" "}
                       · {String(r.due_date).slice(0, 10)}
                     </p>
                     <label>
@@ -1274,6 +1283,8 @@ export function OperationsPanel({
                       Cancelar entrada prevista
                     </button>
                   </form>
+                  <DistributionMap key={`${report.mapVersion}:${r.id}`} version={report.mapVersion} to={String(r.warehouse)} toNode={r.nodeId ? String(r.nodeId) : undefined} receivingOnly onStart={(node, parameters) => setReceivingOrigins((old) => ({ ...old, [String(r.id)]: { node, parameters } }))} />
+                  </div>
                 ))}
             </section>
           )}
@@ -1316,13 +1327,17 @@ export function OperationsPanel({
                   {
                     type: "transfer",
                     ...t,
+                    proposal: { key: t.key, ...t.evidence.period, horizon: t.evidence.horizon, margin: t.evidence.margin, purpose: planning === "purchase" ? "purchase" : "distribution" },
                     requestKey: (transferKeys.current[
-                      `${t.code}:${t.from}:${t.to}:${t.quantity}`
+                      t.key
                     ] ||= crypto.randomUUID()),
                   },
                   `Solicitar ${t.quantity} unidades de ${t.code}, de ${t.from} para ${t.to}? Os saldos só mudam após saída e recebimento conferidos.`,
                 )
               }
+              onReject={(t) => void act({ type: "rejectRecommendation", code: t.code,
+                proposal: { key: t.key, ...t.evidence.period, horizon: t.evidence.horizon, margin: t.evidence.margin, purpose: planning === "purchase" ? "purchase" : "distribution" } },
+                `Rejeitar a sugestão de ${t.quantity} unidades de ${t.code}, de ${t.from} para ${t.to}? A decisão será registrada sem movimentar saldo.`)}
             />
           )}
           {view === "geral" && mode !== "dashboard" && (

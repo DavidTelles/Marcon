@@ -79,11 +79,12 @@ const transfers = async (req, res) => {
       params.push(warehouse, warehouse);
     }
     const [rows] = await getPool().query(
-      `SELECT t.id,t.status,t.quantity,t.reason,t.created_at,t.shipped_at,t.received_at,p.code,s.name AS source,d.name AS destination,u.name AS requester,su.name AS shipper,ru.name AS receiver FROM stock_transfers t JOIN parts p ON p.id=t.part_id JOIN warehouses s ON s.id=t.source_warehouse_id JOIN warehouses d ON d.id=t.destination_warehouse_id JOIN users u ON u.id=t.performed_by LEFT JOIN users su ON su.id=t.shipped_by LEFT JOIN users ru ON ru.id=t.received_by WHERE ${clauses.join(' AND ')} ORDER BY t.id DESC LIMIT 50 OFFSET ${(page - 1) * 50}`,
+      `SELECT t.id,t.status,t.quantity,t.reason,t.created_at,t.shipped_at,t.received_at,p.code,p.unit,si.map_node_id AS sourceNode,di.map_node_id AS destinationNode,s.name AS source,d.name AS destination,u.name AS requester,su.name AS shipper,ru.name AS receiver FROM stock_transfers t JOIN parts p ON p.id=t.part_id JOIN warehouses s ON s.id=t.source_warehouse_id JOIN warehouses d ON d.id=t.destination_warehouse_id JOIN users u ON u.id=t.performed_by LEFT JOIN users su ON su.id=t.shipped_by LEFT JOIN users ru ON ru.id=t.received_by LEFT JOIN inventory si ON si.part_id=t.part_id AND si.warehouse_id=s.id LEFT JOIN inventory di ON di.part_id=t.part_id AND di.warehouse_id=d.id WHERE ${clauses.join(' AND ')} ORDER BY t.id DESC LIMIT 50 OFFSET ${(page - 1) * 50}`,
       params
     );
     res.set('Cache-Control', 'no-store');
-    res.json({ transfers: rows });
+    const [published] = await getPool().query("SELECT id FROM map_versions WHERE status='Publicada'");
+    res.json({ transfers: rows, mapVersion: published[0]?.id ?? null });
   } catch (error) {
     sendError(res, error);
   }

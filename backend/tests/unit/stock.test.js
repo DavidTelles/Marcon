@@ -1,96 +1,41 @@
-jest.mock('../../src/config/db', () => ({
-  withTransaction: async (work) => work(global.__conn)
+jest.mock('../../src/workspace/workspace-actions', () => ({
+  executeWorkspaceAction: jest.fn(),
+  ActionError: jest.requireActual('../../src/workspace/permissions').ActionError
 }));
-
 const { createStockService } = require('../../src/services/stockService');
-const AppError = require('../../src/utils/AppError');
+const { executeWorkspaceAction, ActionError } = require('../../src/workspace/workspace-actions');
+const actor = { id: '1003', role: 'almoxarifado' };
+const stockRepository = { list: jest.fn(), listByProduct: jest.fn(), listMovements: jest.fn() };
+const service = createStockService({ stockRepository,
+  productRepository: { findById: async (id) => id === 1 ? { id: 1, code: 'P1', is_active: true } : null },
+  warehouseRepository: { findById: async (id) => id === 1 ? { id: 1, name: 'Central', is_active: true } : id === 5 ? { id: 5, name: 'Estoque 5', is_active: true } : null }
+});
+const input = { actor, product_id: 1, warehouse_id: 1, quantity: 3, notes: 'Contagem conferida', requestKey: 'stock-test-operation-123' };
+beforeEach(() => { jest.clearAllMocks(); executeWorkspaceAction.mockResolvedValue({ id: 10 }); });
 
-function fakeConn(initial) {
-  const inventory = new Map(Object.entries(initial));
-  return {
-    inventory,
-    movements: [],
-    async execute(sql, params) {
-      if (sql.includes('FROM inventory') && sql.includes('FOR UPDATE')) {
-        const key = `${params[0]}:${params[1]}`;
-        return [inventory.has(key) ? [{ ...inventory.get(key) }] : []];
-      }
-      if (sql.startsWith('INSERT INTO inventory')) {
-        inventory.set(`${params[0]}:${params[1]}`, {
-          part_id: params[0],
-          warehouse_id: params[1],
-          quantity: 0,
-          minimum_quantity: 0
-        });
-        return [{ affectedRows: 1 }];
-      }
-      if (sql.startsWith('UPDATE inventory SET quantity = quantity -')) {
-        const row = inventory.get(`${params[1]}:${params[2]}`);
-        row.quantity -= params[0];
-        return [{ affectedRows: 1 }];
-      }
-      if (sql.startsWith('UPDATE inventory SET quantity = quantity +')) {
-        const row = inventory.get(`${params[1]}:${params[2]}`);
-        row.quantity += params[0];
-        return [{ affectedRows: 1 }];
-      }
-      if (sql.startsWith('UPDATE inventory SET quantity = ?')) {
-        inventory.get(`${params[1]}:${params[2]}`).quantity = params[0];
-        return [{ affectedRows: 1 }];
-      }
-      if (sql.startsWith('INSERT INTO stock_movements')) {
-        this.movements.push({ kind: params[2], quantity: params[3] });
-        return [{ affectedRows: 1 }];
-      }
-      throw new Error(`SQL não esperado no teste: ${sql}`);
-    }
-  };
-}
-
-function build(initial) {
-  global.__conn = fakeConn(initial);
-  const service = createStockService({
-    stockRepository: { list: async () => [], listByProduct: async () => [], listMovements: async () => [] },
-    productRepository: { findById: async (id) => (Number(id) === 1 ? { id: 1, code: 'P1', name: 'Peça 1' } : null) },
-    warehouseRepository: {
-      findById: async (id) => (id === 1 ? { id: 1, code: 'C' } : id === 2 ? { id: 2, code: 'A1' } : null)
-    }
+describe('REST delega ao fluxo oficial (contrato; não prova persistência)', () => {
+  test('entrada usa stockEntry com responsável e chave', async () => {
+    await service.changeQuantity({ ...input, type: 'IN' });
+    expect(executeWorkspaceAction).toHaveBeenCalledWith(actor, { type: 'stockEntry', code: 'P1', warehouse: 'Central', quantity: 3, reason: input.notes, requestKey: input.requestKey });
   });
-  return { service, conn: global.__conn };
-}
-
-describe('Estoque (schema unificado inventory)', () => {
-  test('entrada soma saldo e registra movimento', async () => {
-    const { service, conn } = build({ '1:1': { part_id: 1, warehouse_id: 1, quantity: 5 } });
-    const result = await service.changeQuantity({ product_id: 1, warehouse_id: 1, quantity: 3, type: 'IN', user_id: 9 });
-    expect(result.quantity).toBe(8);
-    expect(conn.movements[0].kind).toBe('entrada');
+  test('transferência apenas solicita; não cria movimentos paralelos', async () => {
+    expect(await service.changeQuantity({ ...input, type: 'TRANSFER', warehouse_to_id: 5 })).toEqual({ id: 10, status: 'Solicitada' });
+    expect(executeWorkspaceAction).toHaveBeenCalledWith(actor, { type: 'transfer', code: 'P1', from: 'Central', to: 'Estoque 5', quantity: 3, reason: input.notes, requestKey: input.requestKey });
   });
-
-  test('saída sem saldo falha com 409', async () => {
-    const { service } = build({ '1:1': { part_id: 1, warehouse_id: 1, quantity: 2 } });
-    await expect(
-      service.changeQuantity({ product_id: 1, warehouse_id: 1, quantity: 5, type: 'OUT', user_id: 9 })
-    ).rejects.toMatchObject({ statusCode: 409 });
+  test('saída exige documento aprovado e conferência de código', async () => {
+    await expect(service.changeQuantity({ ...input, type: 'OUT' })).rejects.toMatchObject({ statusCode: 422 });
+    expect(executeWorkspaceAction).not.toHaveBeenCalled();
+    await service.changeQuantity({ ...input, type: 'OUT', request_id: 7, qr_code: 'P1' });
+    expect(executeWorkspaceAction).toHaveBeenCalledWith(actor, { type: 'changeRequestStatus', id: 7, status: 'Entregue', qrCode: 'P1', confirmedQuantity: 3, requestKey: input.requestKey });
   });
-
-  test('transferência move saldo entre almoxarifados', async () => {
-    const { service, conn } = build({
-      '1:1': { part_id: 1, warehouse_id: 1, quantity: 10 },
-      '1:2': { part_id: 1, warehouse_id: 2, quantity: 1 }
-    });
-    const result = await service.changeQuantity({
-      product_id: 1, warehouse_id: 1, warehouse_to_id: 2, quantity: 4, type: 'TRANSFER', user_id: 9
-    });
-    expect(result.origin_quantity).toBe(6);
-    expect(result.destination_quantity).toBe(5);
-    expect(conn.movements.map((m) => m.kind)).toEqual(['transferencia_saida', 'transferencia_entrada']);
+  test('erros de saldo e permissão são preservados', async () => {
+    executeWorkspaceAction.mockRejectedValue(new ActionError('Saldo insuficiente', 409));
+    await expect(service.changeQuantity({ ...input, type: 'IN' })).rejects.toMatchObject({ statusCode: 409 });
+    await expect(service.changeQuantity({ ...input, actor: undefined, type: 'IN' })).rejects.toMatchObject({ statusCode: 401 });
   });
-
-  test('peça inexistente falha com 404', async () => {
-    const { service } = build({});
-    await expect(
-      service.changeQuantity({ product_id: 99, warehouse_id: 1, quantity: 1, type: 'IN', user_id: 9 })
-    ).rejects.toBeInstanceOf(AppError);
+  test('material inválido e quantidade fracionada são rejeitados antes da operação', async () => {
+    await expect(service.changeQuantity({ ...input, product_id: 99, type: 'IN' })).rejects.toMatchObject({ statusCode: 404 });
+    await expect(service.changeQuantity({ ...input, quantity: 0.5, type: 'IN' })).rejects.toMatchObject({ statusCode: 400 });
+    expect(executeWorkspaceAction).not.toHaveBeenCalled();
   });
 });

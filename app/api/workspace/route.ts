@@ -32,10 +32,10 @@ function failure(error: unknown) {
 }
 
 export async function GET(request: NextRequest) {
-  if (!databaseEnabled()) return unavailable();
   const user = await currentUser();
   if (!user)
     return NextResponse.json({ error: "Faça login." }, { status: 401 });
+  if (!databaseEnabled()) return unavailable();
   try {
     if (request.nextUrl.searchParams.has("transfers")) {
       const token = await apiToken();
@@ -63,7 +63,6 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  if (!databaseEnabled()) return unavailable();
   if (request.headers.get("origin") !== request.nextUrl.origin)
     return NextResponse.json(
       { error: "Origem não autorizada." },
@@ -72,6 +71,7 @@ export async function POST(request: NextRequest) {
   const user = await currentUser();
   if (!user)
     return NextResponse.json({ error: "Faça login." }, { status: 401 });
+  if (!databaseEnabled()) return unavailable();
   let payload: unknown;
   try {
     payload = await request.json();

@@ -25,11 +25,11 @@ const graph: FacilityGraph = {
   ],
 };
 test("Dijkstra, paradas, bloqueios e paredes", () => {
-  expect(shortestPath(graph, "a", "c")).toEqual({
+  expect(shortestPath(graph, "a", "c", { objective: "time" })).toMatchObject({
     nodes: ["a", "b", "c"],
     cost: 7,
   });
-  expect(planStops(graph, "a", ["c", "b", "c"])?.cost).toBe(7);
+  expect(planStops(graph, "a", ["c", "b", "c"], { objective: "time" })?.cost).toBe(7);
   expect(
     shortestPath(
       {
@@ -38,6 +38,7 @@ test("Dijkstra, paradas, bloqueios e paredes", () => {
       },
       "a",
       "c",
+      { objective: "time" },
     )?.cost,
   ).toBe(20);
   expect(planStops(graph, "a", ["d"])).toBeNull();

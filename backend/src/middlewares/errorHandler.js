@@ -1,11 +1,12 @@
 const env = require('../config/env');
 const AppError = require('../utils/AppError');
+const { ActionError } = require('../workspace/permissions');
 
 function errorHandler(err, req, res, next) {
   if (res.headersSent) return next(err);
 
-  const status = err.statusCode || (err.code && String(err.code).startsWith('ER_') ? 500 : 500);
-  const isOperational = err instanceof AppError || err.isOperational;
+  const status = err instanceof ActionError ? err.status : err.statusCode || 500;
+  const isOperational = err instanceof AppError || err instanceof ActionError || err.isOperational;
   const payload = {
     ok: false,
     error: isOperational ? err.message : 'Internal Server Error',

@@ -103,7 +103,7 @@ export const metricDefinitions = {
     label: "Posições de estoque",
     unit: "item/local",
     definition:
-      "Saldo físico, reservado e disponível atuais. Disponível = físico - reservado; o período se aplica às movimentações.",
+      "Saldo físico, reservado e disponível atuais. Disponível = físico - reservas de requisições - transferências solicitadas sem saída; o período se aplica às movimentações.",
   },
 } as const;
 export type Metric = keyof typeof metricDefinitions;
@@ -121,6 +121,8 @@ export type DashboardFilter = {
   page: number;
   pageSize: number;
   metric: Metric;
+  horizon: number;
+  margin: number;
 };
 const statuses = [
   "Pendente",
@@ -191,6 +193,8 @@ export function dashboardFilters(
     metric =
       q.get("metric") ||
       (["estoque", "compra"].includes(view) ? "stock" : "requests");
+  const horizon = Number(q.get("horizon") ?? 7), margin = Number(q.get("margin") ?? 0.2);
+  if (!Number.isInteger(horizon) || horizon < 1 || horizon > 365 || !Number.isFinite(margin) || margin < 0 || margin > 2) throw new ActionError("Cobertura ou margem inválida.");
   if (
     !Number.isSafeInteger(page) ||
     page < 1 ||
@@ -220,6 +224,7 @@ export function dashboardFilters(
     page,
     pageSize,
     metric: metric as Metric,
+    horizon, margin,
   };
 }
 export function requestWhere(user: Account, f: DashboardFilter, period = true) {

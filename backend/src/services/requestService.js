@@ -34,7 +34,7 @@ async function createRequest(actor, payload) {
   if (!rawItems.length || rawItems.some((i) => !i.product_id || !i.quantity || i.quantity <= 0)) {
     throw new AppError(400, 'Itens da requisição inválidos');
   }
-  const urgency = payload.urgency || 'Leve';
+  const urgency = { LEVE: 'Leve', MODERADO: 'Moderado', URGENTE: 'Urgente' }[payload.urgency] || payload.urgency || 'Leve';
   const entries = [];
   for (const item of rawItems) {
     const product = await productRepository.findById(item.product_id);
@@ -47,7 +47,7 @@ async function createRequest(actor, payload) {
     });
   }
   try {
-    const result = await executeWorkspaceAction(actor, { type: 'createRequests', entries });
+    const result = await executeWorkspaceAction(actor, { type: 'createRequests', entries, requestKey: payload.requestKey });
     const created = [];
     for (const id of result.ids || []) created.push(await requestRepository.findById(id));
     return created.length === 1 ? created[0] : { batch: result.batch, requests: created };
@@ -147,6 +147,8 @@ async function returnItems(actor, id, returns) {
       await executeWorkspaceAction(actor, {
         type: 'registerReturn',
         code: request.sku,
+        requestId: Number(request.id),
+        requestKey: ret.requestKey,
         block: request.block_name,
         quantity: Number(ret.quantity || request.quantity),
         condition: ret.condition === 'Danificado' ? 'Danificado' : 'Apto',

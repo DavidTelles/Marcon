@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, CheckCircle2, ScanFace } from "lucide-react";
 import { FaceCapture } from "@/app/components/face/face-capture";
 import { useDemoStore } from "../demo-store";
-import { BLOCKS } from "@/lib/inventory";
 import type { StaffRole, StaffUser } from "@/lib/staff-data";
 
 const roles: StaffRole[] = [
@@ -38,7 +37,7 @@ type Errors = Partial<
 >;
 
 export function StaffCreateScreen() {
-  const { runAction, persistent } = useDemoStore(),
+  const { runAction, persistent, blockOptions } = useDemoStore(),
     router = useRouter(),
     params = useSearchParams();
   const back = useMemo(() => {
@@ -47,7 +46,7 @@ export function StaffCreateScreen() {
       ? value
       : "/admin/create";
   }, [params]);
-  const [form, setForm] = useState(initial),
+  const [form, setForm] = useState<StaffUser>({ ...initial, block: blockOptions[0] ?? "" }),
     [password, setPassword] = useState(""),
     [confirm, setConfirm] = useState(""),
     [errors, setErrors] = useState<Errors>({}),
@@ -319,7 +318,7 @@ export function StaffCreateScreen() {
                   onChange={(e) => change("block", e.target.value)}
                 >
                   <option value="">Selecione</option>
-                  {BLOCKS.map((block) => (
+                  {blockOptions.map((block) => (
                     <option key={block}>{block}</option>
                   ))}
                 </select>

@@ -2,6 +2,7 @@ import { test, expect, type APIRequestContext } from "@playwright/test";
 import neon, { type RowDataPacket } from "../neon-test-db";
 import sharp from "sharp";
 import type { FacilityGraph } from "../../lib/routing";
+import { randomUUID } from "node:crypto";
 
 test("logística real: sugestões, etapas concorrentes, rotas versionadas e saída recalculada", async ({
   playwright,
@@ -29,7 +30,7 @@ test("logística real: sugestões, etapas concorrentes, rotas versionadas e saí
     return ctx;
   }
   async function act(ctx: APIRequestContext, data: object, status = 200) {
-    const r = await ctx.post("/api/workspace", { data });
+    const r = await ctx.post("/api/workspace", { data: { requestKey: randomUUID(), ...data } });
     expect(r.status(), await r.text()).toBe(status);
     return r.json();
   }

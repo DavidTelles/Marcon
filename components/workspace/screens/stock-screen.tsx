@@ -15,9 +15,8 @@ import { heading, badge } from "../ui";
 import { useDemoStore } from "../demo-store";
 import type { Part } from "@/lib/demo-data";
 import { boxLabel } from "@/lib/packaging";
-import { WAREHOUSES, balanceOf, type Warehouse } from "@/lib/inventory";
+import { balanceOf, type Warehouse } from "@/lib/inventory";
 
-const warehouses = WAREHOUSES;
 const asNumber = (value: FormDataEntryValue | null) => Number(value ?? 0);
 
 export function StockScreen({
@@ -36,11 +35,12 @@ export function StockScreen({
     setMovements,
     persistent,
     runAction,
+    warehouseOptions: warehouses,
   } = useDemoStore();
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Part | null>(null);
   const [query, setQuery] = useState("");
-  const [warehouse, setWarehouse] = useState<Warehouse>("Central");
+  const [warehouse, setWarehouse] = useState<Warehouse>(warehouses[0] ?? "");
   const [level, setLevel] = useState("Todos");
   const [sort, setSort] = useState("name");
   useEffect(() => {
@@ -48,11 +48,11 @@ export function StockScreen({
       const requested = new URLSearchParams(window.location.search).get(
         "warehouse",
       );
-      if (requested && WAREHOUSES.includes(requested as Warehouse))
+      if (requested && warehouses.includes(requested))
         setWarehouse(requested as Warehouse);
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [routePart]);
+  }, [routePart, warehouses]);
 
   const visibleStock = useMemo(
     () =>
@@ -64,10 +64,10 @@ export function StockScreen({
             balances.find(
               (b) => b.partCode === item.code && b.warehouse === warehouse,
             )?.minimum ??
-            Math.max(
+            (persistent ? 0 : Math.max(
               2,
               Math.ceil(item.minimum / (warehouse === "Central" ? 4 : 8)),
-            ),
+            )),
           reserved:
             balances.find(
               (b) => b.partCode === item.code && b.warehouse === warehouse,
@@ -108,7 +108,7 @@ export function StockScreen({
               ? b.quantity - a.quantity
               : a.name.localeCompare(b.name, "pt-BR"),
         ),
-    [stock, balances, routePart, query, warehouse, level, sort],
+    [stock, balances, routePart, query, warehouse, level, sort, persistent],
   );
 
   async function savePart(event: React.FormEvent<HTMLFormElement>) {
@@ -323,7 +323,7 @@ export function StockScreen({
         role="tablist"
         aria-label="Estoque por almoxarifado"
       >
-        {WAREHOUSES.map((item) => (
+        {warehouses.map((item) => (
           <button
             key={item}
             type="button"
@@ -356,7 +356,7 @@ export function StockScreen({
           </span>
           <span>Peças cadastradas</span>
           <strong>{stock.length}</strong>
-          <small>{WAREHOUSES.length} almoxarifados</small>
+          <small>{warehouses.length} locais de armazenamento</small>
         </div>
         <div className="stat">
           <span className="stat-icon green">
@@ -818,7 +818,7 @@ export function StockScreen({
               className="button secondary"
               onClick={() => {
                 setQuery("");
-                setWarehouse("Central");
+                setWarehouse(warehouses[0] ?? "");
                 setLevel("Todos");
               }}
             >

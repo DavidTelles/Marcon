@@ -10,6 +10,8 @@ import {
   mapKinds,
   nextPointLabel,
   passageClear,
+  transports,
+  type RouteOptions,
 } from "@/lib/routing";
 import { RouteSummary } from "./route-summary";
 type Version = {
@@ -72,7 +74,8 @@ export function MapEditor() {
     const edges = next.edges.map((e) => {
       const a = next.nodes.find((n) => n.id === e.from),
         b = next.nodes.find((n) => n.id === e.to);
-      return a && b && !passageClear(next, a, b) ? { ...e, blocked: true } : e;
+      const edge = e.distance !== undefined && !e.distanceUnit ? { ...e, distanceUnit: graph.scaleCalibrated === true ? "m" as const : "map" as const } : e;
+      return a && b && !e.vertical && !passageClear(next, a, b) ? { ...edge, blocked: true } : edge;
     });
     setGraph({ ...next, edges, reviewed: false });
     setRoute(null);
@@ -125,7 +128,7 @@ export function MapEditor() {
       x = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)),
       y = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
     if (mode === "point") {
-      const id = "p" + Date.now().toString(36);
+      const id = "p" + crypto.randomUUID();
       change({
         ...graph,
         nodes: [
@@ -245,6 +248,8 @@ export function MapEditor() {
       setMessage(
         "Versão " + id + " publicada. Versões anteriores preservadas.",
       );
+      window.dispatchEvent(new CustomEvent("marcon:map-published"));
+      window.dispatchEvent(new CustomEvent("marcon:workspace-updated"));
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "Falha ao publicar.");
     } finally {
@@ -449,12 +454,13 @@ export function MapEditor() {
                   nodeClick(n.id);
                 }}
               >
+                <title>{mapKinds[n.kind]} · {n.label} · andar {n.floor ?? 0}{n.blocked ? " · bloqueado" : n.restricted ? " · restrito" : ""}</title>
                 <circle
                   cx={n.x * 1000}
                   cy={n.y * 700}
                   r={selected === n.id ? 12 : 9}
                   fill={
-                    selected === n.id || n.uncertain ? "#b96a00" : "var(--blue)"
+                    n.blocked ? "var(--danger)" : selected === n.id || n.uncertain || n.restricted ? "#b96a00" : "var(--blue)"
                   }
                 />
                 <text
@@ -466,7 +472,7 @@ export function MapEditor() {
                   strokeWidth="4"
                   fill="var(--ink)"
                 >
-                  {n.label}
+                  {(["warehouse", "local_stock"].includes(n.kind) ? "▣" : ["block", "sector", "production_line"].includes(n.kind) ? "▦" : ["stairs", "elevator", "ramp"].includes(n.kind) ? "↕" : ["door", "gate", "access", "passage"].includes(n.kind) ? "◇" : "●")} {n.label}
                 </text>
               </g>
             ))}
@@ -475,6 +481,7 @@ export function MapEditor() {
       ) : (
         <p>Envie uma planta ou abra uma versão abaixo.</p>
       )}
+      <p>Legenda: ▣ armazenamento · ▦ produção/setor · ◇ acesso · ↕ circulação vertical · ● demais pontos. Vermelho: bloqueado; âmbar: selecionado, restrito ou pendente de revisão. Linha tracejada: caminho bloqueado.</p>
       {anchor && <p>Clique no final da parede.</p>}
       <label>
         Ponto selecionado
@@ -489,6 +496,12 @@ export function MapEditor() {
       </label>
       {node && (
         <div className="ops-form">
+          <p>ID: {node.id}. Remover o ponto também remove suas conexões. Vínculos de estoque devem ser resolvidos antes da publicação.</p>
+          <label>Andar<input type="number" min="-200" max="200" value={node.floor ?? 0} onChange={(e) => patchNode({ floor: Number(e.target.value) })} /></label>
+          <label>Acesso<input maxLength={120} value={node.access ?? ""} onChange={(e) => patchNode({ access: e.target.value })} /></label>
+          <label><input type="checkbox" checked={node.blocked ?? false} onChange={(e) => patchNode({ blocked: e.target.checked })} />Acesso bloqueado</label>
+          <label><input type="checkbox" checked={node.restricted ?? false} onChange={(e) => patchNode({ restricted: e.target.checked })} />Área restrita (fora das rotas)</label>
+          <fieldset><legend>Transportes permitidos no ponto</legend>{Object.entries(transports).map(([key, label]) => <label key={key}><input type="checkbox" checked={!node.allowedTransport || node.allowedTransport.includes(key as keyof typeof transports)} onChange={(e) => patchNode({ allowedTransport: e.target.checked ? [...(node.allowedTransport ?? []), key as keyof typeof transports] : (node.allowedTransport ?? Object.keys(transports) as (keyof typeof transports)[]).filter((v) => v !== key) })} />{label}</label>)}</fieldset>
           {node.uncertain && (
             <p role="status">
               Sugestão incerta: {node.suggestion || "Revise este ponto."}
@@ -624,6 +637,10 @@ export function MapEditor() {
           <button
             className="button secondary"
             onClick={() => {
+              if (node.warehouseId || node.blockId) {
+                setMessage("Resolva os vínculos de almoxarifado e bloco antes de remover. Estoques que usam este ID também precisam de novo vínculo antes da publicação.");
+                return;
+              }
               change({
                 ...graph,
                 nodes: graph.nodes.filter((n) => n.id !== selected),
@@ -643,9 +660,12 @@ export function MapEditor() {
         {graph.edges.map((edge, i) => (
           <div className="ops-form" key={i}>
             <span>
-              {graph.nodes.find((n) => n.id === edge.from)?.label} ↔{" "}
+              {graph.nodes.find((n) => n.id === edge.from)?.label} {edge.oneWay ? "→" : "↔"}{" "}
               {graph.nodes.find((n) => n.id === edge.to)?.label}
             </span>
+            {(["oneWay", "vertical"] as const).map((field) => <label key={field}><input type="checkbox" checked={edge[field] ?? false} onChange={(e) => change({ ...graph, edges: graph.edges.map((v, j) => j === i ? { ...v, [field]: e.target.checked } : v) })} />{field === "oneWay" ? "Sentido único (origem → destino)" : "Conexão entre andares; cadastre o comprimento"}</label>)}
+            <label>Comprimento ({edge.distanceUnit === "m" || !edge.distanceUnit && graph.scaleCalibrated === true ? "m" : "unidades do mapa"}; vazio: geometria)<input type="number" min="0" step="any" value={edge.distance ?? ""} onChange={(e) => change({ ...graph, edges: graph.edges.map((v, j) => j === i ? { ...v, distance: e.target.value === "" ? undefined : Number(e.target.value), distanceUnit: edge.distanceUnit ?? (graph.scaleCalibrated === true ? "m" : "map") } : v) })} /></label>
+            <fieldset><legend>Transportes permitidos no trecho</legend>{Object.entries(transports).map(([key, label]) => <label key={key}><input type="checkbox" checked={!edge.allowedTransport || edge.allowedTransport.includes(key as keyof typeof transports)} onChange={(e) => change({ ...graph, edges: graph.edges.map((v, j) => j === i ? { ...v, allowedTransport: e.target.checked ? [...(edge.allowedTransport ?? []), key as keyof typeof transports] : (edge.allowedTransport ?? Object.keys(transports) as (keyof typeof transports)[]).filter((t) => t !== key) } : v) })} />{label}</label>)}</fieldset>
             <label>
               Bloqueado
               <input
@@ -662,10 +682,10 @@ export function MapEditor() {
               />
             </label>
             <label>
-              Tempo em segundos (vazio: escala)
+              Tempo em segundos (vazio: sem tempo cadastrado)
               <input
                 type="number"
-                min="1"
+                min="0"
                 value={edge.seconds ?? ""}
                 onChange={(e) =>
                   change({
@@ -714,6 +734,7 @@ export function MapEditor() {
               graph,
               String(f.get("start")),
               f.getAll("stops") as string[],
+              { objective: String(f.get("objective")) as RouteOptions["objective"], transport: String(f.get("transport")) as RouteOptions["transport"], final: String(f.get("final") || "") || undefined },
             );
           setRoute(result);
           setMessage(
@@ -723,6 +744,9 @@ export function MapEditor() {
           );
         }}
       >
+        <label>Objetivo<select name="objective"><option value="distance">Menor distância</option><option value="time">Menor tempo cadastrado</option></select></label>
+        <label>Transporte<select name="transport">{Object.entries(transports).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+        <label>Destino final (opcional)<select name="final"><option value="">Sem destino final fixo</option>{graph.nodes.map((n) => <option key={n.id} value={n.id}>{n.label}</option>)}</select></label>
         <label>
           Início
           <select name="start">

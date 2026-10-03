@@ -3,6 +3,7 @@ import { currentUser } from "@/lib/auth";
 import { findCatalogItem } from "@/lib/catalog";
 import { databaseEnabled } from "@/lib/db";
 import { workspaceSnapshot } from "@/lib/workspace-db";
+import { BackendError } from "@/lib/backend-client";
 
 export async function GET(
   _request: Request,
@@ -15,6 +16,7 @@ export async function GET(
       { status: 401 },
     );
   }
+  try {
   const { id } = await params;
   const item = databaseEnabled()
     ? (await workspaceSnapshot(user)).stock
@@ -43,4 +45,7 @@ export async function GET(
     { item },
     { headers: { "Cache-Control": "no-store" } },
   );
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof BackendError ? error.message : "Material indisponível. Tente atualizar." }, { status: error instanceof BackendError ? error.status : 503, headers: { "Cache-Control": "no-store" } });
+  }
 }

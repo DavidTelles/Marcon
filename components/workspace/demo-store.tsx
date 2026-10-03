@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useState,
+  useRef,
 } from "react";
 import { usePathname } from "next/navigation";
 import {
@@ -19,6 +20,8 @@ import {
 import { initialStaff, type StaffUser } from "@/lib/staff-data";
 import {
   initialBalances,
+  WAREHOUSES,
+  BLOCKS,
   type InventoryBalance,
   type Transfer,
 } from "@/lib/inventory";
@@ -31,6 +34,8 @@ type CartItem = {
 };
 type Store = {
   persistent: boolean;
+  warehouseOptions: string[];
+  blockOptions: string[];
   runAction: (
     action: Record<string, unknown>,
   ) => Promise<Record<string, unknown>>;
@@ -68,15 +73,19 @@ export function DemoProvider({
   const publicPage = pathname === "/login" || pathname.startsWith("/inicio/");
   const [ready, setReady] = useState(!persistent);
   const [loadError, setLoadError] = useState("");
-  const [requests, setRequests] = useState(initialRequests);
-  const [stock, setStock] = useState(initialStock);
-  const [balances, setBalances] = useState(initialBalances);
+  const [warehouseOptions, setWarehouseOptions] = useState<string[]>(persistent ? [] : [...WAREHOUSES]);
+  const [blockOptions, setBlockOptions] = useState<string[]>(persistent ? [] : [...BLOCKS]);
+  const [requests, setRequests] = useState<Request[]>(persistent ? [] : initialRequests);
+  const [stock, setStock] = useState<Part[]>(persistent ? [] : initialStock);
+  const [balances, setBalances] = useState<InventoryBalance[]>(persistent ? [] : initialBalances);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
-  const [movements, setMovements] = useState(initialMovements);
-  const [staff, setStaff] = useState(initialStaff);
+  const [movements, setMovements] = useState<Movement[]>(persistent ? [] : initialMovements);
+  const [staff, setStaff] = useState<StaffUser[]>(persistent ? [] : initialStaff);
   const [returns, setReturns] = useState<ReturnRecord[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartLoaded, setCartLoaded] = useState(false);
+  const pendingActions = useRef(new Map<string, Promise<Record<string, unknown>>>());
+  const retryKeys = useRef(new Map<string, string>());
   useEffect(() => {
     let active = true;
     Promise.resolve().then(() => {
@@ -127,6 +136,8 @@ export function DemoProvider({
     if (!response.ok)
       throw new Error("Não foi possível carregar os dados do Neon.");
     const data: WorkspaceSnapshot = await response.json();
+    setWarehouseOptions(data.warehouses.map((w) => w.name));
+    setBlockOptions(data.blocks.map((b) => b.name));
     setRequests(data.requests);
     setStock(data.stock);
     setBalances(data.balances);
@@ -149,7 +160,8 @@ export function DemoProvider({
   }, [persistent, refresh, publicPage]);
   useEffect(() => {
     if (!persistent || publicPage) return;
-    const update = () => {
+    const update = (event?: Event) => {
+      if (event instanceof CustomEvent && event.detail?.source === "store") return;
       if (document.visibilityState === "visible")
         refresh().catch(() => undefined);
     };
@@ -168,16 +180,32 @@ export function DemoProvider({
         throw new Error(
           "Ação persistente indisponível no modo de demonstração.",
         );
+      const signature = JSON.stringify(action);
+      const pending = pendingActions.current.get(signature);
+      if (pending) return pending;
+      const key = action.requestKey ?? retryKeys.current.get(signature) ?? crypto.randomUUID();
+      retryKeys.current.set(signature, String(key));
+      const operation = (async () => {
       const response = await fetch("/api/workspace", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(action),
+        body: JSON.stringify({ ...action, requestKey: key }),
       });
       const result = await response.json();
+      if (response.status === 401) window.location.replace("/login");
       if (!response.ok)
         throw new Error(result.error || "A operação não foi concluída.");
-      await refresh();
+      retryKeys.current.delete(signature);
+      // Persistence already succeeded: a refresh failure must not invite the
+      // user to execute an additive stock mutation again.
+      try { await refresh(); } catch {
+        setLoadError("Operação registrada. Falha ao atualizar a tela; recarregue os dados sem repetir a operação.");
+      }
+      window.dispatchEvent(new CustomEvent("marcon:workspace-updated", { detail: { source: "store" } }));
       return result as Record<string, unknown>;
+      })();
+      pendingActions.current.set(signature, operation);
+      try { return await operation; } finally { pendingActions.current.delete(signature); }
     },
     [persistent, refresh],
   );
@@ -204,6 +232,8 @@ export function DemoProvider({
     <Context.Provider
       value={{
         persistent,
+        warehouseOptions,
+        blockOptions,
         runAction,
         requests,
         setRequests,
@@ -223,6 +253,7 @@ export function DemoProvider({
         setCart,
       }}
     >
+      {reportPage && loadError && <div role="alert">{loadError} <button onClick={() => void refresh().catch((error) => setLoadError(error.message))}>Atualizar dados</button></div>}
       {children}
     </Context.Provider>
   );

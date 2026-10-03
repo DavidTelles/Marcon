@@ -16,6 +16,7 @@ export function RecommendationCards({
   onFilter,
   onPage,
   onTransfer,
+  onReject,
   onBuy,
   onCritical,
 }: {
@@ -26,6 +27,7 @@ export function RecommendationCards({
   onFilter: (filter: string) => void;
   onPage: (page: number) => void;
   onTransfer: (transfer: DashboardReport["transfers"][number]) => void;
+  onReject: (transfer: DashboardReport["transfers"][number]) => void;
   onBuy: (code: string, warehouse: string) => void;
   onCritical: () => void;
 }) {
@@ -169,7 +171,7 @@ export function RecommendationCards({
                     aria-label="Saldo disponível da origem antes e depois"
                   >
                     <span>
-                      Disponível na origem
+                      Disponível projetado na origem
                       <br />
                       <strong>
                         {t.evidence.sourceAvailable} {r.unit}
@@ -191,7 +193,7 @@ export function RecommendationCards({
                     <small>
                       Mínimo recomendado na origem: {t.evidence.sourceMinimum}{" "}
                       {r.unit}. Reservado: {t.evidence.sourceReserved} {r.unit}.
-                      Projeção, sem alteração de saldo.
+                      Projeção considerando as sugestões anteriores deste relatório, sem alteração de saldo.
                     </small>
                   </div>
                 )}
@@ -270,6 +272,8 @@ export function RecommendationCards({
                       {t?.evidence.proximity ?? r.distribution?.proximity}
                     </dd>
                   </dl>
+                  {t && <p>Cobertura na origem: {t.evidence.sourceCoverageBefore?.toFixed(1) ?? "indeterminada"} → {t.evidence.sourceCoverageAfter?.toFixed(1) ?? "indeterminada"} dias; destino: {t.evidence.destinationCoverageBefore?.toFixed(1) ?? "indeterminada"} → {t.evidence.destinationCoverageAfter?.toFixed(1) ?? "indeterminada"} dias. Conversão cadastrada: {t.evidence.packSize} {r.unit} por caixa; fracionamento em unidades inteiras permitido pelo fluxo atual.</p>}
+                  {r.capacity === null && <p>Capacidade deste material no destino não cadastrada; confirme espaço físico na revisão. Não há estimativa de volume compartilhado.</p>}
                   <p>
                     Compra sugerida: alvo {r.target} − disponível {r.available}{" "}
                     − entradas {r.incoming} − transferências sugeridas{" "}
@@ -287,6 +291,7 @@ export function RecommendationCards({
                 </details>
                 <div className="decision-actions">
                   {t && can(role, "stock") && (
+                    <>
                     <button
                       className="button primary"
                       disabled={busy}
@@ -294,6 +299,8 @@ export function RecommendationCards({
                     >
                       Solicitar transferência sugerida
                     </button>
+                    <button className="button secondary" disabled={busy} onClick={() => onReject(t)}>Rejeitar sugestão</button>
+                    </>
                   )}
                   {action === "buy" && can(role, "planning") && (
                     <button
@@ -306,9 +313,12 @@ export function RecommendationCards({
                 </div>
                 {t && report.mapVersion && (
                   <DistributionMap
+                    key={`${report.mapVersion}:${t.from}:${t.to}`}
                     version={report.mapVersion}
                     from={t.from}
                     to={t.to}
+                    fromNode={t.evidence.route?.nodes[0]}
+                    toNode={t.evidence.route?.nodes.at(-1)}
                   />
                 )}
               </article>

@@ -10,6 +10,7 @@ import { badge } from "./ui";
 import { can } from "@/lib/permissions";
 import { RequestOperations } from "./operations/request-operations";
 import { OperationsPanel } from "./operations/operations-panel";
+import { InsightChart } from "./operations/insight-chart";
 import { MapEditor } from "./operations/map-editor";
 import { PurchaseScreen } from "./screens/purchase-screen";
 import { RecommendationScreen } from "./screens/recommendation-screen";
@@ -733,6 +734,29 @@ export default function Workspace({
                 NavIcon={NavIcon}
               />
             )}
+          {role === "funcionario" && page === "historico" && (
+            <InsightChart
+              title="Suas requisições"
+              description="Acompanhe rapidamente o andamento dos seus pedidos."
+              rows={[
+                {
+                  label: "Aguardando",
+                  value: roleRequests.filter((item) =>
+                    ["Pendente", "Em análise"].includes(item.status),
+                  ).length,
+                },
+                {
+                  label: "Aprovadas",
+                  value: roleRequests.filter((item) => item.status === "Aprovada").length,
+                },
+                {
+                  label: "Entregues",
+                  value: roleRequests.filter((item) => item.status === "Entregue").length,
+                },
+              ]}
+              unit="pedidos"
+            />
+          )}
           {!persistent &&
             ["requisicoes", "solicitacoes", "historico"].includes(page) && (
               <RequestsScreen

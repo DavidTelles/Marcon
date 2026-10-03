@@ -1,4 +1,7 @@
 const { query } = require('../config/db');
+const AppError = require('../utils/AppError');
+const commitments = `COALESCE((SELECT SUM(r.quantity) FROM request_reservations r WHERE r.part_id=i.part_id AND r.warehouse_id=i.warehouse_id),0) AS reserved,
+  COALESCE((SELECT SUM(t.quantity) FROM stock_transfers t WHERE t.part_id=i.part_id AND t.source_warehouse_id=i.warehouse_id AND t.status='Solicitada'),0) AS committed`;
 
 // Estoque: tabela unificada `inventory` (part_id, warehouse_id).
 async function list(filters = {}) {
@@ -16,7 +19,7 @@ async function list(filters = {}) {
     `SELECT i.part_id AS product_id, p.code AS sku, p.name,
             i.warehouse_id, w.code AS warehouse_code, w.name AS warehouse_name,
             CASE WHEN w.is_central THEN 'CENTRAL' ELSE 'AUXILIARY' END AS warehouse_type,
-            i.quantity, i.minimum_quantity AS min_quantity, i.aisle AS corridor, i.shelf, i.updated_at
+            i.quantity,p.unit,${commitments},i.minimum_quantity AS min_quantity, i.aisle AS corridor, i.shelf, i.updated_at
      FROM inventory i
      JOIN parts p ON p.id = i.part_id
      JOIN warehouses w ON w.id = i.warehouse_id
@@ -31,8 +34,8 @@ async function listByProduct(productId) {
   return query(
     `SELECT i.warehouse_id, w.code AS warehouse_code, w.name AS warehouse_name,
             CASE WHEN w.is_central THEN 'CENTRAL' ELSE 'AUXILIARY' END AS warehouse_type,
-            i.quantity, i.minimum_quantity AS min_quantity, i.aisle AS corridor, i.shelf
-     FROM inventory i JOIN warehouses w ON w.id = i.warehouse_id
+            i.quantity,p.unit,${commitments},i.minimum_quantity AS min_quantity, i.aisle AS corridor, i.shelf
+     FROM inventory i JOIN warehouses w ON w.id = i.warehouse_id JOIN parts p ON p.id=i.part_id
      WHERE i.part_id = ?
      ORDER BY w.id`,
     [productId]
@@ -50,7 +53,9 @@ async function listMovements(filters = {}) {
     where.push('m.warehouse_id = ?');
     params.push(filters.warehouse_id);
   }
-  const limit = Math.min(Number(filters.limit) || 200, 1000);
+  const requestedLimit = Number(filters.limit ?? 200);
+  if (!Number.isSafeInteger(requestedLimit) || requestedLimit < 1 || requestedLimit > 1000) throw new AppError(400, 'Limite inválido (1–1000)');
+  const limit = requestedLimit;
   return query(
     `SELECT m.id, m.part_id AS product_id, p.code AS sku, p.name AS product_name,
             m.warehouse_id, w.name AS warehouse_name, m.kind AS type, m.quantity,

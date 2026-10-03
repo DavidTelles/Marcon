@@ -129,6 +129,7 @@ export async function executeRequestAction(
     throw new ActionError("Requisição fora do seu escopo.", 403);
   const pending = ["Pendente", "Em análise"].includes(String(r.status));
   if (a.type === "editRequest" || a.type === "deleteRequest") {
+    demand(user, "request");
     if (!owns || !pending)
       throw new ActionError(
         "Somente o requisitor pode editar/excluir antes da aprovação.",
@@ -168,7 +169,7 @@ export async function executeRequestAction(
     if (user.role === "funcionario")
       throw new ActionError("Aprovação/entrega exige outro perfil.", 403);
     if (next === "Em análise" && r.status === "Pendente") {
-      demand(user, "approve");
+      demand(user, "approve", "requests.analyze");
       await c.execute("UPDATE requests SET status='Em análise' WHERE id=?", [
         id,
       ]);
@@ -198,21 +199,12 @@ export async function executeRequestAction(
             graph && node && destination
               ? shortestPath(graph, node.id, destination.id)
               : null;
-          const factor =
-            r.priority === "Urgente" ? 2 : r.priority === "Moderado" ? 1.5 : 1;
           return {
             l,
-            score: path
-              ? path.cost * factor +
-                (Number(l.block_id) === Number(r.block_id) ? 0 : 30)
-              : Number(l.block_id) === Number(r.block_id)
-                ? 1_000_000
-                : Number(l.is_central)
-                  ? 2_000_000
-                  : 3_000_000,
+            score: graph?.reviewed && path ? path.cost : Infinity,
           };
         })
-        .sort((a, b) => a.score - b.score || available(b.l) - available(a.l));
+        .sort((a, b) => a.score - b.score || Number(b.l.block_id === r.block_id) - Number(a.l.block_id === r.block_id) || available(b.l) - available(a.l));
       const existing = await rows(
         c,
         "SELECT warehouse_id,quantity FROM request_reservations WHERE request_id=? FOR UPDATE",
@@ -263,17 +255,13 @@ export async function executeRequestAction(
       );
     } else if (next === "Entregue" && r.status === "Aprovada") {
       demand(user, "stock");
+      demand(user, "stock", "requests.deliver");
       scan(p, a.qrCode);
       if (integer(a.confirmedQuantity) !== Number(r.quantity))
         throw new ActionError("Confirme a quantidade exata separada.", 422);
-      const departure = await first(
-        c,
-        "SELECT id FROM delivery_route_history WHERE request_id=? AND event='Saída' LIMIT 1",
-        [id],
-      );
-      // Legacy/manual delivery confirmation still captures its planning decision atomically.
-      if (!departure)
-        await recordDeliveryPlan(
+      // Capture the current publication at delivery as well; earlier departures
+      // remain in history and do not certify that their path was travelled.
+      await recordDeliveryPlan(
           c,
           user,
           { action: "planDelivery", atDelivery: true },

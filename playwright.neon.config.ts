@@ -18,7 +18,7 @@ export default defineConfig({
     channel: process.env.PLAYWRIGHT_CHANNEL || undefined,
   },
   webServer: {
-    command: process.env.PLAYWRIGHT_PRODUCTION ? "npx next start -p 3101" : "npx next dev -p 3101",
+    command: process.env.PLAYWRIGHT_PRODUCTION ? "node scripts/run-with-backend.mjs start -p 3101" : "node scripts/run-with-backend.mjs dev -p 3101",
     url: "http://localhost:3101/login",
     reuseExistingServer: false,
     timeout: 120_000,

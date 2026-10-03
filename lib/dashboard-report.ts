@@ -86,7 +86,7 @@ export async function dashboardDetail(
       params,
     );
     const [rows] = await pool.execute<RowDataPacket[]>(
-      `SELECT r.*,p.code,p.name AS item,p.unit,u.name AS person,u.employee_no,b.name AS block,COALESCE(au.name,ap.name,'Não atribuído') AS actor,TIMESTAMPDIFF(SECOND,r.created_at,r.delivered_at)/3600 AS hours ${requestJoins} LEFT JOIN users au ON au.id=r.fulfilled_by LEFT JOIN users ap ON ap.id=r.approved_by WHERE ${condition} ORDER BY CASE WHEN ${open} THEN 0 ELSE 1 END,FIELD(r.priority,'Urgente','Moderado','Leve'),r.created_at,r.id LIMIT ${limit} OFFSET ${offset}`,
+      `SELECT r.*,COALESCE((SELECT SUM(m.quantity) FROM stock_movements m WHERE m.request_id=r.id AND m.kind='saida'),0) AS delivered_quantity,p.code,p.name AS item,p.unit,u.name AS person,u.employee_no,b.name AS block,COALESCE(au.name,ap.name,'Não atribuído') AS actor,TIMESTAMPDIFF(SECOND,r.created_at,r.delivered_at)/3600 AS hours ${requestJoins} LEFT JOIN users au ON au.id=r.fulfilled_by LEFT JOIN users ap ON ap.id=r.approved_by WHERE ${condition} ORDER BY CASE WHEN ${open} THEN 0 ELSE 1 END,FIELD(r.priority,'Urgente','Moderado','Leve'),r.created_at,r.id LIMIT ${limit} OFFSET ${offset}`,
       params,
     );
     const records: DetailRecord[] = [];
@@ -104,6 +104,9 @@ export async function dashboardDetail(
         code: String(r.code),
         material: String(r.item),
         quantity: Number(r.quantity),
+        requestedQuantity: Number(r.quantity),
+        approvedQuantity: r.approved_at ? Number(r.quantity) : 0,
+        deliveredQuantity: Number(r.delivered_quantity),
         person: String(r.person),
         block: String(r.block),
         sector: String(r.sector),
@@ -286,10 +289,10 @@ export async function dashboardReport(
       (r) =>
         user.role !== "funcionario" &&
         (!f.warehouse || r.warehouse === f.warehouse) &&
-        (!f.block ||
+        (q.get("planning") === "distribution" ? r.distribution?.matchesFilters : (!f.block ||
           warehouses.some(
             (w) => w.name === r.warehouse && w.block === f.block,
-          )),
+          ))),
     )
     .map((r) => {
       const price = prices.find((p) => p.code === r.code);
@@ -648,12 +651,12 @@ export async function dashboardReport(
         f.view === "compra"
           ? "Compra: consumo observado no local da baixa, independente da posição dos blocos no mapa; mínimo e prazo de reposição."
           : "Distribuição: somente baixas efetivas por bloco; demanda atribuída ao almoxarifado acessível mais próximo no mapa publicado. Sem acesso mapeado não há transferência automática sugerida.",
-        "Disponível = físico - reservado.",
+        "Disponível = físico - reservas de requisições - transferências solicitadas ainda sem saída.",
         "Compra preserva também o mínimo total do item: eventual diferença entre mínimo total e soma dos mínimos locais é atribuída ao Central (ou primeiro local cadastrado).",
         "Compra = max(0, alvo - disponível - entradas confirmadas - transferência possível).",
         "Tempo médio = média de (entrega - criação) em horas, somente horários válidos.",
         "Preço = estimativa interna; data do evento de cadastro/preço, quando registrada.",
-        "Previsão: dias observáveis do período selecionado até hoje; média diária, prazo, variabilidade e criticidade; validação temporal em 28 dias quando há histórico.",
+        f.view === "compra" ? "Compra: dias observáveis, média, prazo, variabilidade e criticidade; validação temporal quando há histórico." : "Distribuição: alvo = max(mínimo, teto(consumo líquido/dias × (prazo+horizonte) × (1+margem))); demanda atribuída uma vez por proximidade, compartilhada conforme capacidade por material. Prioridade: risco de falta, déficit/alvo (normalizado entre unidades); origens por custo da rota. Sem capacidade cadastrada, verificação física necessária.",
         "Sem prazo de entrega cadastrado: fila ordenada por urgência e antiguidade; não inventa SLA.",
         "Sem conversão entre unidades: consulte séries separadas por unidade.",
         "Uma requisição representa uma linha de item; batch_id identifica o carrinho.",

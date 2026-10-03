@@ -47,6 +47,7 @@ export function RequestOperations({
         Setor: {r.sector || "Não informado"}
         {r.batchId && <> · Carrinho {r.batchId.slice(0, 8)}</>}
       </p>
+      {r.requestedQuantity !== undefined && <p>Solicitado: {r.requestedQuantity} · Aprovado: {r.approvedQuantity ?? 0} · Entregue / baixado: {r.deliveredQuantity ?? 0}. A aprovação reserva saldo; o atendimento integral registra a baixa.</p>}
       {r.allocations?.map((a) => (
         <p key={a.warehouse}>
           Separar {a.quantity} em {a.warehouse} · {a.location}

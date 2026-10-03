@@ -12,6 +12,8 @@ export type WorkspaceSnapshot = {
   transfers: Transfer[];
   returns: ReturnRecord[];
   staff: StaffUser[];
+  warehouses: { id: number; name: string }[];
+  blocks: { id: number; name: string }[];
 };
 
 // O snapshot do workspace passou a ser servido pela API do backend MARCON,

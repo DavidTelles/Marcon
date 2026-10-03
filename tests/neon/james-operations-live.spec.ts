@@ -78,6 +78,7 @@ test("API/Neon real: conversation, all profiles, confirmed operations and persis
       headers,
       data: {
         type: "createRequests",
+        requestKey: crypto.randomUUID(),
         entries: [{ code, quantity: 2, priority: "Leve", justification: "" }],
       },
     });

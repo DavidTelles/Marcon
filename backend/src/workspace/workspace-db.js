@@ -33,18 +33,19 @@ async function workspaceSnapshot(user, catalogOnly = false) {
     const scope = user.role === "funcionario" ? "u.employee_no=?" : user.role === "lider" ? "b.name=?" : "1=1";
     const params = user.role === "funcionario" ? [user.id] : user.role === "lider" ? [user.block ?? ""] : [];
     const [rr] = await c.execute(
-      `SELECT r.*,p.name AS material,p.code,u.employee_no,u.name AS person,b.name AS block,DATE_FORMAT(r.created_at,'%d/%m/%Y') AS date FROM requests r JOIN parts p ON p.id=r.part_id JOIN users u ON u.id=r.requester_id JOIN blocks b ON b.id=r.block_id WHERE ${scope} ${catalogOnly ? "AND FALSE" : ""} ORDER BY r.created_at DESC,r.id DESC`,
+      `SELECT r.*,COALESCE((SELECT SUM(m.quantity) FROM stock_movements m WHERE m.request_id=r.id AND m.kind='saida'),0) AS delivered_quantity,p.name AS material,p.code,u.employee_no,u.name AS person,b.name AS block,DATE_FORMAT(r.created_at,'%d/%m/%Y') AS date FROM requests r JOIN parts p ON p.id=r.part_id JOIN users u ON u.id=r.requester_id JOIN blocks b ON b.id=r.block_id WHERE ${scope} ${catalogOnly ? "AND FALSE" : ""} ORDER BY r.created_at DESC,r.id DESC`,
       params
     );
     const [br] = await c.query(
-      "SELECT p.code,w.id AS warehouse_id,COALESCE(i.quantity,0) AS quantity,COALESCE(i.minimum_quantity,0) AS minimum_quantity,COALESCE(i.aisle,'') AS aisle,COALESCE(i.shelf,p.location) AS shelf,i.capacity,i.map_node_id,w.name AS warehouse,COALESCE((SELECT SUM(r.quantity) FROM request_reservations r WHERE r.part_id=p.id AND r.warehouse_id=w.id),0) AS reserved FROM parts p CROSS JOIN warehouses w LEFT JOIN inventory i ON i.part_id=p.id AND i.warehouse_id=w.id WHERE p.active=TRUE AND w.active=TRUE ORDER BY p.id,w.id"
+      "SELECT p.code,w.id AS warehouse_id,COALESCE(i.quantity,0) AS quantity,COALESCE(i.minimum_quantity,0) AS minimum_quantity,COALESCE(i.aisle,'') AS aisle,COALESCE(i.shelf,p.location) AS shelf,i.capacity,i.map_node_id,w.name AS warehouse,COALESCE((SELECT SUM(r.quantity) FROM request_reservations r WHERE r.part_id=p.id AND r.warehouse_id=w.id),0) AS reserved,COALESCE((SELECT SUM(t.quantity) FROM stock_transfers t WHERE t.part_id=p.id AND t.source_warehouse_id=w.id AND t.status='Solicitada'),0) AS committed FROM parts p CROSS JOIN warehouses w LEFT JOIN inventory i ON i.part_id=p.id AND i.warehouse_id=w.id WHERE p.active=TRUE AND w.active=TRUE ORDER BY p.id,w.id"
     );
     const balances = br.map((b) => ({
       partCode: String(b.code),
       warehouse: String(b.warehouse),
       quantity: Number(b.quantity),
       reserved: Number(b.reserved),
-      available: Number(b.quantity) - Number(b.reserved),
+      available: Number(b.quantity) - Number(b.reserved) - Number(b.committed),
+      committed: Number(b.committed),
       minimum: Number(b.minimum_quantity),
       aisle: String(b.aisle),
       shelf: String(b.shelf),
@@ -61,6 +62,9 @@ async function workspaceSnapshot(user, catalogOnly = false) {
       material: String(r.material),
       code: String(r.code),
       quantity: Number(r.quantity),
+      requestedQuantity: Number(r.quantity),
+      approvedQuantity: r.approved_at ? Number(r.quantity) : 0,
+      deliveredQuantity: Number(r.delivered_quantity),
       person: String(r.person),
       requesterId: String(r.employee_no),
       block: String(r.block),
@@ -207,7 +211,9 @@ async function workspaceSnapshot(user, catalogOnly = false) {
         block: u.block ? String(u.block) : void 0
       }));
     }
-    return { stock, balances, requests, movements, returns, transfers, staff };
+    const [warehouses] = await c.query("SELECT id,name FROM warehouses WHERE active=TRUE ORDER BY is_central DESC,id");
+    const [blocks] = await c.query("SELECT id,name FROM blocks ORDER BY id");
+    return { stock, balances, requests, movements, returns, transfers, staff, warehouses, blocks };
   });
 }
 // Annotate the CommonJS export names for ESM import in node:

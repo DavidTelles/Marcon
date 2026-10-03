@@ -31,11 +31,13 @@ async function resolveRoleCode(payloadRole, actor) {
 }
 
 async function register(payload, actor) {
+  if (!actor || actor.roleCode !== ROLES.ADMIN || actor.permissionOverrides?.['users.manage'] === false)
+    throw new AppError(403, 'Cadastro de usuários exige administrador autorizado');
   const employeeCode = String(payload.id || payload.employee_code || payload.employee_no || '').trim();
   const email = (payload.email || `${employeeCode.toLowerCase()}@marcon.local`).trim().toLowerCase();
   const name = payload.name || payload.employee_code || employeeCode;
   const password = payload.password;
-  if (!employeeCode || !password) {
+  if (!employeeCode || typeof password !== 'string' || password.length < 12) {
     throw new AppError(400, 'id e password são obrigatórios');
   }
   if (!/^[A-Za-z0-9_-]{1,30}$/.test(employeeCode)) throw new AppError(400, 'Matrícula inválida');
@@ -117,11 +119,13 @@ async function forgotPassword({ email, employee_code }) {
   );
   return {
     message: 'Token de redefinição gerado',
-    reset_token: process.env.NODE_ENV === 'production' ? undefined : token
+    // Tokens must never be delivered to an unauthenticated HTTP caller.
+    delivery: 'Sem provedor de envio configurado; solicite recuperação ao administrador'
   };
 }
 
 async function resetPassword({ token, password }) {
+  if (typeof password !== 'string' || password.length < 12 || password.length > 1024) throw new AppError(400, 'Nova senha deve ter 12–1024 caracteres');
   const tokenHash = crypto.createHash('sha256').update(String(token || '')).digest('hex');
   const rows = await query(
     'SELECT * FROM password_reset_tokens WHERE token_hash = ? AND used_at IS NULL AND expires_at > NOW() ORDER BY id DESC LIMIT 1',

@@ -1,4 +1,7 @@
 export type Request = {
+  requestedQuantity?: number;
+  approvedQuantity?: number;
+  deliveredQuantity?: number;
   createdAt?: string;
   requesterId?: string;
   sector?: string;

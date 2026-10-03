@@ -1,6 +1,6 @@
 import {
   bigint, char, customType, date, decimal, index, integer, jsonb, pgEnum,
-  pgTable, primaryKey, smallint, text, timestamp, unique, uniqueIndex,
+  pgTable, primaryKey, smallint, text, timestamp, uniqueIndex,
   varchar,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
@@ -9,7 +9,7 @@ const id = () => bigint("id", { mode: "number" }).primaryKey().generatedAlwaysAs
 const createdAt = () => timestamp("created_at", { mode: "string", precision: 3 }).notNull().defaultNow();
 const updatedAt = () => timestamp("updated_at", { mode: "string", precision: 3 }).notNull().defaultNow();
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => "bytea" });
-const ref = (name: string, get: () => any) => bigint(name, { mode: "number" }).notNull().references(() => get().id);
+const ref = (name: string, get: () => { id: import("drizzle-orm/pg-core").AnyPgColumn }) => bigint(name, { mode: "number" }).notNull().references(() => get().id);
 
 export const userRole = pgEnum("user_role", ["admin", "lider", "almoxarifado", "funcionario"]);
 export const requestPriority = pgEnum("request_priority", ["Leve", "Moderado", "Urgente"]);

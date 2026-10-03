@@ -2,13 +2,14 @@ import type { Account } from "./accounts";
 import { workspaceSnapshot } from "./workspace-db";
 import { getPool } from "./db";
 import type { RowDataPacket } from "./db-types";
-import { ActionError, can } from "./permissions";
-import { predict, suggestTransfers, type Forecast } from "./forecast";
+import { ActionError, permitted } from "./permissions";
+import { coverageTarget, netConsumption, predict, suggestTransfers, type Forecast } from "./forecast";
+import { createHash } from "node:crypto";
 import { graphProblems, type FacilityGraph } from "./routing";
 import { integrationStatus } from "./integrations/corporate";
 import {
-  nearestWarehouseForBlock,
-  warehouseDistance,
+  accessibleWarehousesForBlock,
+  warehouseRoute,
 } from "./distribution-location";
 export type ReportFilter = {
   purpose?: "purchase" | "distribution";
@@ -20,6 +21,8 @@ export type ReportFilter = {
   status?: string;
   priority?: string;
   sector?: string;
+  horizon?: number;
+  margin?: number;
 };
 export type ReportRow = {
   code: string;
@@ -53,6 +56,7 @@ export type ReportRow = {
     proximity: string;
     pendingOutgoing: number;
     pendingIncoming: number;
+    matchesFilters: boolean;
   };
 };
 export async function operationsReport(user: Account, filters: ReportFilter) {
@@ -62,11 +66,14 @@ export async function operationsReport(user: Account, filters: ReportFilter) {
       filters.from ||
       new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10),
     to = filters.to || today;
+  const horizon = filters.horizon ?? 7, margin = filters.margin ?? 0.2;
+  if (!Number.isInteger(horizon) || horizon < 1 || horizon > 365 || !Number.isFinite(margin) || margin < 0 || margin > 2)
+    throw new ActionError("Cobertura (1–365 dias) ou margem (0–2) inválida.");
   if (
     ![from, to].every(
-      (v) => /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v)),
+      (v) => /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v)) && new Date(v).toISOString().slice(0, 10) === v,
     ) ||
-    from > to ||
+    from > to || to > today ||
     (Date.parse(to) - Date.parse(from)) / 86400000 > 366
   )
     throw new ActionError("Período inválido (máximo 366 dias).");
@@ -93,7 +100,7 @@ export async function operationsReport(user: Account, filters: ReportFilter) {
           ? [user.block ?? ""]
           : [];
   const [movements] = await pool.execute<RowDataPacket[]>(
-    `SELECT r.sector AS request_sector,r.status AS request_status,r.priority AS request_priority,m.id,m.part_id,m.warehouse_id,m.kind,m.quantity,m.reason,au.name AS actor,p.code,DATE_FORMAT(m.created_at,'%Y-%m-%d') AS date,b.id AS block_id,b.name AS block,u.employee_no AS requester FROM stock_movements m JOIN users au ON au.id=m.actor_id JOIN parts p ON p.id=m.part_id LEFT JOIN requests r ON r.id=m.request_id LEFT JOIN users u ON u.id=r.requester_id LEFT JOIN blocks b ON b.id=m.block_id WHERE ${scope} AND m.created_at>=? AND m.created_at<DATE_ADD(?,INTERVAL 1 DAY)`,
+    `SELECT r.sector AS request_sector,r.status AS request_status,r.priority AS request_priority,m.request_id,m.id,m.part_id,m.warehouse_id,m.kind,m.quantity,m.reason,au.name AS actor,p.code,DATE_FORMAT(m.created_at,'%Y-%m-%d') AS date,b.id AS block_id,b.name AS block,u.employee_no AS requester FROM stock_movements m JOIN users au ON au.id=m.actor_id JOIN parts p ON p.id=m.part_id LEFT JOIN requests r ON r.id=m.request_id LEFT JOIN users u ON u.id=r.requester_id LEFT JOIN blocks b ON b.id=m.block_id WHERE ${scope} AND m.created_at>=? AND m.created_at<DATE_ADD(?,INTERVAL 1 DAY) ORDER BY m.created_at,m.id`,
     [...params, from, to],
   );
   const [warehouses] = await pool.query<RowDataPacket[]>(
@@ -109,34 +116,24 @@ export async function operationsReport(user: Account, filters: ReportFilter) {
     : null;
   if (graph && (!graph.reviewed || graphProblems(graph).length)) graph = null;
   if (graph) graph.scaleCalibrated = graph.scaleCalibrated === true;
-  const locationCache = new Map<
-    string,
-    ReturnType<typeof nearestWarehouseForBlock>
-  >();
-  const costCache = new Map<string, number>();
-  function mappedCost(from: string, to: string) {
-    if (!graph) return filters.purpose === "purchase" ? 0 : Infinity;
-    const key = `${from}:${to}`;
-    if (!costCache.has(key)) {
+  function mappedRoute(code: string, from: string, to: string) {
+    if (!graph) return null;
       const a = warehouses.find((w) => w.name === from),
         b = warehouses.find((w) => w.name === to);
-      costCache.set(
-        key,
-        a && b
-          ? warehouseDistance(graph, Number(a.id), Number(b.id))
-          : Infinity,
-      );
-    }
-    return costCache.get(key)!;
+      const locations = snapshot.stock.find((p) => p.code === code)?.locations;
+      return a && b ? warehouseRoute(graph, Number(a.id), Number(b.id), {}, {
+        source: locations?.find((l) => l.warehouseId === Number(a.id))?.nodeId,
+        destination: locations?.find((l) => l.warehouseId === Number(b.id))?.nodeId,
+      }) : null;
   }
-  const [pendingTransfers] = can(user.role, "planning")
+  const [pendingTransfers] = permitted(user, "planning")
     ? await pool.query<RowDataPacket[]>(
         "SELECT part_id,source_warehouse_id,destination_warehouse_id,quantity,status FROM stock_transfers WHERE status IN ('Solicitada','Em trânsito')",
       )
     : [[]];
-  const [incomingRows] = can(user.role, "planning")
+  const [incomingRows] = permitted(user, "planning")
     ? await pool.query<RowDataPacket[]>(
-        "SELECT e.*,p.code,w.name AS warehouse FROM expected_receipts e JOIN parts p ON p.id=e.part_id JOIN warehouses w ON w.id=e.warehouse_id ORDER BY e.due_date DESC LIMIT 1000",
+        "SELECT e.*,p.code,p.unit,i.map_node_id AS nodeId,w.name AS warehouse FROM expected_receipts e JOIN parts p ON p.id=e.part_id JOIN warehouses w ON w.id=e.warehouse_id LEFT JOIN inventory i ON i.part_id=e.part_id AND i.warehouse_id=e.warehouse_id WHERE e.status='Confirmada' OR e.id IN (SELECT id FROM expected_receipts ORDER BY id DESC LIMIT 1000) ORDER BY e.due_date DESC",
       )
     : [[]];
   const [firstDates] = await pool.query<RowDataPacket[]>(
@@ -172,10 +169,9 @@ export async function operationsReport(user: Account, filters: ReportFilter) {
           : 1,
       ),
     );
-    const relevant = observations.filter((m) => Number(m.part_id) === p.id),
-      history = relevant.filter(
-        (m) => m.kind === "saida" && m.date >= from && m.date <= endDay,
-      );
+    const relevant = observations.filter((m) => Number(m.part_id) === p.id);
+    // Filters used for presentation must not remove other sectors' needs from source coverage.
+    const history = netConsumption<RowDataPacket & { kind: string; quantity: number }>(movements.filter((m) => Number(m.part_id) === p.id && m.date >= from && m.date <= endDay).map((m) => ({ ...m, kind: String(m.kind), quantity: Number(m.quantity) })));
     const locationIds = (p.locations ?? [])
       .filter(
         (l) =>
@@ -184,25 +180,23 @@ export async function operationsReport(user: Account, filters: ReportFilter) {
           l.capacity > l.reserved,
       )
       .map((l) => l.warehouseId);
-    const targetWarehouses = new Map(
-      [
-        ...new Set(
-          history.map((m) => (m.block_id ? Number(m.block_id) : null)),
-        ),
-      ].map((id) => {
-        const key = `${id}:${locationIds.join(",")}`;
-        if (!locationCache.has(key))
-          locationCache.set(
-            key,
-            nearestWarehouseForBlock(graph, id, locationIds),
-          );
-        return [id, locationCache.get(key)?.id];
-      }),
-    );
-    const assignedWarehouse = (m: RowDataPacket) =>
-      filters.purpose === "purchase"
-        ? Number(m.warehouse_id)
-        : targetWarehouses.get(m.block_id ? Number(m.block_id) : null);
+    const allocated: typeof history = [];
+    const remainingCapacity = new Map((p.locations ?? []).map((l) => [l.warehouseId,
+      l.capacity == null ? Infinity : Math.max(0, l.capacity - l.reserved) * days / ((p.leadDays + horizon) * (1 + margin))]));
+    if (filters.purpose === "purchase") allocated.push(...history);
+    else for (const m of history) {
+      const ranked = accessibleWarehousesForBlock(graph, m.block_id ? Number(m.block_id) : null, locationIds, new Map(p.locations?.map((l) => [l.warehouseId, l.nodeId])));
+      let remaining = m.quantity;
+      for (const candidate of ranked) {
+        const quantity = Math.min(remaining, remainingCapacity.get(candidate.id) ?? 0);
+        if (quantity > 0) {
+          allocated.push({ ...m, quantity, warehouse_id: candidate.id });
+          remainingCapacity.set(candidate.id, remainingCapacity.get(candidate.id)! - quantity);
+          remaining -= quantity;
+        }
+      }
+      if (remaining > 0) allocated.push({ ...m, quantity: remaining, warehouse_id: null });
+    }
     for (const location of p.locations ?? []) {
       const minimumGap = Math.max(
         0,
@@ -224,19 +218,16 @@ export async function operationsReport(user: Account, filters: ReportFilter) {
         const day = new Date(Date.parse(endDay) - (days - 1 - i) * 86400000)
           .toISOString()
           .slice(0, 10);
-        return history
+        return allocated
           .filter(
             (m) =>
-              m.date === day && assignedWarehouse(m) === location.warehouseId,
+              m.date === day && Number(m.warehouse_id) === location.warehouseId,
           )
           .reduce((s, m) => s + Number(m.quantity), 0);
       });
-      const forecast = predict(
-          daily,
-          p.leadDays,
-          forecastMinimum,
-          p.criticality,
-        ),
+      const forecast = filters.purpose === "purchase"
+        ? predict(daily, p.leadDays, forecastMinimum, p.criticality)
+        : coverageTarget(daily, p.leadDays, forecastMinimum, horizon, margin),
         target = Math.max(
           0,
           Math.min(
@@ -268,28 +259,29 @@ export async function operationsReport(user: Account, filters: ReportFilter) {
         .reduce((s, r) => s + Number(r.quantity), 0);
       reportRows.push({
         distribution: {
+          matchesFilters: ![filters.block, filters.sector, filters.requester].some(Boolean) || allocated.some((m) => Number(m.warehouse_id) === location.warehouseId && m.quantity > 0 && (!filters.block || m.block === filters.block) && (!filters.sector || String(m.request_sector).toLowerCase() === filters.sector.toLowerCase()) && (!filters.requester || m.requester === filters.requester)),
           verified:
             !!graph &&
-            history.some((m) => assignedWarehouse(m) === location.warehouseId),
-          unmappedConsumption: history
+            allocated.some((m) => Number(m.warehouse_id) === location.warehouseId && m.quantity > 0),
+          unmappedConsumption: allocated
             .filter(
               (m) =>
-                !targetWarehouses.get(m.block_id ? Number(m.block_id) : null),
+                m.warehouse_id === null,
             )
             .reduce((s, m) => s + Number(m.quantity), 0),
           consumption: [
             ...new Set(
-              history
-                .filter((m) => assignedWarehouse(m) === location.warehouseId)
+              allocated
+                .filter((m) => Number(m.warehouse_id) === location.warehouseId)
                 .map((m) => String(m.block ?? "Sem bloco")),
             ),
           ].map((block) => ({
             block,
-            quantity: history
+            quantity: allocated
               .filter(
                 (m) =>
                   String(m.block ?? "Sem bloco") === block &&
-                  assignedWarehouse(m) === location.warehouseId,
+                  Number(m.warehouse_id) === location.warehouseId,
               )
               .reduce((s, m) => s + Number(m.quantity), 0),
           })),
@@ -338,7 +330,7 @@ export async function operationsReport(user: Account, filters: ReportFilter) {
         itemMinimum: p.minimum,
         target,
         forecast: Math.ceil(forecast.daily * p.leadDays),
-        buy: can(user.role, "planning")
+        buy: permitted(user, "planning")
           ? Math.max(0, target - location.available - incoming)
           : 0,
         transfer: 0,
@@ -350,22 +342,24 @@ export async function operationsReport(user: Account, filters: ReportFilter) {
       });
     }
   }
-  const transfers = can(user.role, "planning")
+  const projected = new Map(reportRows.map((r) => [`${r.code}:${r.warehouse}`, r.available]));
+  const transfers = permitted(user, "planning")
     ? suggestTransfers(
         reportRows.map((r) => ({
           code: r.code,
           warehouse: r.warehouse,
-          available: Math.max(
-            0,
-            r.available - (r.distribution?.pendingOutgoing ?? 0),
-          ),
-          target: r.target,
+          available: Math.max(0, r.available),
+          target: filters.purpose !== "purchase" && r.distribution?.unmappedConsumption ? Math.max(r.target, r.available) : r.target,
           minimum: r.minimum,
           incoming: r.incoming + (r.distribution?.pendingIncoming ?? 0),
           capacity: r.capacity,
-          reserved: r.reserved + (r.distribution?.pendingOutgoing ?? 0),
+          reserved: r.reserved,
+          physical: r.physical,
+          unit: r.unit,
+          step: 1, // Official stock flows permit loose base units; packSize converts boxes.
+          daily: r.analysis.daily,
         })),
-        (source, dest) => mappedCost(source.warehouse, dest.warehouse),
+        (source, dest) => mappedRoute(source.code, source.warehouse, dest.warehouse)?.cost ?? Infinity,
         (dest) =>
           filters.purpose === "purchase" ||
           !!reportRows.find(
@@ -378,12 +372,16 @@ export async function operationsReport(user: Account, filters: ReportFilter) {
         const dest = reportRows.find(
           (r) => r.code === t.code && r.warehouse === t.to,
         )!;
+        const sourceBefore = projected.get(`${t.code}:${t.from}`)!, destinationBefore = projected.get(`${t.code}:${t.to}`)!;
+        projected.set(`${t.code}:${t.from}`, sourceBefore - t.quantity);
+        projected.set(`${t.code}:${t.to}`, destinationBefore + t.quantity);
         return {
           ...t,
+          key: createHash("sha256").update(JSON.stringify([t, from, to, horizon, margin, published[0]?.id ?? null, source.available, source.target, dest.available, dest.target])).digest("hex"),
           reason:
             filters.purpose === "purchase"
               ? t.reason
-              : "Destino acessível mais próximo dos blocos consumidores; transferir somente o excesso acima do mínimo e alvo da origem.",
+              : "O destino atende consumo próximo e tem cobertura insuficiente; a origem mantém seu mínimo e sua cobertura após a transferência.",
           confidence: dest.analysis.confidence,
           benefit:
             dest.analysis.daily > 0
@@ -391,23 +389,36 @@ export async function operationsReport(user: Account, filters: ReportFilter) {
               : "Reposição do alvo cadastrado; consumo insuficiente para estimar benefício.",
           evidence: {
             period: { from, to },
-            sourceAvailable: source.available,
+            sourceAvailable: sourceBefore,
             sourceReserved: source.reserved,
             sourceMinimum: source.minimum,
             sourceTarget: source.target,
-            destinationAvailable: dest.available,
+            destinationAvailable: destinationBefore,
             destinationReserved: dest.reserved,
             destinationTarget: dest.target,
             forecast: dest.forecast,
             leadDays: snapshot.stock.find((p) => p.code === t.code)?.leadDays,
             incoming: dest.incoming,
+            horizon, margin,
+            route: mappedRoute(t.code, t.from, t.to),
+            sourceCoverageBefore: source.analysis.daily > 0 ? sourceBefore / source.analysis.daily : null,
+            sourceCoverageAfter: source.analysis.daily > 0 ? (sourceBefore - t.quantity) / source.analysis.daily : null,
+            destinationCoverageBefore: dest.analysis.daily > 0 ? destinationBefore / dest.analysis.daily : null,
+            destinationCoverageAfter: dest.analysis.daily > 0 ? (destinationBefore + t.quantity) / dest.analysis.daily : null,
+            capacityKnown: dest.capacity !== null,
+            packSize: snapshot.stock.find((p) => p.code === t.code)?.packSize ?? 1,
             ...dest.distribution,
           },
         };
       })
     : [];
+  const [rejected] = permitted(user, "planning") ? await pool.query<RowDataPacket[]>(
+    "SELECT details FROM audit_log WHERE entity_type='recommendation' AND action='reject' ORDER BY id DESC LIMIT 10000",
+  ) : [[]];
+  const rejectedKeys = new Set(rejected.map((r) => (typeof r.details === "string" ? JSON.parse(r.details) : r.details)?.key));
+  const visibleTransfers = transfers.filter((t) => !rejectedKeys.has(t.key));
   for (const r of reportRows) {
-    r.transfer = transfers
+    r.transfer = visibleTransfers
       .filter((t) => t.code === r.code && t.to === r.warehouse)
       .reduce((s, t) => s + t.quantity, 0);
     r.buy = Math.max(
@@ -460,9 +471,9 @@ export async function operationsReport(user: Account, filters: ReportFilter) {
     period: { from, to },
     generatedAt: new Date().toISOString(),
     source:
-      "Neon local: baixas efetivas kind=saida; devoluções separadas. Previsão usa dias observáveis do período selecionado até hoje; saldos são atuais.",
+      "Consumo: baixas efetivas (saida), descontadas devoluções aptas vinculadas às mesmas baixas no período. Pedidos e transferências não são consumo. Cobertura usa dias observáveis; saldos são atuais.",
     rows: reportRows,
-    transfers,
+    transfers: visibleTransfers,
     incoming: incomingRows,
     summary: {
       withdrawals: reportRows.reduce((s, r) => s + r.withdrawals, 0),

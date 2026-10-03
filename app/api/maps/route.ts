@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import sharp from "sharp";
 import { currentUser } from "@/lib/auth";
 import { databaseEnabled, getPool, transaction } from "@/lib/db";
-import { ActionError, can, demand, integer, text } from "@/lib/permissions";
-import { graphProblems, planStops, type FacilityGraph } from "@/lib/routing";
+import { ActionError, demand, integer, text } from "@/lib/permissions";
+import { graphProblems, planStops, transports, type FacilityGraph, type RouteOptions } from "@/lib/routing";
 import type { RowDataPacket, ResultSetHeader } from "@/lib/db-types";
 import { imageObstacles, imageSuggestions } from "@/lib/map-image";
 import { deliveryHistory, planDelivery } from "@/lib/delivery-planning";
@@ -14,8 +14,7 @@ export async function GET(request: NextRequest) {
   try {
     const user = await currentUser();
     if (!user) return json({ error: "Faça login." }, 401);
-    if (!can(user.role, "stock"))
-      return json({ error: "Acesso ao mapa operacional restrito." }, 403);
+    demand(user, "stock");
     if (!databaseEnabled()) return json({ error: "Configure o Neon." }, 503);
     if (request.nextUrl.searchParams.has("delivery")) {
       const page = integer(
@@ -132,10 +131,11 @@ export async function POST(request: NextRequest) {
     if (a.action === "test") {
       demand(user, "stock");
       let graph: FacilityGraph;
+      let mapVersion: number | null = null;
       if (user.role === "admin" && a.graph) graph = a.graph as FacilityGraph;
       else {
         const [r] = await getPool().query<RowDataPacket[]>(
-          "SELECT graph FROM map_versions WHERE status='Publicada'",
+          "SELECT id,graph FROM map_versions WHERE status='Publicada'",
         );
         if (!r[0])
           return json({
@@ -145,6 +145,10 @@ export async function POST(request: NextRequest) {
           });
         graph =
           typeof r[0].graph === "string" ? JSON.parse(r[0].graph) : r[0].graph;
+        mapVersion = Number(r[0].id);
+        if (!graph.reviewed) throw new ActionError("A planta publicada não está revisada.", 409);
+        if (a.mapVersion !== undefined && a.mapVersion !== mapVersion)
+          throw new ActionError("A planta publicada mudou. Atualize a rota.", 409);
       }
       if (
         !Array.isArray(a.stops) ||
@@ -152,9 +156,17 @@ export async function POST(request: NextRequest) {
         !a.stops.every((s) => typeof s === "string")
       )
         throw new ActionError("Paradas inválidas.");
-      const route = planStops(graph, text(a.start, 64), a.stops as string[]);
+      const options: RouteOptions = {
+        objective: a.objective === undefined ? "distance" : a.objective as RouteOptions["objective"],
+        transport: a.transport === undefined ? "walking" : a.transport as RouteOptions["transport"],
+        final: a.final === undefined ? undefined : text(a.final, 64),
+      };
+      if (!["distance", "time"].includes(options.objective!) || !Object.hasOwn(transports, options.transport!))
+        throw new ActionError("Objetivo ou transporte inválido.");
+      const route = planStops(graph, text(a.start, 64), a.stops as string[], options);
       return json({
         route,
+        graph, mapVersion, parameters: options,
         reason: route
           ? "Rota sugerida, sem movimentação de saldo."
           : "Rota indisponível: revise pontos, paredes e acessos bloqueados.",
@@ -208,6 +220,13 @@ export async function POST(request: NextRequest) {
           n.kind === "shelf" ? { ...n, kind: "access" } : n,
         );
         const errors = graphProblems(graph);
+        const [activeWarehouses] = await c.query<RowDataPacket[]>("SELECT id FROM warehouses WHERE active=TRUE");
+        const [activeBlocks] = await c.query<RowDataPacket[]>("SELECT id FROM blocks");
+        if (graph.nodes.some((n: FacilityGraph["nodes"][number]) => (n.warehouseId && !activeWarehouses.some((w) => Number(w.id) === n.warehouseId)) || (n.blockId && !activeBlocks.some((b) => Number(b.id) === n.blockId))))
+          throw new ActionError("Um local ou bloco vinculado foi removido ou desativado. Resolva os vínculos antes de publicar.", 409);
+        const [linked] = await c.query<RowDataPacket[]>("SELECT i.map_node_id,i.warehouse_id,p.code FROM inventory i JOIN parts p ON p.id=i.part_id WHERE i.map_node_id IS NOT NULL AND p.active=TRUE");
+        const missing = linked.find((l) => !graph.nodes.some((n: FacilityGraph["nodes"][number]) => n.id === l.map_node_id && n.warehouseId === Number(l.warehouse_id)));
+        if (missing) throw new ActionError(`O ponto ${missing.map_node_id} está vinculado ao estoque de ${missing.code}. Resolva o vínculo no cadastro antes de publicar.`, 409);
         if (
           errors.length ||
           !graph.reviewed ||

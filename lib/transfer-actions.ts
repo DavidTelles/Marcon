@@ -11,7 +11,10 @@ import {
   scan,
   movement,
   audit,
+  rows,
 } from "./stock-ledger";
+import { storageRoute } from "./delivery-planning";
+import type { RouteOptions } from "./routing";
 
 // Called inside the existing stock transaction, after server-side stock authorization.
 export async function transferAction(
@@ -38,7 +41,8 @@ export async function transferAction(
       [key],
     );
     if (existing) throw new ActionError("Solicitação já registrada.", 409);
-    const b = (await stock(c, Number(p.id))).find(
+    const balances = await stock(c, Number(p.id));
+    const b = balances.find(
       (b) => Number(b.warehouse_id) === Number(source.id),
     );
     if (!b || available(b) - Number(b.minimum_quantity) < q)
@@ -46,6 +50,20 @@ export async function transferAction(
         "Saldo insuficiente acima das reservas e do mínimo da origem.",
         409,
       );
+    const destination = balances.find((v) => Number(v.warehouse_id) === Number(dest.id));
+    const incoming = await rows(c, "SELECT quantity FROM stock_transfers WHERE part_id=? AND destination_warehouse_id=? AND status IN ('Solicitada','Em trânsito') FOR UPDATE", [p.id, dest.id]);
+    if (destination) capacity(destination, Number(destination.quantity) + incoming.reduce((s, v) => s + Number(v.quantity), 0) + q);
+    const currentRoute = await storageRoute(c, Number(p.id), Number(source.id), Number(dest.id), { objective: a.objective as RouteOptions["objective"], transport: a.transport as RouteOptions["transport"] });
+    let routeEvidence: unknown = currentRoute;
+    if (a.recommendation && typeof a.recommendation === "object") {
+      const rec = a.recommendation as Record<string, unknown>;
+      if (currentRoute.mapVersion !== rec.mapVersion) throw new ActionError("A planta mudou. Atualize a recomendação.", 409);
+      const route = currentRoute.route;
+      if (![rec.sourceTarget, rec.sourceMinimum].every((v) => typeof v === "number" && Number.isFinite(v) && v >= 0)) throw new ActionError("Cobertura inválida.");
+      if (!route || available(b) - Math.max(Number(rec.sourceTarget), Number(rec.sourceMinimum), Number(b.minimum_quantity)) < q)
+        throw new ActionError("Cobertura ou percurso mudou. Atualize a recomendação.", 409);
+      routeEvidence = { ...rec, route, parameters: { objective: route.objective, transport: route.transport } };
+    }
     const [r] = await c.execute<ResultSetHeader>(
       "INSERT INTO stock_transfers(part_id,source_warehouse_id,destination_warehouse_id,quantity,qr_code_scanned,performed_by,status,reason,request_key) VALUES(?,?,?,?,?,?,'Solicitada',?,?)",
       [p.id, source.id, dest.id, q, "", actor, note, key],
@@ -53,7 +71,9 @@ export async function transferAction(
     await audit(c, actor, "transfer", r.insertId, "request", {
       quantity: q,
       reason: note,
+      route: routeEvidence,
     });
+    if (a.recommendation) await audit(c, actor, "recommendation", Number(p.id), "accept", { transferId: r.insertId, ...routeEvidence as object });
     return { id: r.insertId };
   }
   const id = integer(a.id);
@@ -106,7 +126,8 @@ export async function transferAction(
       409,
     );
   if (dispatch) {
-    if (available(b) - Number(b.minimum_quantity) < q)
+    // The current document already commits q; exclude only its own commitment.
+    if (available(b) + q - Number(b.minimum_quantity) < q)
       throw new ActionError(
         "Saída consumiria reservas ou mínimo da origem.",
         409,
@@ -143,8 +164,11 @@ export async function transferAction(
     null,
     id,
   );
+  const planned = await first(c, "SELECT details FROM audit_log WHERE entity_type='transfer' AND entity_id=? AND action='request' ORDER BY id DESC LIMIT 1", [id]);
+  const plannedDetails = planned ? typeof planned.details === "string" ? JSON.parse(planned.details) : planned.details : null;
   await audit(c, actor, "transfer", id, dispatch ? "dispatch" : "receive", {
     quantity: q,
+    route: await storageRoute(c, Number(p.id), Number(t.source_warehouse_id), Number(t.destination_warehouse_id), { objective: (a.objective ?? plannedDetails?.route?.parameters?.objective) as RouteOptions["objective"], transport: (a.transport ?? plannedDetails?.route?.parameters?.transport) as RouteOptions["transport"] }),
   });
   return { id };
 }

@@ -1,6 +1,7 @@
 import { expect, test, type APIRequestContext } from "@playwright/test";
 import neon from "../neon-test-db";
 import type { RowDataPacket } from "../neon-test-db";
+import { randomUUID } from "node:crypto";
 
 test("Neon: perfis, operações e concorrência de saldo", async ({
   playwright,
@@ -25,10 +26,10 @@ test("Neon: perfis, operações e concorrência de saldo", async ({
   }
   async function action(
     context: APIRequestContext,
-    data: unknown,
+      data: object,
     status = 200,
   ) {
-    const response = await context.post("/api/workspace", { data });
+    const response = await context.post("/api/workspace", { data: { requestKey: randomUUID(), ...data } });
     expect(response.status(), await response.text()).toBe(status);
     return response.json();
   }
@@ -206,7 +207,7 @@ test("Neon: perfis, operações e concorrência de saldo", async ({
       note: "Material danificado",
       requestId: ids[0],
     });
-    await action(warehouse, {
+    const transfer = await action(warehouse, {
       type: "transfer",
       code,
       to: "Almoxarifado 1",
@@ -214,12 +215,17 @@ test("Neon: perfis, operações e concorrência de saldo", async ({
       qrCode: code,
       reason: "Reposicao local",
     });
+    await action(warehouse, { type: "dispatchTransfer", id: transfer.id, qrCode: code, confirmedQuantity: 1, reason: "Coleta conferida" });
+    const [inTransit] = await pool.query<RowDataPacket[]>("SELECT (SELECT SUM(i.quantity) FROM inventory i WHERE i.part_id=p.id)+(SELECT COALESCE(SUM(t.quantity),0) FROM stock_transfers t WHERE t.part_id=p.id AND t.status='Em trânsito') AS total FROM parts p WHERE p.code=?", [code]);
+    expect(Number(inTransit[0].total)).toBe(9);
+    await action(warehouse, { type: "receiveTransfer", id: transfer.id, qrCode: code, confirmedQuantity: 1, reason: "Entrega conferida" });
     await action(warehouse, { type: "updatePrice", code, price: 12.34 });
     const responses = await Promise.all(
       [1, 2].map(() =>
         staff.post("/api/workspace", {
           data: {
             type: "createRequests",
+            requestKey: randomUUID(),
             entries: [{ code, quantity: 6, priority: "Leve" }],
           },
         }),

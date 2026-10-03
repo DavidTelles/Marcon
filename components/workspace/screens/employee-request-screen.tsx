@@ -22,7 +22,6 @@ import { useDemoStore } from "../demo-store";
 import { useEmployeeName, useEmployeeBlock } from "../employee-identity";
 import { PartArt } from "./part-art";
 import styles from "@/app/catalogo/catalog.module.css";
-import { InsightChart } from "../operations/insight-chart";
 
 type Mode = "request" | "cart" | null;
 const normalize = (value: string) =>
@@ -583,7 +582,6 @@ export function EmployeeRequestScreen({ routePart }: { routePart?: string }) {
           </div>
         </div>
       </section>
-      <InsightChart title="Suas requisições" description="Acompanhe rapidamente o andamento dos seus pedidos." rows={[{ label: "Aguardando", value: requests.filter((item) => item.person === employeeName && ["Pendente", "Em análise"].includes(item.status)).length }, { label: "Aprovadas", value: requests.filter((item) => item.person === employeeName && item.status === "Aprovada").length }, { label: "Entregues", value: requests.filter((item) => item.person === employeeName && item.status === "Entregue").length }]} unit="pedidos" />
       <section
         id="lista-pecas"
         className={styles.catalogSection}

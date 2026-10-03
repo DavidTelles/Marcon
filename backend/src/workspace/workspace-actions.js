@@ -62,7 +62,7 @@ const roleCodes = {
   Almoxarife: "almoxarifado",
   Funcion\u00E1rio: "funcionario"
 };
-async function executeWorkspaceAction(user, input, connection) {
+async function executeWorkspaceActionCore(user, input, connection) {
   function run(work) {
     return connection ? work(connection) : (0, import_db.transaction)(work);
   }
@@ -76,7 +76,19 @@ async function executeWorkspaceAction(user, input, connection) {
     );
   const action = input;
   switch (action.type) {
+    case "rejectRecommendation": {
+      (0, import_permissions.demand)(user, "planning");
+      if (!action.recommendation || !/^[a-f0-9]{64}$/.test(action.recommendation.key)) throw new import_permissions.ActionError("Recomendação inválida.");
+      return run(async (c) => {
+        const actor = await actorId(c, user);
+        const part = await one(c, "SELECT id FROM parts WHERE code=? AND active=TRUE", [action.code]);
+        if (!part) throw new import_permissions.ActionError("Material inexistente.", 404);
+        await audit(c, actor, "recommendation", Number(part.id), "reject", action.recommendation);
+        return { ok: true };
+      });
+    }
     case "saveUser": {
+      (0, import_permissions.demand)(user, "people");
       requireRole(user, ["admin"]);
       const data = action.user;
       if (!data || typeof data !== "object")
@@ -192,6 +204,7 @@ async function executeWorkspaceAction(user, input, connection) {
       });
     }
     case "toggleUser": {
+      (0, import_permissions.demand)(user, "people");
       requireRole(user, ["admin"]);
       if (typeof action.active !== "boolean")
         throw new import_permissions.ActionError("Status do usu\xE1rio inv\xE1lido.");
@@ -222,6 +235,7 @@ async function executeWorkspaceAction(user, input, connection) {
       });
     }
     case "updatePrice": {
+      (0, import_permissions.demand)(user, "stock");
       requireRole(user, ["admin", "almoxarifado"]);
       const price = Number(action.price);
       if (!Number.isFinite(price) || price < 0 || price > 9999999999)
@@ -239,7 +253,7 @@ async function executeWorkspaceAction(user, input, connection) {
           [price, part.id]
         );
         await audit(connection2, actor, "part", Number(part.id), "price", {
-          price
+          referenceUnitPrice: price
         });
         return { ok: true };
       });
@@ -247,6 +261,33 @@ async function executeWorkspaceAction(user, input, connection) {
     default:
       throw new import_permissions.ActionError("A\xE7\xE3o n\xE3o reconhecida.");
   }
+}
+// Reuse the existing submissions ledger. The op namespace is separate from
+// James' confirmation ledger, so an API call cannot wait on its caller's lock.
+async function executeWorkspaceAction(user, input, connection) {
+  if (!input || typeof input !== "object" || !("type" in input))
+    throw new import_permissions.ActionError("Ação inválida.");
+  if (["createRequests", "stockEntry", "registerReturn", "confirmInbound"].includes(input.type) && !input.requestKey)
+    throw new import_permissions.ActionError("Informe requestKey para evitar execução duplicada.", 422);
+  if (!input.requestKey || input.type === "createRequests" || input.type === "transfer")
+    return executeWorkspaceActionCore(user, input, connection);
+  if (typeof input.requestKey !== "string" || !/^[\w-]{16,64}$/.test(input.requestKey))
+    throw new import_permissions.ActionError("Identificador de envio inválido.");
+  const { createHash } = require("node:crypto");
+  const digest = (v) => createHash("sha256").update(JSON.stringify(v)).digest("hex");
+  const key = "op-" + digest(input.requestKey).slice(0, 60);
+  const hash = digest({ input, role: user.role, block: user.block });
+  const work = async (c) => {
+    const actor = await actorId(c, user);
+    await c.execute("INSERT IGNORE INTO request_submissions(actor_id,request_key,payload_hash) VALUES(?,?,?)", [actor, key, hash]);
+    const saved = await one(c, "SELECT payload_hash,result FROM request_submissions WHERE actor_id=? AND request_key=? FOR UPDATE", [actor, key]);
+    if (saved.payload_hash !== hash) throw new import_permissions.ActionError("Este envio pertence a outra operação.", 409);
+    if (saved.result) return typeof saved.result === "string" ? JSON.parse(saved.result) : saved.result;
+    const result = await executeWorkspaceActionCore(user, input, c);
+    await c.execute("UPDATE request_submissions SET result=? WHERE actor_id=? AND request_key=?", [JSON.stringify(result), actor, key]);
+    return result;
+  };
+  return connection ? work(connection) : (0, import_db.transaction)(work);
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {

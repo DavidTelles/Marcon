@@ -32,7 +32,8 @@ async function authenticate(req, res, next) {
       sector: user.sector,
       block: user.block_name || undefined,
       blockId: user.block_id,
-      permissions
+      permissions,
+      permissionOverrides: await userRepository.getPermissionOverridesForUser(user.id)
     };
     next();
   } catch (error) {
@@ -43,6 +44,9 @@ async function authenticate(req, res, next) {
 function authorize(...rolesOrPermissions) {
   return (req, res, next) => {
     if (!req.user) return next(new AppError(401, 'Acesso sem autenticação'));
+    const required = rolesOrPermissions.filter((item) => item.includes('.'));
+    if (required.some((item) => req.user.permissionOverrides?.[item] === false))
+      return next(new AppError(403, 'Permissão individual bloqueada para esta operação'));
     if (req.user.roleCode === ROLES.ADMIN) return next();
     const allowed = rolesOrPermissions.some(
       (item) => req.user.roleCode === item || req.user.role === item || req.user.permissions.includes(item)

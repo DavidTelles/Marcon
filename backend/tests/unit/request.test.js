@@ -42,6 +42,7 @@ describe('Requisições via camada de workspace', () => {
     await requestService.createRequest(employee, { product_id: 5, quantity: 2, urgency: 'Moderado' });
     expect(executeWorkspaceAction).toHaveBeenCalledWith(employee, {
       type: 'createRequests',
+      requestKey: undefined,
       entries: [{ code: 'ROL-1', quantity: 2, priority: 'Moderado', justification: undefined }]
     });
   });

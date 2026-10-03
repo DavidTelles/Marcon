@@ -1,7 +1,6 @@
 "use client";
 
 import { InspectReturn } from "../operations/inspect-return";
-import { WAREHOUSES } from "@/lib/inventory";
 import { useState } from "react";
 import {
   ClipboardList,
@@ -13,7 +12,6 @@ import { heading, badge } from "../ui";
 import { useDemoStore } from "../demo-store";
 import type { ReturnRecord } from "@/lib/demo-data";
 
-const blocks = ["Bloco A", "Bloco B", "Bloco C", "Bloco D"];
 const today = () => new Date().toISOString().slice(0, 10);
 const displayDate = (date: string) => date.split("-").reverse().join("/");
 
@@ -32,6 +30,8 @@ export function ReturnsScreen({
     setMovements,
     persistent,
     runAction,
+    warehouseOptions,
+    blockOptions: blocks,
   } = useDemoStore();
   const [partCode, setPartCode] = useState(stock[0]?.code ?? "");
   const [boxes, setBoxes] = useState("");
@@ -41,7 +41,7 @@ export function ReturnsScreen({
   const [condition, setCondition] = useState<ReturnRecord["condition"]>("Apto");
   const [note, setNote] = useState("");
   const [requestId, setRequestId] = useState("");
-  const [warehouse, setWarehouse] = useState("Central");
+  const [warehouse, setWarehouse] = useState(warehouseOptions[0] ?? "");
   const [query, setQuery] = useState("");
   const [conditionFilter, setConditionFilter] = useState("Todas");
 
@@ -255,7 +255,7 @@ export function ReturnsScreen({
                   value={warehouse}
                   onChange={(e) => setWarehouse(e.target.value)}
                 >
-                  {WAREHOUSES.map((w) => (
+                  {warehouseOptions.map((w) => (
                     <option key={w}>{w}</option>
                   ))}
                 </select>

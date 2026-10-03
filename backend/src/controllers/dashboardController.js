@@ -6,7 +6,7 @@ const reportService = require('../services/reportService');
 const general = asyncHandler(async (req, res) => success(res, 200, await dashboardService.general()));
 const warehouse = asyncHandler(async (req, res) => success(res, 200, await dashboardService.byWarehouse()));
 const stock = asyncHandler(async (req, res) => success(res, 200, await dashboardService.stockComparative()));
-const block = asyncHandler(async (req, res) => success(res, 200, await dashboardService.byBlock()));
+const block = asyncHandler(async (req, res) => success(res, 200, await dashboardService.byBlock(req.user.role === 'lider' ? (req.user.blockId ?? -1) : null)));
 const sector = asyncHandler(async (req, res) => success(res, 200, await dashboardService.bySector(req.params.id)));
 const lowStock = asyncHandler(async (req, res) => success(res, 200, await dashboardService.lowStock()));
 const exportHistory = asyncHandler(async (req, res) => {

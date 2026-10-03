@@ -6,6 +6,7 @@ const warehouseRepository = require('../repositories/warehouseRepository');
 const productRepository = require('../repositories/productRepository');
 const AppError = require('../utils/AppError');
 const { stockService } = require('../services/container');
+const { executeWorkspaceAction } = require('../workspace/workspace-actions');
 
 
 const listBlocks = asyncHandler(async (req, res) => success(res, 200, await blockRepository.list()));
@@ -27,22 +28,36 @@ const getProduct = asyncHandler(async (req, res) => {
   success(res, 200, product);
 });
 const createProduct = asyncHandler(async (req, res) => {
-  const sku = String(req.body.sku || req.body.id || `SKU-${Date.now()}`);
-  const product = await productRepository.create({ ...req.body, sku });
-  const amount = req.body.amount ?? req.body.quantity;
-  if (amount && req.body.warehouse_id) {
-    await stockService.changeQuantity({
-      product_id: product.id,
-      warehouse_id: req.body.warehouse_id,
-      quantity: Number(amount),
-      type: 'IN',
-      user_id: req.user.dbId,
-      notes: 'Entrada inicial'
-    });
-  }
-  success(res, 201, product);
+  const result = await saveProduct(req.user, req.body);
+  success(res, 201, await productRepository.findById(result.id));
 });
-const updateProduct = asyncHandler(async (req, res) => success(res, 200, await productRepository.update(req.params.id, req.body)));
+async function saveProduct(actor, body, existing) {
+  const warehouse = body.warehouse_id ? await warehouseRepository.findById(body.warehouse_id)
+    : (await warehouseRepository.list()).find((w) => w.is_active && w.is_central);
+  if (!warehouse) throw new AppError(422, 'Selecione um almoxarifado existente');
+  return executeWorkspaceAction(actor, { type: 'savePart', warehouse: warehouse.name,
+    requestKey: body.requestKey, preserveQuantity: !!existing,
+    localQuantity: body.amount ?? body.quantity ?? 0, reason: body.reason,
+    part: { id: existing?.id, code: body.sku ?? body.code ?? existing?.code,
+      qrCode: body.qr_code ?? existing?.qr_code ?? body.sku ?? body.code,
+      name: body.name ?? existing?.name, location: body.location ?? body.corridor ?? existing?.location,
+      unit: body.unit ?? existing?.unit ?? 'un', category: body.category ?? existing?.category ?? 'Peças',
+      description: body.description ?? existing?.description ?? '',
+      packSize: body.pack_size ?? existing?.pack_size ?? 1,
+      minimum: body.min_quantity ?? existing?.min_quantity ?? 1,
+      leadDays: body.lead_days ?? existing?.lead_days ?? 7,
+      estimatedCost: body.reference_unit_price ?? existing?.reference_unit_price ?? 0,
+      aisle: body.corridor, shelf: body.shelf, capacity: body.capacity, mapNodeId: body.map_node_id,
+      localMinimum: body.local_minimum,
+    } });
+}
+const updateProduct = asyncHandler(async (req, res) => {
+  const existing = await productRepository.findById(req.params.id);
+  if (!existing) throw new AppError(404, 'Peça inexistente');
+  if (req.body.is_active === false) await executeWorkspaceAction(req.user, { type: 'deletePart', id: Number(existing.id) });
+  else await saveProduct(req.user, req.body, existing);
+  success(res, 200, await productRepository.findById(existing.id));
+});
 const locateProduct = asyncHandler(async (req, res) => {
   success(res, 200, await stockService.locateProduct(req.params.id));
 });

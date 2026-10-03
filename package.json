@@ -9,6 +9,8 @@
     "start": "node scripts/run-with-backend.mjs start",
     "start:next": "next start",
     "lint": "eslint",
+    "sync:workspace": "node scripts/sync-workspace.mjs",
+    "check:workspace": "node scripts/sync-workspace.mjs --check",
     "test:e2e": "playwright test",
     "db:migrate": "node scripts/db-migrate.mjs",
     "db:generate": "drizzle-kit generate",

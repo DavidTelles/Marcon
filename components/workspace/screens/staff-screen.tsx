@@ -7,7 +7,6 @@ import { Pencil, Plus, UserRoundCheck, UserRoundX } from "lucide-react";
 import { heading } from "../ui";
 import { useDemoStore } from "../demo-store";
 import type { StaffRole, StaffUser } from "@/lib/staff-data";
-import { BLOCKS } from "@/lib/inventory";
 
 const roles: StaffRole[] = [
   "Administrador",
@@ -30,7 +29,7 @@ export function StaffScreen({
 }: {
   setMessage: React.Dispatch<React.SetStateAction<string>>;
 }) {
-  const { staff, setStaff, persistent, runAction } = useDemoStore();
+  const { staff, setStaff, persistent, runAction, blockOptions: BLOCKS } = useDemoStore();
   const searchParams = useSearchParams(),
     pathname = usePathname(),
     router = useRouter();

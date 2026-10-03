@@ -36,7 +36,8 @@ async function list() {
 }
 
 async function findById(id) {
-  const rows = await query(`${BASE} WHERE p.id = ? OR p.code = ?`, [id, String(id)]);
+  const numericId = /^\d+$/.test(String(id)) && Number.isSafeInteger(Number(id)) ? Number(id) : null;
+  const rows = await query(`${BASE} WHERE p.id = ? OR p.code = ?`, [numericId, String(id)]);
   return map(rows[0]);
 }
 
