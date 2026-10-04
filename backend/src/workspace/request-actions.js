@@ -8,6 +8,7 @@ const delivery_planning_1 = require("./delivery-planning");
 const permissions_1 = require("./permissions");
 const stock_ledger_1 = require("./stock-ledger");
 const routing_1 = require("./routing");
+const request_policy_1 = require("./request-policy");
 exports.requestActions = new Set([
     "createRequests",
     "changeRequestStatus",
@@ -15,7 +16,14 @@ exports.requestActions = new Set([
     "deleteRequest",
     "requestCancellation",
     "confirmReceipt",
+    "claimRequest",
+    "preparePick",
+    "confirmPick",
 ]);
+async function patternFor(c, actor, partId) {
+    const history = await (0, stock_ledger_1.rows)(c, "SELECT part_id,block_id,sector,quantity FROM requests WHERE (block_id=? OR sector=?) AND approved_at IS NOT NULL AND status NOT IN ('Cancelada','Rejeitada') AND created_at>=DATE_SUB(NOW(),INTERVAL 90 DAY)", [actor.block_id, actor.sector]);
+    return (0, request_policy_1.requestPattern)(history, partId, Number(actor.block_id), String(actor.sector));
+}
 async function executeRequestAction(c, user, actor, a) {
     const actorId = Number(actor.id);
     if (a.type === "createRequests") {
@@ -48,15 +56,24 @@ async function executeRequestAction(c, user, actor, a) {
             throw new permissions_1.ActionError("Agrupe os itens repetidos no carrinho.");
         const batch = (0, node_crypto_1.randomUUID)(), ids = [];
         for (const e of [...entries].sort((x, y) => String(x.code).localeCompare(String(y.code)))) {
-            const p = await (0, stock_ledger_1.partLock)(c, e.code), q = (0, permissions_1.integer)(e.quantity);
+            const p = await (0, stock_ledger_1.partLock)(c, e.code);
+            let q;
+            try {
+                q = (0, request_policy_1.requestedUnits)((0, permissions_1.integer)(e.quantity), e.requestedUnit, Number(p.pack_size));
+            }
+            catch (error) {
+                throw new permissions_1.ActionError(error instanceof Error ? error.message : "Quantidade inválida.");
+            }
             if (!["Leve", "Moderado", "Urgente"].includes(String(e.priority)))
                 throw new permissions_1.ActionError("Urgência inválida.");
-            if ((q > 10 || e.priority === "Urgente") && !(0, permissions_1.text)(e.justification))
+            const anomaly = (0, request_policy_1.requestAnomaly)(q, await patternFor(c, actor, Number(p.id)));
+            if ((anomaly.unusual || e.priority === "Urgente") &&
+                (0, permissions_1.text)(e.justification).length < 3)
                 throw new permissions_1.ActionError("Justifique o pedido fora do padrão.");
             if (q >
                 (await (0, stock_ledger_1.stock)(c, Number(p.id))).reduce((sum, r) => sum + (0, stock_ledger_1.available)(r), 0))
                 throw new permissions_1.ActionError("Saldo disponível insuficiente.", 409);
-            const [r] = await c.execute("INSERT INTO requests(requester_id,block_id,part_id,quantity,priority,justification,batch_id,sector) VALUES(?,?,?,?,?,?,?,?)", [
+            const [r] = await c.execute("INSERT INTO requests(requester_id,block_id,part_id,quantity,priority,justification,batch_id,sector,requested_unit,requested_amount,pack_size_at_request,anomaly) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", [
                 actorId,
                 actor.block_id,
                 p.id,
@@ -65,6 +82,10 @@ async function executeRequestAction(c, user, actor, a) {
                 (0, permissions_1.text)(e.justification) || null,
                 batch,
                 actor.sector,
+                e.requestedUnit ?? "piece",
+                e.quantity,
+                p.pack_size,
+                JSON.stringify(anomaly),
             ]);
             ids.push(r.insertId);
             await (0, stock_ledger_1.audit)(c, actorId, "request", r.insertId, "create", {
@@ -93,12 +114,87 @@ async function executeRequestAction(c, user, actor, a) {
             throw new permissions_1.ActionError("Somente o requisitor pode editar/excluir antes da aprovação.", 403);
         if (a.type === "editRequest") {
             const q = (0, permissions_1.integer)(a.quantity);
+            const anomaly = (0, request_policy_1.requestAnomaly)(q, await patternFor(c, actor, Number(p.id)));
+            const justification = (0, permissions_1.text)(a.justification ?? r.justification);
+            if ((anomaly.unusual || r.priority === "Urgente") &&
+                justification.length < 3)
+                throw new permissions_1.ActionError("Justifique o pedido fora do padrão.");
             if (q > (await (0, stock_ledger_1.stock)(c, Number(p.id))).reduce((s, v) => s + (0, stock_ledger_1.available)(v), 0))
                 throw new permissions_1.ActionError("Saldo insuficiente.", 409);
-            await c.execute("UPDATE requests SET quantity=? WHERE id=?", [q, id]);
+            await c.execute("UPDATE requests SET quantity=?,requested_unit='piece',requested_amount=?,anomaly=?,justification=? WHERE id=?", [q, q, JSON.stringify(anomaly), justification || null, id]);
         }
         else
             await c.execute("UPDATE requests SET status='Cancelada',cancellation_reason='Excluída pelo requisitor antes da aprovação' WHERE id=?", [id]);
+    }
+    else if (a.type === "claimRequest") {
+        (0, permissions_1.demand)(user, "stock", "requests.deliver");
+        if (r.status !== "Aprovada")
+            throw new permissions_1.ActionError("Pedido já assumido ou indisponível para separação.", 409);
+        await (0, delivery_planning_1.recordDeliveryPlan)(c, user, { action: "planDelivery" }, id);
+        await c.execute("UPDATE requests SET status='Em separação',fulfilled_by=? WHERE id=?", [actorId, id]);
+    }
+    else if (a.type === "preparePick" || a.type === "confirmPick") {
+        (0, permissions_1.demand)(user, "stock", "requests.deliver");
+        if (a.code !== undefined &&
+            (0, permissions_1.text)(a.code).toUpperCase() !== String(p.code).toUpperCase())
+            throw new permissions_1.ActionError("Material diferente da requisição.", 422);
+        if (r.status !== "Em separação" || Number(r.fulfilled_by) !== actorId)
+            throw new permissions_1.ActionError("Somente o almoxarife responsável pode confirmar esta retirada.", 409);
+        (0, stock_ledger_1.scan)(p, a.qrCode);
+        if ((0, permissions_1.integer)(a.confirmedQuantity) !== Number(r.quantity))
+            throw new permissions_1.ActionError("Confirme a quantidade exata reservada.", 422);
+        const digest = (0, node_crypto_1.createHash)("sha256")
+            .update(JSON.stringify([
+            actorId,
+            id,
+            (0, permissions_1.text)(a.qrCode).toUpperCase(),
+            a.confirmedQuantity,
+            a.confirmation,
+        ]))
+            .digest("hex");
+        if (a.type === "preparePick") {
+            const confirmation = (0, node_crypto_1.randomUUID)();
+            const hash = (0, node_crypto_1.createHash)("sha256")
+                .update(JSON.stringify([
+                actorId,
+                id,
+                (0, permissions_1.text)(a.qrCode).toUpperCase(),
+                a.confirmedQuantity,
+                confirmation,
+            ]))
+                .digest("hex");
+            await c.execute("UPDATE requests SET pickup_confirmation=? WHERE id=?", [
+                JSON.stringify({ hash, expiresAt: Date.now() + 5 * 60_000 }),
+                id,
+            ]);
+            return { id, confirmation };
+        }
+        const confirmation = typeof r.pickup_confirmation === "string"
+            ? JSON.parse(r.pickup_confirmation)
+            : r.pickup_confirmation;
+        if (!confirmation ||
+            confirmation.hash !== digest ||
+            confirmation.expiresAt < Date.now())
+            throw new permissions_1.ActionError("Confirmação expirada ou alterada. Confirme a retirada novamente.", 409);
+        await (0, delivery_planning_1.recordDeliveryPlan)(c, user, { action: "planDelivery", atDelivery: true }, id);
+        const reserved = await (0, stock_ledger_1.rows)(c, "SELECT * FROM request_reservations WHERE request_id=? ORDER BY warehouse_id FOR UPDATE", [id]);
+        if (a.sourceWarehouseId !== undefined &&
+            (reserved.length !== 1 ||
+                Number(reserved[0].warehouse_id) !== (0, permissions_1.integer)(a.sourceWarehouseId)))
+            throw new permissions_1.ActionError("Origem diferente da reserva. Para múltiplos locais, confira a retirada pelo atendimento da requisição.", 422);
+        if (reserved.reduce((sum, v) => sum + Number(v.quantity), 0) !==
+            Number(r.quantity))
+            throw new permissions_1.ActionError("Reserva incompleta. Peça revalidação ao gestor.", 409);
+        for (const v of reserved) {
+            const [updated] = await c.execute("UPDATE inventory SET quantity=quantity-? WHERE part_id=? AND warehouse_id=? AND quantity>=?", [v.quantity, p.id, v.warehouse_id, v.quantity]);
+            if (updated.affectedRows !== 1)
+                throw new permissions_1.ActionError("Saldo inconsistente. Retirada bloqueada.", 409);
+            await (0, stock_ledger_1.movement)(c, actorId, Number(p.id), Number(v.warehouse_id), "saida", Number(v.quantity), "Retirada conferida; aguardando entrega no bloco", id, Number(r.block_id));
+        }
+        await c.execute("DELETE FROM request_reservations WHERE request_id=?", [
+            id,
+        ]);
+        await c.execute("UPDATE requests SET status='Em entrega',fulfilled_from=?,picked_at=UTC_TIMESTAMP(3),pickup_confirmation=NULL WHERE id=?", [reserved[0].warehouse_id, id]);
     }
     else if (a.type === "confirmReceipt") {
         if (!owns || r.status !== "Entregue" || r.received_at)
@@ -143,20 +239,27 @@ async function executeRequestAction(c, user, actor, a) {
                     score: graph?.reviewed && path ? path.cost : Infinity,
                 };
             })
-                .sort((a, b) => a.score - b.score || Number(b.l.block_id === r.block_id) - Number(a.l.block_id === r.block_id) || (0, stock_ledger_1.available)(b.l) - (0, stock_ledger_1.available)(a.l));
+                .sort((a, b) => a.score - b.score ||
+                Number(b.l.block_id === r.block_id) -
+                    Number(a.l.block_id === r.block_id) ||
+                (0, stock_ledger_1.available)(b.l) - (0, stock_ledger_1.available)(a.l));
             const existing = await (0, stock_ledger_1.rows)(c, "SELECT warehouse_id,quantity FROM request_reservations WHERE request_id=? FOR UPDATE", [id]);
             let remaining = Number(r.quantity) -
                 existing.reduce((sum, v) => sum + Number(v.quantity), 0);
             for (const { l } of ranked) {
                 const q = Math.min(remaining, (0, stock_ledger_1.available)(l));
                 if (q > 0) {
-                    await c.execute("INSERT INTO request_reservations(request_id,part_id,warehouse_id,quantity) VALUES(?,?,?,?) ON DUPLICATE KEY UPDATE quantity=quantity+VALUES(quantity)", [id, p.id, l.warehouse_id, q]);
+                    await c.execute("INSERT INTO request_reservations(request_id,part_id,warehouse_id,quantity) VALUES(?,?,?,?) ON DUPLICATE KEY UPDATE quantity=request_reservations.quantity+VALUES(quantity)", [id, p.id, l.warehouse_id, q]);
                     remaining -= q;
                 }
             }
             if (remaining)
                 throw new permissions_1.ActionError("Saldo insuficiente para reservar. Nenhuma aprovação foi aplicada.", 409);
             await c.execute("UPDATE requests SET status='Aprovada',approved_by=?,approved_at=COALESCE(approved_at,UTC_TIMESTAMP(3)) WHERE id=?", [actorId, id]);
+        }
+        else if (next === "Rejeitada" && pending) {
+            (0, permissions_1.demand)(user, "approve");
+            await c.execute("UPDATE requests SET status='Rejeitada',cancellation_reason=? WHERE id=?", [(0, permissions_1.reason)(a.reason), id]);
         }
         else if (next === "Cancelada" &&
             [
@@ -173,29 +276,12 @@ async function executeRequestAction(c, user, actor, a) {
             ]);
             await c.execute("UPDATE requests SET status='Cancelada',cancellation_reason=COALESCE(cancellation_reason,?) WHERE id=?", [(0, permissions_1.reason)(a.reason ?? "Cancelamento confirmado pelo responsável"), id]);
         }
-        else if (next === "Entregue" && r.status === "Aprovada") {
+        else if (next === "Entregue" && r.status === "Em entrega") {
             (0, permissions_1.demand)(user, "stock");
             (0, permissions_1.demand)(user, "stock", "requests.deliver");
-            (0, stock_ledger_1.scan)(p, a.qrCode);
-            if ((0, permissions_1.integer)(a.confirmedQuantity) !== Number(r.quantity))
-                throw new permissions_1.ActionError("Confirme a quantidade exata separada.", 422);
-            // Capture the current publication at delivery as well; earlier departures
-            // remain in history and do not certify that their path was travelled.
-            await (0, delivery_planning_1.recordDeliveryPlan)(c, user, { action: "planDelivery", atDelivery: true }, id);
-            const reserved = await (0, stock_ledger_1.rows)(c, "SELECT * FROM request_reservations WHERE request_id=? ORDER BY warehouse_id FOR UPDATE", [id]);
-            if (reserved.reduce((s, v) => s + Number(v.quantity), 0) !==
-                Number(r.quantity))
-                throw new permissions_1.ActionError("Reserva incompleta. Peça revalidação ao gestor.", 409);
-            for (const v of reserved) {
-                const [updated] = await c.execute("UPDATE inventory SET quantity=quantity-? WHERE part_id=? AND warehouse_id=? AND quantity>=?", [v.quantity, p.id, v.warehouse_id, v.quantity]);
-                if (updated.affectedRows !== 1)
-                    throw new permissions_1.ActionError("Saldo inconsistente. Entrega bloqueada.", 409);
-                await (0, stock_ledger_1.movement)(c, actorId, Number(p.id), Number(v.warehouse_id), "saida", Number(v.quantity), "Entrega conferida", id, Number(r.block_id));
-            }
-            await c.execute("DELETE FROM request_reservations WHERE request_id=?", [
-                id,
-            ]);
-            await c.execute("UPDATE requests SET status='Entregue',fulfilled_by=?,fulfilled_from=?,delivered_at=UTC_TIMESTAMP(3) WHERE id=?", [actorId, reserved[0].warehouse_id, id]);
+            if (Number(r.fulfilled_by) !== actorId || !r.picked_at)
+                throw new permissions_1.ActionError("Confirme primeiro a retirada com o almoxarife responsável.", 409);
+            await c.execute("UPDATE requests SET status='Entregue',delivered_at=UTC_TIMESTAMP(3) WHERE id=?", [id]);
         }
         else
             throw new permissions_1.ActionError("Transição de estado inválida.", 409);

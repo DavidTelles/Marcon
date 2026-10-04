@@ -185,7 +185,7 @@ export async function operationsReport(user: Account, filters: ReportFilter) {
       l.capacity == null ? Infinity : Math.max(0, l.capacity - l.reserved) * days / ((p.leadDays + horizon) * (1 + margin))]));
     if (filters.purpose === "purchase") allocated.push(...history);
     else for (const m of history) {
-      const ranked = accessibleWarehousesForBlock(graph, m.block_id ? Number(m.block_id) : null, locationIds, new Map(p.locations?.map((l) => [l.warehouseId, l.nodeId])));
+      const ranked = accessibleWarehousesForBlock(graph, m.block_id ? Number(m.block_id) : null, locationIds, new Map(p.locations?.map((l) => [l.warehouseId, l.nodeId])), String(m.request_sector ?? ""));
       let remaining = m.quantity;
       for (const candidate of ranked) {
         const quantity = Math.min(remaining, remainingCapacity.get(candidate.id) ?? 0);

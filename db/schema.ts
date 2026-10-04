@@ -13,7 +13,7 @@ const ref = (name: string, get: () => { id: import("drizzle-orm/pg-core").AnyPgC
 
 export const userRole = pgEnum("user_role", ["admin", "lider", "almoxarifado", "funcionario"]);
 export const requestPriority = pgEnum("request_priority", ["Leve", "Moderado", "Urgente"]);
-export const requestStatus = pgEnum("request_status", ["Pendente", "Em análise", "Aprovada", "Entregue", "Cancelada", "Cancelamento solicitado"]);
+export const requestStatus = pgEnum("request_status", ["Pendente", "Em análise", "Aprovada", "Entregue", "Cancelada", "Cancelamento solicitado", "Em separação", "Em entrega", "Rejeitada"]);
 export const transferStatus = pgEnum("transfer_status", ["Solicitada", "Em trânsito", "Recebida", "Cancelada"]);
 export const returnCondition = pgEnum("return_condition", ["Apto", "Danificado"]);
 export const returnInspection = pgEnum("return_inspection", ["Pendente", "Conferida"]);
@@ -37,7 +37,7 @@ export const blocks = pgTable("blocks", {
 export const warehouses = pgTable("warehouses", {
   id: id(), code: varchar("code", { length: 30 }).notNull().unique(),
   name: varchar("name", { length: 80 }).notNull().unique(),
-  blockId: bigint("block_id", { mode: "number" }).unique().references(() => blocks.id),
+  blockId: bigint("block_id", { mode: "number" }).references(() => blocks.id),
   isCentral: smallint("is_central").notNull().default(0),
   active: smallint("active").notNull().default(1),
 }, (t) => [
@@ -78,6 +78,10 @@ export const inventory = pgTable("inventory", {
 }, (t) => [primaryKey({ columns: [t.partId, t.warehouseId] })]);
 
 export const requests = pgTable("requests", {
+  requestedUnit: varchar("requested_unit", { length: 12 }).notNull().default("piece"),
+  requestedAmount: integer("requested_amount"), packSizeAtRequest: integer("pack_size_at_request"),
+  anomaly: jsonb("anomaly"), pickedAt: timestamp("picked_at", { mode: "string", precision: 3 }),
+  pickupConfirmation: jsonb("pickup_confirmation"),
   id: id(), requesterId: ref("requester_id", () => users), blockId: ref("block_id", () => blocks), partId: ref("part_id", () => parts),
   quantity: integer("quantity").notNull(), priority: requestPriority("priority").notNull().default("Leve"),
   status: requestStatus("status").notNull().default("Pendente"), justification: text("justification"),

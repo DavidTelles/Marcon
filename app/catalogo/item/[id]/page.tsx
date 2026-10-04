@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
-import { ItemDetail } from "./item-detail";
+import { redirect } from "next/navigation";
 import { currentUser } from "@/lib/auth";
+import { roleLanding } from "@/lib/workspace-routes";
 
 export const metadata: Metadata = { title: "Detalhe do item | Marcon" };
 
@@ -11,5 +12,10 @@ export default async function ItemPage({
 }) {
   const { id } = await params;
   const user = await currentUser();
-  return <ItemDetail id={id} canRequest={user?.role === "funcionario"} />;
+  if (!user) redirect("/login");
+  redirect(
+    user.role === "funcionario"
+      ? `/employee/request/material/${encodeURIComponent(id)}`
+      : roleLanding[user.role],
+  );
 }

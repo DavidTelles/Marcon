@@ -27,12 +27,15 @@ import {
 } from "@/lib/inventory";
 import type { WorkspaceSnapshot } from "@/lib/workspace-db";
 type CartItem = {
+  requestedUnit?: "piece" | "box";
+  requestedAmount?: number;
   code: string;
   quantity: number;
   priority: Request["priority"];
   justification: string;
 };
 type Store = {
+  accountId?: string;
   persistent: boolean;
   warehouseOptions: string[];
   blockOptions: string[];
@@ -69,7 +72,7 @@ export function DemoProvider({
   const pathname = usePathname();
   const reportPage =
     persistent &&
-    /\/(dashboard|history|all-requests|requests)(\/|$)/.test(pathname);
+    /\/(dashboard)(\/|$)/.test(pathname);
   const publicPage = pathname === "/login" || pathname.startsWith("/inicio/");
   const [ready, setReady] = useState(!persistent);
   const [loadError, setLoadError] = useState("");
@@ -163,11 +166,11 @@ export function DemoProvider({
     const update = (event?: Event) => {
       if (event instanceof CustomEvent && event.detail?.source === "store") return;
       if (document.visibilityState === "visible")
-        refresh().catch(() => undefined);
+        refresh().catch((error) => setLoadError(error instanceof Error ? error.message : "Comunicação com o banco indisponível."));
     };
     window.addEventListener("focus", update);
     window.addEventListener("marcon:workspace-updated", update);
-    const interval = window.setInterval(update, 30_000);
+    const interval = window.setInterval(update, 10_000);
     return () => {
       window.removeEventListener("focus", update);
       window.removeEventListener("marcon:workspace-updated", update);
@@ -231,6 +234,7 @@ export function DemoProvider({
   return (
     <Context.Provider
       value={{
+        accountId,
         persistent,
         warehouseOptions,
         blockOptions,

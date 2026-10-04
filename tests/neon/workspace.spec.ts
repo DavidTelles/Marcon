@@ -10,7 +10,7 @@ test("Neon: perfis, operações e concorrência de saldo", async ({
   const contexts: APIRequestContext[] = [];
   const pool = neon.createPool();
   const suffix = Date.now().toString(36);
-  const code = `TEST-${suffix}`;
+  const code = `TEST-${suffix}`.toUpperCase();
   const employee = `test_${suffix}`;
   async function login(identity: string) {
     const context = await playwright.request.newContext({
@@ -26,10 +26,12 @@ test("Neon: perfis, operações e concorrência de saldo", async ({
   }
   async function action(
     context: APIRequestContext,
-      data: object,
+    data: object,
     status = 200,
   ) {
-    const response = await context.post("/api/workspace", { data: { requestKey: randomUUID(), ...data } });
+    const response = await context.post("/api/workspace", {
+      data: { requestKey: randomUUID(), ...data },
+    });
     expect(response.status(), await response.text()).toBe(status);
     return response.json();
   }
@@ -146,23 +148,44 @@ test("Neon: perfis, operações e concorrência de saldo", async ({
     await action(staff, { type: "createRequests", entries: [null] }, 400);
     const { ids } = await action(staff, {
       type: "createRequests",
-      entries: [{ code, quantity: 2, priority: "Leve" }],
+      entries: [
+        {
+          code,
+          quantity: 2,
+          priority: "Leve",
+          justification: "Atividade técnica de teste",
+        },
+      ],
     });
     await action(leader, {
       type: "changeRequestStatus",
       id: ids[0],
       status: "Aprovada",
     });
+    await action(warehouse, { type: "claimRequest", id: ids[0] });
     await action(
       warehouse,
       {
-        type: "changeRequestStatus",
+        type: "preparePick",
         id: ids[0],
-        status: "Entregue",
         qrCode: "ERRADO",
+        confirmedQuantity: 2,
       },
       422,
     );
+    const prepared = await action(warehouse, {
+      type: "preparePick",
+      id: ids[0],
+      qrCode: code,
+      confirmedQuantity: 2,
+    });
+    await action(warehouse, {
+      type: "confirmPick",
+      id: ids[0],
+      qrCode: code,
+      confirmedQuantity: 2,
+      confirmation: prepared.confirmation,
+    });
     await action(warehouse, {
       type: "changeRequestStatus",
       id: ids[0],
@@ -215,10 +238,25 @@ test("Neon: perfis, operações e concorrência de saldo", async ({
       qrCode: code,
       reason: "Reposicao local",
     });
-    await action(warehouse, { type: "dispatchTransfer", id: transfer.id, qrCode: code, confirmedQuantity: 1, reason: "Coleta conferida" });
-    const [inTransit] = await pool.query<RowDataPacket[]>("SELECT (SELECT SUM(i.quantity) FROM inventory i WHERE i.part_id=p.id)+(SELECT COALESCE(SUM(t.quantity),0) FROM stock_transfers t WHERE t.part_id=p.id AND t.status='Em trânsito') AS total FROM parts p WHERE p.code=?", [code]);
+    await action(warehouse, {
+      type: "dispatchTransfer",
+      id: transfer.id,
+      qrCode: code,
+      confirmedQuantity: 1,
+      reason: "Coleta conferida",
+    });
+    const [inTransit] = await pool.query<RowDataPacket[]>(
+      "SELECT (SELECT SUM(i.quantity) FROM inventory i WHERE i.part_id=p.id)+(SELECT COALESCE(SUM(t.quantity),0) FROM stock_transfers t WHERE t.part_id=p.id AND t.status='Em trânsito') AS total FROM parts p WHERE p.code=?",
+      [code],
+    );
     expect(Number(inTransit[0].total)).toBe(9);
-    await action(warehouse, { type: "receiveTransfer", id: transfer.id, qrCode: code, confirmedQuantity: 1, reason: "Entrega conferida" });
+    await action(warehouse, {
+      type: "receiveTransfer",
+      id: transfer.id,
+      qrCode: code,
+      confirmedQuantity: 1,
+      reason: "Entrega conferida",
+    });
     await action(warehouse, { type: "updatePrice", code, price: 12.34 });
     const responses = await Promise.all(
       [1, 2].map(() =>
@@ -226,7 +264,14 @@ test("Neon: perfis, operações e concorrência de saldo", async ({
           data: {
             type: "createRequests",
             requestKey: randomUUID(),
-            entries: [{ code, quantity: 6, priority: "Leve" }],
+            entries: [
+              {
+                code,
+                quantity: 6,
+                priority: "Leve",
+                justification: "Atividade técnica de teste",
+              },
+            ],
           },
         }),
       ),

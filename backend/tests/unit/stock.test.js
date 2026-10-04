@@ -25,8 +25,8 @@ describe('REST delega ao fluxo oficial (contrato; não prova persistência)', ()
   test('saída exige documento aprovado e conferência de código', async () => {
     await expect(service.changeQuantity({ ...input, type: 'OUT' })).rejects.toMatchObject({ statusCode: 422 });
     expect(executeWorkspaceAction).not.toHaveBeenCalled();
-    await service.changeQuantity({ ...input, type: 'OUT', request_id: 7, qr_code: 'P1' });
-    expect(executeWorkspaceAction).toHaveBeenCalledWith(actor, { type: 'changeRequestStatus', id: 7, status: 'Entregue', qrCode: 'P1', confirmedQuantity: 3, requestKey: input.requestKey });
+    await service.changeQuantity({ ...input, type: 'OUT', request_id: 7, qr_code: 'P1', confirmation: 'confirmed-token' });
+    expect(executeWorkspaceAction).toHaveBeenCalledWith(actor, { type: 'confirmPick', id: 7, code: 'P1', sourceWarehouseId: 1, qrCode: 'P1', confirmedQuantity: 3, confirmation: 'confirmed-token', requestKey: input.requestKey });
   });
   test('erros de saldo e permissão são preservados', async () => {
     executeWorkspaceAction.mockRejectedValue(new ActionError('Saldo insuficiente', 409));

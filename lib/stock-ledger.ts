@@ -85,7 +85,7 @@ export async function partLock(c: PoolConnection, code: unknown, id?: unknown) {
   const p = await first(
     c,
     `SELECT * FROM parts WHERE ${id ? "id" : "code"}=? AND active=TRUE FOR UPDATE`,
-    [id ?? text(code, 64)],
+    [id ?? text(code, 64).toUpperCase()],
   );
   if (!p) throw new ActionError("Peça não encontrada.", 404);
   return p;

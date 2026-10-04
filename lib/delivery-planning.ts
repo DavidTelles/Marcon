@@ -5,6 +5,7 @@ import { ActionError, demand, integer, text } from "./permissions";
 import { first, rows, audit } from "./stock-ledger";
 import {
   graphProblems,
+  deliveryTargets,
   planStops,
   shortestPath,
   type FacilityGraph,
@@ -26,7 +27,7 @@ export type DeliveryPlan = {
 export async function storageRoute(c: PoolConnection, part: number, source: number | string, destination: number, options: RouteOptions = {}) {
   const parameters: RouteOptions = { objective: options.objective ?? "distance", transport: options.transport ?? "walking" };
   if (!["distance", "time"].includes(parameters.objective!) || !Object.hasOwn(transports, parameters.transport!)) throw new ActionError("Objetivo ou transporte inválido.");
-  const map = await first(c, "SELECT id,graph FROM map_versions WHERE status='Publicada' LOCK IN SHARE MODE");
+  const map = await first(c, "SELECT id,graph FROM map_versions WHERE status='Publicada' FOR SHARE");
   const graph: FacilityGraph | null = map ? typeof map.graph === "string" ? JSON.parse(map.graph) : map.graph : null;
   if (!graph?.reviewed || graphProblems(graph).length) return { mapVersion: null, route: null, reason: "Publique uma planta revisada e mapeie os locais reais de retirada e entrega." };
   const locations = await rows(c, "SELECT warehouse_id,map_node_id FROM inventory WHERE part_id=? AND warehouse_id IN (?,?)", [part, typeof source === "number" ? source : destination, destination]);
@@ -68,7 +69,7 @@ export async function recordDeliveryPlan(
   const r = await first(c, "SELECT * FROM requests WHERE id=? FOR UPDATE", [
     id,
   ]);
-  if (!r || r.status !== "Aprovada")
+  if (!r || !["Aprovada", "Em separação"].includes(String(r.status)))
     throw new ActionError(
       "Rota disponível somente para requisição aprovada.",
       409,
@@ -83,7 +84,7 @@ export async function recordDeliveryPlan(
   // Publication updates lock this same row. A departure uses one committed map version.
   const map = await first(
     c,
-    "SELECT id,graph FROM map_versions WHERE status='Publicada' LOCK IN SHARE MODE",
+    "SELECT id,graph FROM map_versions WHERE status='Publicada' FOR SHARE",
   );
   const graph: FacilityGraph | null = map
     ? typeof map.graph === "string"
@@ -128,10 +129,7 @@ export async function recordDeliveryPlan(
           ? graph.nodes.find((n) => n.id === v.map_node_id && n.warehouseId === Number(v.warehouse_id))?.id
           : graph.nodes.find((n) => n.warehouseId === Number(v.warehouse_id))?.id,
     );
-    const end =
-      graph.nodes.find(
-        (n) => n.blockId === Number(r.block_id) && n.kind === "delivery",
-      ) ?? graph.nodes.find((n) => n.blockId === Number(r.block_id));
+    const ends = deliveryTargets(graph, Number(r.block_id), String(r.sector));
     if (
       destinations.some(
         (d) => !graph.nodes.some((n) => n.id === d && n.kind === "delivery"),
@@ -144,11 +142,11 @@ export async function recordDeliveryPlan(
     if (start && !pickups.includes(start)) throw new ActionError("Escolha uma origem de retirada reservada nesta requisição.", 409);
     reason =
       "Rota indisponível: falta ligação transitável ou vínculo de origem/destino. Operação manual.";
-    if (pickups.length && pickups.every(Boolean) && end) {
+    if (pickups.length && pickups.every(Boolean) && ends.length) {
       const collection = planStops(graph, start, pickups as string[], parameters);
       const delivery =
         collection &&
-        planStops(graph, collection.nodes.at(-1)!, destinations as string[], { ...parameters, final: end.id });
+        ends.map((end) => planStops(graph, collection.nodes.at(-1)!, destinations as string[], { ...parameters, final: end.id })).filter((path) => path !== null).sort((a, b) => a.cost - b.cost)[0];
       if (collection && delivery) {
         route = {
           ...delivery,
@@ -180,7 +178,7 @@ export async function recordDeliveryPlan(
     destinations,
     start,
   };
-  if (a.atDelivery === true) payload.reason += " Cálculo registrado na confirmação da entrega; horário de saída não informado.";
+  if (a.atDelivery === true) payload.reason += " Cálculo registrado na retirada conferida; a confirmação da entrega no bloco ocorre em etapa posterior.";
   const event = depart ? "Saída" : previous ? "Recalculada" : "Planejada";
   const [saved] = await c.execute<ResultSetHeader>(
     "INSERT INTO delivery_route_history(request_id,map_version_id,actor_id,event,payload) VALUES(?,?,?,?,?)",

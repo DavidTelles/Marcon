@@ -13,7 +13,7 @@ async function storageRoute(c, part, source, destination, options = {}) {
     const parameters = { objective: options.objective ?? "distance", transport: options.transport ?? "walking" };
     if (!["distance", "time"].includes(parameters.objective) || !Object.hasOwn(routing_1.transports, parameters.transport))
         throw new permissions_1.ActionError("Objetivo ou transporte inválido.");
-    const map = await (0, stock_ledger_1.first)(c, "SELECT id,graph FROM map_versions WHERE status='Publicada' LOCK IN SHARE MODE");
+    const map = await (0, stock_ledger_1.first)(c, "SELECT id,graph FROM map_versions WHERE status='Publicada' FOR SHARE");
     const graph = map ? typeof map.graph === "string" ? JSON.parse(map.graph) : map.graph : null;
     if (!graph?.reviewed || (0, routing_1.graphProblems)(graph).length)
         return { mapVersion: null, route: null, reason: "Publique uma planta revisada e mapeie os locais reais de retirada e entrega." };
@@ -46,14 +46,14 @@ async function recordDeliveryPlan(c, user, a, id) {
     const r = await (0, stock_ledger_1.first)(c, "SELECT * FROM requests WHERE id=? FOR UPDATE", [
         id,
     ]);
-    if (!r || r.status !== "Aprovada")
+    if (!r || !["Aprovada", "Em separação"].includes(String(r.status)))
         throw new permissions_1.ActionError("Rota disponível somente para requisição aprovada.", 409);
     const previous = await (0, stock_ledger_1.first)(c, "SELECT * FROM delivery_route_history WHERE request_id=? ORDER BY id DESC LIMIT 1 FOR UPDATE", [id]);
     const departed = await (0, stock_ledger_1.first)(c, "SELECT id FROM delivery_route_history WHERE request_id=? AND event='Saída' LIMIT 1", [id]);
     if (departed && a.action === "departDelivery")
         throw new permissions_1.ActionError("Saída já registrada. Histórico preservado.", 409);
     // Publication updates lock this same row. A departure uses one committed map version.
-    const map = await (0, stock_ledger_1.first)(c, "SELECT id,graph FROM map_versions WHERE status='Publicada' LOCK IN SHARE MODE");
+    const map = await (0, stock_ledger_1.first)(c, "SELECT id,graph FROM map_versions WHERE status='Publicada' FOR SHARE");
     const graph = map
         ? typeof map.graph === "string"
             ? JSON.parse(map.graph)
@@ -127,7 +127,7 @@ async function recordDeliveryPlan(c, user, a, id) {
         start,
     };
     if (a.atDelivery === true)
-        payload.reason += " Cálculo registrado na confirmação da entrega; horário de saída não informado.";
+        payload.reason += " Cálculo registrado na retirada conferida; a confirmação da entrega no bloco ocorre em etapa posterior.";
     const event = depart ? "Saída" : previous ? "Recalculada" : "Planejada";
     const [saved] = await c.execute("INSERT INTO delivery_route_history(request_id,map_version_id,actor_id,event,payload) VALUES(?,?,?,?,?)", [id, map?.id ?? null, actor.id, event, JSON.stringify(payload)]);
     await (0, stock_ledger_1.audit)(c, Number(actor.id), "request", id, "route", {

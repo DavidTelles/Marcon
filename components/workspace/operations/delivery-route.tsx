@@ -104,7 +104,7 @@ export function DeliveryRoute({ request }: { request: Request }) {
         O cálculo usa a versão publicada e não baixa estoque. A saída recalcula
         o percurso com os bloqueios atuais e preserva os cálculos anteriores.
       </p>
-      {request.status === "Aprovada" && (
+      {["Aprovada", "Em separação"].includes(request.status) && (
         <>
         <div className="ops-form">
           <label>Objetivo<select value={objective} onChange={(e) => { setObjective(e.target.value as RouteOptions["objective"]); setData(null); }}><option value="distance">Menor distância</option><option value="time">Menor tempo cadastrado</option></select></label>

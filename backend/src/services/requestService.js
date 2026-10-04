@@ -12,6 +12,7 @@ function wrap(error) {
 }
 
 function assertCanView(actor, request) {
+  if (request.status === 'Entregue') return;
   if (actor.role === 'admin' || actor.role === 'almoxarifado') return;
   if (actor.role === 'lider') {
     if (request.block_name !== actor.block) throw new AppError(403, 'Líder só visualiza requisições do próprio bloco');
@@ -42,6 +43,7 @@ async function createRequest(actor, payload) {
     entries.push({
       code: product.code,
       quantity: Number(item.quantity),
+      requestedUnit: item.requestedUnit || payload.requestedUnit || 'piece',
       priority: urgency,
       justification: payload.description || payload.justification || undefined
     });
@@ -90,16 +92,17 @@ async function transition(actor, id, nextStatus, notes, extra = {}) {
   try {
     if (nextStatus === REQUEST_STATUS.ANALYZING) {
       await executeWorkspaceAction(actor, { type: 'changeRequestStatus', id: Number(id), status: 'Em análise' });
-    } else if (nextStatus === REQUEST_STATUS.APPROVED || nextStatus === REQUEST_STATUS.SEPARATING) {
-      // Separação física acontece na aprovação (reserva automática de saldo).
+    } else if (nextStatus === REQUEST_STATUS.SEPARATING) {
+      await executeWorkspaceAction(actor, { type: 'claimRequest', id: Number(id) });
+    } else if (nextStatus === REQUEST_STATUS.APPROVED) {
+      // A aprovação reserva saldo; a retirada conferida realiza a baixa.
       await executeWorkspaceAction(actor, { type: 'changeRequestStatus', id: Number(id), status: 'Aprovada' });
     } else if (nextStatus === REQUEST_STATUS.DELIVERED) {
       await executeWorkspaceAction(actor, {
         type: 'changeRequestStatus',
         id: Number(id),
         status: 'Entregue',
-        qrCode: extra.qr_code || extra.qrCode,
-        confirmedQuantity: Number(extra.confirmed_quantity || extra.confirmedQuantity || request.quantity)
+        requestKey: extra.requestKey
       });
     } else if (nextStatus === REQUEST_STATUS.RECEIVED) {
       await executeWorkspaceAction(actor, { type: 'confirmReceipt', id: Number(id) });
@@ -107,7 +110,7 @@ async function transition(actor, id, nextStatus, notes, extra = {}) {
       await executeWorkspaceAction(actor, {
         type: 'changeRequestStatus',
         id: Number(id),
-        status: 'Cancelada',
+        status: 'Rejeitada',
         reason: notes || 'Requisição rejeitada'
       });
     } else if (nextStatus === REQUEST_STATUS.CANCELLED) {
@@ -162,4 +165,19 @@ async function returnItems(actor, id, returns) {
   return requestRepository.findById(id);
 }
 
-module.exports = { createRequest, list, getById, edit, remove, transition, returnItems };
+async function pickup(actor, id, payload, confirm = false) {
+  await getById(actor, id);
+  try {
+    return await executeWorkspaceAction(actor, {
+      type: confirm ? 'confirmPick' : 'preparePick', id: Number(id),
+      qrCode: payload.qr_code, confirmedQuantity: Number(payload.confirmed_quantity),
+      confirmation: payload.confirmation, requestKey: payload.requestKey
+    });
+  } catch (error) { throw wrap(error); }
+}
+async function history(actor, filters = {}) {
+  void actor;
+  return requestRepository.list({ ...filters, requester_id: undefined, status: 'Entregue', statuses: undefined });
+}
+
+module.exports = { createRequest, list, history, getById, edit, remove, transition, returnItems, pickup };

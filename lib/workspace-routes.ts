@@ -10,7 +10,8 @@ export type Page =
   | "devolucoes"
   | "compra"
   | "recomendacoes"
-  | "nova";
+  | "nova"
+  | "materiais";
 export const roleLanding: Record<Role, string> = {
   admin: "/admin/dashboard",
   lider: "/department-head/dashboard",
@@ -28,6 +29,7 @@ export const pagePaths: Record<Role, Partial<Record<Page, string>>> = {
     historico: "/admin/history",
   },
   lider: {
+    materiais: "/department-head/materials",
     dashboard: "/department-head/dashboard",
     solicitacoes: "/department-head/requests",
     historico: "/department-head/history",

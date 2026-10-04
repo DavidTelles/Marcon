@@ -5,6 +5,7 @@ import { can } from "@/lib/permissions";
 import { useDemoStore } from "../demo-store";
 import { CodeScanner } from "./code-scanner";
 import { DeliveryRoute } from "./delivery-route";
+import styles from "../screens/workflow.module.css";
 export function RequestOperations({
   id,
   role,
@@ -18,8 +19,9 @@ export function RequestOperations({
   beforeAction?: () => Promise<boolean>;
   onComplete?: () => void;
 }) {
-  const { requests, runAction } = useDemoStore(),
-    r = request ?? requests.find((r) => r.id === id);
+  const { requests, runAction, accountId } = useDemoStore(),
+    r = requests.find((r) => r.id === id) ?? request;
+  const [confirmation, setConfirmation] = useState("");
   const [quantity, setQuantity] = useState(""),
     [reason, setReason] = useState(""),
     [code, setCode] = useState(""),
@@ -31,9 +33,10 @@ export function RequestOperations({
     setBusy(true);
     setMessage("");
     try {
-      await runAction({ type, id, ...extra });
-      onComplete?.();
+      const result = await runAction({ type, id, ...extra });
+      if (type !== "preparePick") onComplete?.();
       setMessage("Operação confirmada.");
+      return result;
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "Falha na operação.");
     } finally {
@@ -47,13 +50,42 @@ export function RequestOperations({
         Setor: {r.sector || "Não informado"}
         {r.batchId && <> · Carrinho {r.batchId.slice(0, 8)}</>}
       </p>
-      {r.requestedQuantity !== undefined && <p>Solicitado: {r.requestedQuantity} · Aprovado: {r.approvedQuantity ?? 0} · Entregue / baixado: {r.deliveredQuantity ?? 0}. A aprovação reserva saldo; o atendimento integral registra a baixa.</p>}
+      {r.requestedQuantity !== undefined && (
+        <p>
+          Solicitado: {r.requestedQuantity} · Aprovado:{" "}
+          {r.approvedQuantity ?? 0} · Retirado do estoque:{" "}
+          {r.deliveredQuantity ?? 0}. A entrega no bloco encerra o pedido.
+        </p>
+      )}
+      {r.anomaly?.unusual && (
+        <div className={styles.anomaly} role="note">
+          <strong>Pedido fora do padrão do setor/bloco</strong>
+          {r.anomaly.reasons.map((reason) => (
+            <p key={reason}>{reason}</p>
+          ))}
+          <p>
+            <strong>Justificativa do solicitante:</strong>{" "}
+            {r.justification || "Não registrada no pedido legado."}
+          </p>
+        </div>
+      )}
+      {!r.anomaly?.unusual && r.justification && (
+        <p>
+          <strong>Justificativa:</strong> {r.justification}
+        </p>
+      )}
       {r.allocations?.map((a) => (
         <p key={a.warehouse}>
-          Separar {a.quantity} em {a.warehouse} · {a.location}
+          {r.pickedAt ? "Retirado" : "Separar"} {a.quantity} em {a.warehouse} ·{" "}
+          {a.location}
         </p>
       ))}
-      {r.cancellationReason && <p>Cancelamento: {r.cancellationReason}</p>}
+      {r.cancellationReason && (
+        <p>
+          {r.status === "Rejeitada" ? "Motivo da rejeição" : "Cancelamento"}:{" "}
+          {r.cancellationReason}
+        </p>
+      )}
       {role === "funcionario" &&
         ["Pendente", "Em análise"].includes(r.status) && (
           <>
@@ -66,12 +98,23 @@ export function RequestOperations({
                 onChange={(e) => setQuantity(e.target.value)}
               />
             </label>
+            <label>
+              Justificativa da alteração (obrigatória para pedidos fora do
+              padrão)
+              <textarea
+                value={reason}
+                onChange={(event) => setReason(event.target.value)}
+              />
+            </label>
             <div className="head-actions">
               <button
                 className="button primary"
                 disabled={busy || !quantity}
                 onClick={() =>
-                  void action("editRequest", { quantity: Number(quantity) })
+                  void action("editRequest", {
+                    quantity: Number(quantity),
+                    justification: reason.trim() || r.justification,
+                  })
                 }
               >
                 Salvar quantidade
@@ -123,6 +166,42 @@ export function RequestOperations({
           </p>
         </>
       )}
+      {can(role, "approve") && r.status === "Pendente" && (
+        <button
+          className="button secondary"
+          disabled={busy}
+          onClick={() =>
+            void action("changeRequestStatus", { status: "Em análise" })
+          }
+        >
+          Iniciar análise
+        </button>
+      )}
+      {can(role, "approve") &&
+        ["Pendente", "Em análise"].includes(r.status) && (
+          <>
+            <label>
+              Motivo da rejeição
+              <textarea
+                value={reason}
+                onChange={(event) => setReason(event.target.value)}
+                minLength={3}
+              />
+            </label>
+            <button
+              className="button secondary"
+              disabled={busy || reason.trim().length < 3}
+              onClick={() =>
+                void action("changeRequestStatus", {
+                  status: "Rejeitada",
+                  reason,
+                })
+              }
+            >
+              Rejeitar solicitação
+            </button>
+          </>
+        )}
       {can(role, "approve") &&
         ["Pendente", "Em análise", "Aprovada"].includes(r.status) && (
           <button
@@ -138,12 +217,7 @@ export function RequestOperations({
           </button>
         )}
       {(can(role, "approve") || can(role, "stock")) &&
-        [
-          "Pendente",
-          "Em análise",
-          "Aprovada",
-          "Cancelamento solicitado",
-        ].includes(r.status) && (
+        ["Aprovada", "Cancelamento solicitado"].includes(r.status) && (
           <button
             className="button secondary"
             disabled={busy}
@@ -158,40 +232,92 @@ export function RequestOperations({
           </button>
         )}
       {can(role, "stock") && r.status === "Aprovada" && (
-        <>
-          <CodeScanner onCode={setCode} />
-          <label>
-            Código conferido
-            <input value={code} onChange={(e) => setCode(e.target.value)} />
-          </label>
-          <label>
-            Quantidade separada
-            <input
-              type="number"
-              min="1"
-              value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
+        <button
+          className="button primary"
+          disabled={busy}
+          onClick={() => void action("claimRequest")}
+        >
+          Pegar para entrega
+        </button>
+      )}
+      {can(role, "stock") &&
+        r.status === "Em separação" &&
+        r.fulfilledBy === accountId && (
+          <>
+            <CodeScanner
+              onCode={(value) => {
+                setCode(value);
+                setConfirmation("");
+              }}
             />
-          </label>
+            <label>
+              Código conferido
+              <input
+                value={code}
+                onChange={(e) => {
+                  setCode(e.target.value);
+                  setConfirmation("");
+                }}
+              />
+            </label>
+            <label>
+              Quantidade separada
+              <input
+                type="number"
+                min="1"
+                value={quantity}
+                onChange={(e) => {
+                  setQuantity(e.target.value);
+                  setConfirmation("");
+                }}
+              />
+            </label>
+            <button
+              className="button primary"
+              disabled={busy || !code || Number(quantity) !== r.quantity}
+              onClick={() =>
+                void action(confirmation ? "confirmPick" : "preparePick", {
+                  qrCode: code,
+                  confirmedQuantity: Number(quantity),
+                  confirmation,
+                }).then((result) => {
+                  if (result?.confirmation)
+                    setConfirmation(String(result.confirmation));
+                  else setConfirmation("");
+                })
+              }
+            >
+              {confirmation
+                ? "Confirmar novamente e baixar estoque"
+                : "Confirmar retirada"}
+            </button>
+          </>
+        )}
+      {can(role, "stock") &&
+        r.status === "Em entrega" &&
+        r.fulfilledBy === accountId && (
           <button
             className="button primary"
-            disabled={busy || !code || Number(quantity) !== r.quantity}
+            disabled={busy}
             onClick={() =>
-              void action("changeRequestStatus", {
-                status: "Entregue",
-                qrCode: code,
-                confirmedQuantity: Number(quantity),
-              })
+              void action("changeRequestStatus", { status: "Entregue" })
             }
           >
-            Confirmar entrega e baixa
+            Confirmar entrega
           </button>
-        </>
-      )}
+        )}
+      {r.fulfilledBy &&
+        r.fulfilledBy !== accountId &&
+        ["Em separação", "Em entrega"].includes(r.status) && (
+          <p>
+            Atendimento assumido pelo almoxarife de matrícula {r.fulfilledBy}.
+          </p>
+        )}
       {message && <p role="status">{message}</p>}
-      {can(role, "stock") && ["Aprovada", "Entregue"].includes(r.status) && (
-        <DeliveryRoute key={r.id} request={r} />
-      )}
+      {can(role, "stock") &&
+        ["Aprovada", "Em separação", "Em entrega", "Entregue"].includes(
+          r.status,
+        ) && <DeliveryRoute key={r.id} request={r} />}
     </section>
   );
 }

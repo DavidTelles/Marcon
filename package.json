@@ -20,6 +20,7 @@
     "seed": "node scripts/db-seed.mjs",
     "dev:api": "npm --prefix backend run dev",
     "test:api": "npm --prefix backend test",
+    "test:login-routes": "node scripts/test-login-routes.mjs",
     "format": "prettier --write app/login app/globals.css tests playwright.config.ts",
     "format:check": "prettier --check app/login app/globals.css tests playwright.config.ts"
   },

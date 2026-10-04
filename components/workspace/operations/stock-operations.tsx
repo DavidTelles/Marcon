@@ -22,18 +22,24 @@ export function StockOperations() {
         type: mode,
         code: d.get("part"),
         warehouse: d.get("warehouse"),
-        from: d.get("warehouse"),
-        to: d.get("to"),
         quantity: Number(d.get("quantity")),
         qrCode: code,
         reason: d.get("reason"),
         dueDate: d.get("dueDate"),
         supplier: d.get("supplier"),
         reference: d.get("reference"),
-        ...(mode === "transfer" ? { objective: d.get("objective"), transport: d.get("transport") } : {}),
+        ...(mode === "transfer"
+          ? {
+              from: d.get("warehouse"),
+              to: d.get("to"),
+              objective: d.get("objective"),
+              transport: d.get("transport"),
+            }
+          : {}),
       };
       const signature = JSON.stringify(payload);
-      if (submission.current?.signature !== signature) submission.current = { signature, key: crypto.randomUUID() };
+      if (submission.current?.signature !== signature)
+        submission.current = { signature, key: crypto.randomUUID() };
       await runAction({ ...payload, requestKey: submission.current.key });
       setMessage("Operação registrada no Neon.");
       submission.current = null;
@@ -61,6 +67,7 @@ export function StockOperations() {
           Operação
           <select value={mode} onChange={(e) => setMode(e.target.value)}>
             <option value="stockEntry">Entrada conferida</option>
+            <option value="replenishStock">Reposição de estoque</option>
             <option value="adjustStock">Ajustar saldo físico</option>
             <option value="transfer">
               Solicitar transferência entre locais
@@ -81,7 +88,9 @@ export function StockOperations() {
           </select>
         </label>
         <label>
-          Almoxarifado / origem
+          {mode === "transfer"
+            ? "Almoxarifado de origem"
+            : "Almoxarifado de destino"}
           <select name="warehouse">
             {warehouseOptions.map((w) => (
               <option key={w}>{w}</option>
@@ -112,10 +121,29 @@ export function StockOperations() {
           Justificativa
           <input name="reason" required minLength={3} maxLength={1000} />
         </label>
-        {mode === "transfer" && (
+        {["transfer", "replenishStock", "stockEntry"].includes(mode) && (
           <>
-            <label>Objetivo da rota<select name="objective"><option value="distance">Menor distância</option><option value="time">Menor tempo cadastrado</option></select></label>
-            <label>Transporte<select name="transport">{Object.entries(transports).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+            {mode === "transfer" && (
+              <>
+                <label>
+                  Objetivo da rota
+                  <select name="objective">
+                    <option value="distance">Menor distância</option>
+                    <option value="time">Menor tempo cadastrado</option>
+                  </select>
+                </label>
+                <label>
+                  Transporte
+                  <select name="transport">
+                    {Object.entries(transports).map(([key, label]) => (
+                      <option key={key} value={key}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </>
+            )}
             <CodeScanner onCode={setCode} />
             <label>
               Código lido

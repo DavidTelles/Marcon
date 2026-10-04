@@ -1,4 +1,4 @@
-import { shortestPath, type FacilityGraph, type RouteOptions } from "./routing";
+import { deliveryTargets, shortestPath, type FacilityGraph, type RouteOptions } from "./routing";
 
 // Cost follows the existing graph metric and its blocked edges, never straight lines.
 export function warehouseDistance(
@@ -27,11 +27,10 @@ export function accessibleWarehousesForBlock(
   blockId: number | null,
   warehouseIds: number[],
   bindings: Map<number, string | undefined> = new Map(),
+  sector?: string,
 ) {
   if (!graph || blockId === null) return [];
-  const targets = graph.nodes.filter(
-    (n) => n.blockId === blockId && ["block", "sector", "production_line", "delivery", "replenishment"].includes(n.kind),
-  );
+  const targets = deliveryTargets(graph, blockId, sector);
   const ranked = warehouseIds
     .map((id) => ({
       id,

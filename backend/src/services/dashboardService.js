@@ -19,7 +19,7 @@ async function general() {
 async function byWarehouse() {
   return query(
     `SELECT w.id, w.code, w.name,p.unit,
-            CASE WHEN w.is_central THEN 'CENTRAL' ELSE 'AUXILIARY' END AS type,
+            CASE WHEN w.is_central = 1 THEN 'CENTRAL' ELSE 'AUXILIARY' END AS type,
             COALESCE(SUM(i.quantity), 0) AS quantity
      FROM warehouses w
      LEFT JOIN inventory i ON i.warehouse_id = w.id

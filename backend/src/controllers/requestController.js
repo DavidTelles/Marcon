@@ -20,13 +20,12 @@ const reject = asyncHandler(async (req, res) => {
   success(res, 200, await requestService.transition(req.user, req.params.id, REQUEST_STATUS.REJECTED, req.body?.notes));
 });
 const separate = asyncHandler(async (req, res) => {
-  // Na versão integrada a separação (reserva de saldo) acontece na aprovação.
+  // Assumir atendimento não altera o saldo físico.
   success(res, 200, await requestService.transition(req.user, req.params.id, REQUEST_STATUS.SEPARATING, req.body?.notes));
 });
 const deliver = asyncHandler(async (req, res) => {
   success(res, 200, await requestService.transition(req.user, req.params.id, REQUEST_STATUS.DELIVERED, req.body?.notes, {
-    qr_code: req.body?.qr_code,
-    confirmed_quantity: req.body?.confirmed_quantity
+    requestKey: req.body?.requestKey
   }));
 });
 const receive = asyncHandler(async (req, res) => {
@@ -38,6 +37,10 @@ const cancel = asyncHandler(async (req, res) => {
 const returnItems = asyncHandler(async (req, res) => {
   success(res, 200, await requestService.returnItems(req.user, req.params.id, req.body?.items || []));
 });
+const preparePickup = asyncHandler(async (req, res) => success(res, 200, await requestService.pickup(req.user, req.params.id, req.body)));
+const confirmPickup = asyncHandler(async (req, res) => success(res, 200, await requestService.pickup(req.user, req.params.id, req.body, true)));
+const history = asyncHandler(async (req, res) => success(res, 200, await requestService.history(req.user, req.query)));
+const open = asyncHandler(async (req, res) => success(res, 200, await requestService.list(req.user, { ...req.query, status: undefined, statuses: ['Aprovada', 'Em separação', 'Em entrega', 'Cancelamento solicitado'] })));
 
 module.exports = {
   create,
@@ -52,5 +55,9 @@ module.exports = {
   deliver,
   receive,
   cancel,
-  returnItems
+  returnItems,
+  preparePickup,
+  confirmPickup,
+  history,
+  open
 };

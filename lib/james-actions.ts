@@ -18,8 +18,14 @@ import {
   type JamesReportContext,
 } from "./james-reports";
 import { pathFor } from "./workspace-routes";
+import { requestAnomaly } from "./request-policy";
 import { choiceIndex } from "./james-voice";
-import { catalogMatches, narrowCandidates, rankCatalogCandidates, candidateQuestion } from "./james-catalog";
+import {
+  catalogMatches,
+  narrowCandidates,
+  rankCatalogCandidates,
+  candidateQuestion,
+} from "./james-catalog";
 import { explicitOperation } from "./james-intents";
 import {
   previewJamesOperation,
@@ -384,9 +390,13 @@ export async function converseJames(
             }),
           };
         }
-        let selected = saved.continuation.hypothesisCode && /^(?:sim|isso|esse mesmo)[.!]?$/i.test(message.trim())
-          ? saved.continuation.hypothesisCode
-          : ordinal === null ? message.trim() : saved.continuation.choices[ordinal];
+        let selected =
+          saved.continuation.hypothesisCode &&
+          /^(?:sim|isso|esse mesmo)[.!]?$/i.test(message.trim())
+            ? saved.continuation.hypothesisCode
+            : ordinal === null
+              ? message.trim()
+              : saved.continuation.choices[ordinal];
         if (!allCodes.includes(selected)) {
           let narrowed = narrowCandidates(
             allCodes.map((code) => byCode.get(code)!).filter(Boolean),
@@ -397,24 +407,50 @@ export async function converseJames(
               allCodes.map((code) => byCode.get(code)!).filter(Boolean),
               { query: message },
             ).map((result) => result.part.code);
-          const spokenMeasure = normalize(message).match(/\b(seis|oito|dez|doze)\b/);
-          const numberWord: Record<string, string> = { seis: "6", oito: "8", dez: "10", doze: "12" };
+          const spokenMeasure = normalize(message).match(
+            /\b(seis|oito|dez|doze)\b/,
+          );
+          const numberWord: Record<string, string> = {
+            seis: "6",
+            oito: "8",
+            dez: "10",
+            doze: "12",
+          };
           const plausible = spokenMeasure
             ? narrowed.filter((code) => {
                 const part = byCode.get(code)!;
-                const values = normalize(`${part.name} ${part.dimensions || ""}`);
-                return new RegExp(`\\bm${numberWord[spokenMeasure[1]]}\\b|\\b${numberWord[spokenMeasure[1]]}\\s*mm\\b`).test(values);
+                const values = normalize(
+                  `${part.name} ${part.dimensions || ""}`,
+                );
+                return new RegExp(
+                  `\\bm${numberWord[spokenMeasure[1]]}\\b|\\b${numberWord[spokenMeasure[1]]}\\s*mm\\b`,
+                ).test(values);
               })
             : [];
-          if (plausible.length === 1 && spokenMeasure && !/\bm\d+\b/i.test(message)) {
+          if (
+            plausible.length === 1 &&
+            spokenMeasure &&
+            !/\bm\d+\b/i.test(message)
+          ) {
             const part = byCode.get(plausible[0])!;
-            const thread = normalize(`${part.name} ${part.dimensions || ""}`).match(/\b(m\d+)\b/)?.[1]?.toUpperCase();
+            const thread = normalize(`${part.name} ${part.dimensions || ""}`)
+              .match(/\b(m\d+)\b/)?.[1]
+              ?.toUpperCase();
             return {
               reply: `Você disse "${spokenMeasure[1]}". ${part.name}${thread ? ` tem rosca ${thread}` : ""}. É essa medida? Diga sim ou informe outra característica.`,
               cart,
-              draft: draft(saved.continuation.steps[saved.continuation.index], user.block, "confirmar medida"),
+              draft: draft(
+                saved.continuation.steps[saved.continuation.index],
+                user.block,
+                "confirmar medida",
+              ),
               choices: [{ code: part.code, name: part.name }],
-              clarificationToken: ticket(user, cart, { ...saved.continuation, choices: [part.code], candidates: [part.code], hypothesisCode: part.code }),
+              clarificationToken: ticket(user, cart, {
+                ...saved.continuation,
+                choices: [part.code],
+                candidates: [part.code],
+                hypothesisCode: part.code,
+              }),
             };
           }
           if (narrowed.length !== 1) {
@@ -610,16 +646,37 @@ export async function converseJames(
                       history,
                     },
                     signal,
-                ))));
-  if (steps.some((step) => /\b(?:mesmo que pedi|igual ao ultimo|mesmo de ontem|pedi ontem)\b/.test(normalize(step.query || "")))) {
+                  ))));
+  if (
+    steps.some((step) =>
+      /\b(?:mesmo que pedi|igual ao ultimo|mesmo de ontem|pedi ontem)\b/.test(
+        normalize(step.query || ""),
+      ),
+    )
+  ) {
     demand(user, "request");
     const { requests } = await workspaceSnapshot(user);
-    const yesterday = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo" }).format(new Date(Date.now() - 86_400_000));
-    const own = requests.filter((request) => request.requesterId === user.id && (!/ontem/.test(simple) || request.date === yesterday));
+    const yesterday = new Intl.DateTimeFormat("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+    }).format(new Date(Date.now() - 86_400_000));
+    const own = requests.filter(
+      (request) =>
+        request.requesterId === user.id &&
+        (!/ontem/.test(simple) || request.date === yesterday),
+    );
     const previous = own[0];
-    if (!previous) return { reply: "Não encontrei um pedido anterior seu nesse período. Descreva a peça ou procure no histórico.", cart };
+    if (!previous)
+      return {
+        reply:
+          "Não encontrei um pedido anterior seu nesse período. Descreva a peça ou procure no histórico.",
+        cart,
+      };
     for (const step of steps) {
-      if (/\b(?:mesmo que pedi|igual ao ultimo|mesmo de ontem|pedi ontem)\b/.test(normalize(step.query || "")))
+      if (
+        /\b(?:mesmo que pedi|igual ao ultimo|mesmo de ontem|pedi ontem)\b/.test(
+          normalize(step.query || ""),
+        )
+      )
         step.query = previous.code;
     }
   }
@@ -696,10 +753,20 @@ export async function converseJames(
         dimensions: step.dimensions,
         appearance: step.appearance,
       });
-      const exact = stock.filter((part) => [part.code, part.name].some((value) => normalize(value) === normalize(step.query || "")));
+      const exact = stock.filter((part) =>
+        [part.code, part.name].some(
+          (value) => normalize(value) === normalize(step.query || ""),
+        ),
+      );
       const compatible = new Set(ranked.map((result) => result.part.code));
       const verifiedExact = exact.filter((part) => compatible.has(part.code));
-      let matches = verifiedExact.length ? verifiedExact : ranked.length ? ranked.map((result) => result.part) : exact.length ? [] : catalogMatches(stock, step.query || "");
+      let matches = verifiedExact.length
+        ? verifiedExact
+        : ranked.length
+          ? ranked.map((result) => result.part)
+          : exact.length
+            ? []
+            : catalogMatches(stock, step.query || "");
       if (["set", "remove"].includes(step.action))
         matches = matches.filter((p) => cart.some((e) => e.code === p.code));
       if (step.action === "find") {
@@ -1050,12 +1117,14 @@ export async function converseJames(
     else if (
       cart.some(
         (e) =>
-          (e.quantity > 10 || e.priority === "Urgente") &&
-          !e.justification.trim(),
+          (requestAnomaly(e.quantity, byCode.get(e.code)?.requestPattern)
+            .unusual ||
+            e.priority === "Urgente") &&
+          e.justification.trim().length < 3,
       )
     )
       replies.push(
-        "Preciso da justificativa para quantidade acima de 10 ou urgência. Diga: justificativa: seguida do motivo. Depois peça para revisar.",
+        "Preciso da justificativa para pedido fora do padrão do setor/bloco ou urgente. Diga: justificativa: seguida do motivo. Depois peça para revisar.",
       );
     else {
       confirmationToken = ticket(user, cart);

@@ -30,6 +30,8 @@ import adminShell from "./admin-shell.module.css";
 import { ThemeToggle, useWorkspaceTheme } from "./theme-toggle";
 import { WarehouseDashboard } from "./screens/warehouse-dashboard";
 import { RequestsScreen } from "./screens/requests-screen";
+import { RequestWorkflowScreen } from "./screens/request-workflow-screen";
+import { MaterialsScreen } from "./screens/materials-screen";
 import { type Request, type Part } from "@/lib/demo-data";
 import {
   pathFor,
@@ -98,6 +100,7 @@ const roles: Record<
   },
 };
 const pageIcons = {
+  materiais: Boxes,
   mapa: MapPinned,
   dashboard: LayoutDashboard,
   requisicoes: ClipboardList,
@@ -162,7 +165,7 @@ export default function Workspace({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [dashboardExpanded, setDashboardExpanded] = useState(
-    page === "dashboard",
+    page === "dashboard" || page === "materiais",
   );
   const {
     requests,
@@ -184,6 +187,7 @@ export default function Workspace({
   const menuButton = useRef<HTMLButtonElement>(null);
   const sidebar = useRef<HTMLElement>(null);
   const pagePermissions = {
+    materiais: "history",
     mapa: "map",
     funcionarios: "people",
     compra: "planning",
@@ -570,18 +574,18 @@ export default function Workspace({
                     ["bloco", "Por bloco"],
                     ["estoque", "Estoque"],
                     ["requisicoes", "Requisições"],
+                    ["materiais", "Materiais"],
                   ]
                     .filter(
                       ([view]) =>
-                        role !== "lider" ||
-                        ["bloco", "requisicoes"].includes(view),
+                        role === "lider" ? ["bloco", "materiais"].includes(view) : role === "almoxarifado" ? ["geral", "estoque"].includes(view) : view !== "materiais",
                     )
                     .map(([view, label]) => (
                       <Link
                         key={view}
-                        href={`${pathFor(role, "dashboard")}?dashboard=${view}&metric=${view === "estoque" ? "stock" : "requests"}`}
+                        href={view === "materiais" ? pathFor(role, "materiais") : `${pathFor(role, "dashboard")}?dashboard=${view}&metric=${view === "estoque" ? "stock" : "requests"}`}
                         aria-current={
-                          page === "dashboard" && selectedDashboard === view
+                          (page === "dashboard" && selectedDashboard === view) || (page === "materiais" && view === "materiais")
                             ? "page"
                             : undefined
                         }
@@ -795,14 +799,13 @@ export default function Workspace({
           )}
           {page === "devolucoes" && <ReturnsScreen setMessage={setMessage} />}
           {page === "mapa" && <MapEditor />}
+          {page === "materiais" && role === "lider" && <MaterialsScreen />}
+          {persistent && ["requisicoes", "solicitacoes", "historico"].includes(page) && <RequestWorkflowScreen role={role} history={page === "historico"} />}
           {persistent &&
             [
               "dashboard",
-              "historico",
               "compra",
               "recomendacoes",
-              "requisicoes",
-              "solicitacoes",
             ].includes(page) && (
               <OperationsPanel
                 key={

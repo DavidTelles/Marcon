@@ -1,4 +1,11 @@
 export type Request = {
+  unit?: string;
+  requestedUnit?: "piece" | "box";
+  requestedAmount?: number;
+  packSizeAtRequest?: number;
+  anomaly?: import("./request-policy").RequestAnomaly;
+  pickedAt?: string;
+  fulfilledBy?: string;
   requestedQuantity?: number;
   approvedQuantity?: number;
   deliveredQuantity?: number;
@@ -28,7 +35,10 @@ export type Request = {
     | "Aprovada"
     | "Entregue"
     | "Cancelada"
-    | "Cancelamento solicitado";
+    | "Cancelamento solicitado"
+    | "Em separação"
+    | "Em entrega"
+    | "Rejeitada";
   priority: "Leve" | "Moderado" | "Urgente";
   code?: string;
   justification?: string;
@@ -80,6 +90,7 @@ export const initialRequests: Request[] = [
   },
 ];
 export type Part = {
+  requestPattern?: import("./request-policy").RequestPattern;
   description?: string;
   purpose?: string;
   material?: string;
@@ -266,6 +277,7 @@ export const initialMovements: Movement[] = [
 ];
 
 export type ReturnRecord = {
+  inspectedAt?: string;
   inspectionStatus?: string;
   requestId?: number;
   warehouse?: string;

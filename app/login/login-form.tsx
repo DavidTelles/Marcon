@@ -20,7 +20,7 @@ import { FaceLogin } from "./components/face-login";
 import { PasskeyLogin } from "./components/passkey-login";
 import styles from "./login.module.css";
 
-export default function LoginForm({ children, demoMode = true }: { children: ReactNode; demoMode?: boolean }) {
+export default function LoginForm({ children, demoMode = false }: { children?: ReactNode; demoMode?: boolean }) {
   const {
     isBusy,
     status,

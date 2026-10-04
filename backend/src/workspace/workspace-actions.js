@@ -267,7 +267,7 @@ async function executeWorkspaceActionCore(user, input, connection) {
 async function executeWorkspaceAction(user, input, connection) {
   if (!input || typeof input !== "object" || !("type" in input))
     throw new import_permissions.ActionError("Ação inválida.");
-  if (["createRequests", "stockEntry", "registerReturn", "confirmInbound"].includes(input.type) && !input.requestKey)
+  if (["createRequests", "stockEntry", "replenishStock", "registerReturn", "confirmInbound"].includes(input.type) && !input.requestKey)
     throw new import_permissions.ActionError("Informe requestKey para evitar execução duplicada.", 422);
   if (!input.requestKey || input.type === "createRequests" || input.type === "transfer")
     return executeWorkspaceActionCore(user, input, connection);

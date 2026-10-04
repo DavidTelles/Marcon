@@ -27,7 +27,9 @@ test("reservas concorrentes, cancelamento, entrega, devolução, escopos e relat
     return c;
   }
   async function act(c: APIRequestContext, data: object, status = 200) {
-    const r = await c.post("/api/workspace", { data: { requestKey: randomUUID(), ...data } });
+    const r = await c.post("/api/workspace", {
+      data: { requestKey: randomUUID(), ...data },
+    });
     expect(r.status(), await r.text()).toBe(status);
     return r.json();
   }
@@ -80,11 +82,25 @@ test("reservas concorrentes, cancelamento, entrega, devolução, escopos e relat
     });
     const first = await act(employee, {
       type: "createRequests",
-      entries: [{ code, quantity: 6, priority: "Leve" }],
+      entries: [
+        {
+          code,
+          quantity: 6,
+          priority: "Leve",
+          justification: "Atividade técnica de teste",
+        },
+      ],
     });
     const second = await act(other, {
       type: "createRequests",
-      entries: [{ code, quantity: 6, priority: "Leve" }],
+      entries: [
+        {
+          code,
+          quantity: 6,
+          priority: "Leve",
+          justification: "Atividade técnica de teste",
+        },
+      ],
     });
     expect(await totals()).toEqual({ physical: 10, reserved: 0 });
     await act(
@@ -166,16 +182,23 @@ test("reservas concorrentes, cancelamento, entrega, devolução, escopos e relat
     expect(await totals()).toEqual({ physical: 10, reserved: 0 });
     const delivery = await act(employee, {
         type: "createRequests",
-        entries: [{ code, quantity: 4, priority: "Moderado" }],
+        entries: [
+          {
+            code,
+            quantity: 4,
+            priority: "Moderado",
+            justification: "Atividade técnica de teste",
+          },
+        ],
       }),
       id = delivery.ids[0];
     await act(leader, { type: "changeRequestStatus", id, status: "Aprovada" });
+    await act(warehouse, { type: "claimRequest", id });
     await act(
       warehouse,
       {
-        type: "changeRequestStatus",
+        type: "preparePick",
         id,
-        status: "Entregue",
         qrCode: "wrong",
         confirmedQuantity: 4,
       },
@@ -184,14 +207,26 @@ test("reservas concorrentes, cancelamento, entrega, devolução, escopos e relat
     await act(
       warehouse,
       {
-        type: "changeRequestStatus",
+        type: "preparePick",
         id,
-        status: "Entregue",
         qrCode: code,
         confirmedQuantity: 3,
       },
       422,
     );
+    const prepared = await act(warehouse, {
+      type: "preparePick",
+      id,
+      qrCode: code,
+      confirmedQuantity: 4,
+    });
+    await act(warehouse, {
+      type: "confirmPick",
+      id,
+      qrCode: code,
+      confirmedQuantity: 4,
+      confirmation: prepared.confirmation,
+    });
     const deliveries = await Promise.all(
       [1, 2].map(() =>
         warehouse.post("/api/workspace", {
@@ -517,12 +552,14 @@ test("estoque e planejamento responsivos com Neon e leitor sem câmera", async (
     page.getByRole("alert").filter({ hasText: "Câmera indisponível" }),
   ).toContainText("Use leitor USB ou digite o código");
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/warehouse/dashboard?view=compra");
+  await page.goto("/warehouse/purchases");
   await expect(
-    page.getByRole("heading", { name: "Consumo e planejamento" }),
+    page.getByRole("heading", { name: "Compra preditiva", exact: true }),
   ).toBeVisible();
-  await page.locator('.dashboard-popover summary').click();
-  await expect(page.getByRole('button', {name:'Planilha', exact:true})).toBeVisible();
+  await page.locator(".dashboard-popover summary").click();
+  await expect(
+    page.getByRole("button", { name: "Planilha", exact: true }),
+  ).toBeVisible();
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth + 1,
@@ -535,7 +572,12 @@ test("estoque e planejamento responsivos com Neon e leitor sem câmera", async (
         () => document.documentElement.scrollWidth <= innerWidth + 1,
       ),
     ).toBeTruthy();
-    await expect(page.getByRole('region',{name:'Estoque e previsão',exact:true}).locator('tbody td').first()).toBeVisible();
+    await expect(
+      page
+        .getByRole("region", { name: "Compras sugeridas", exact: true })
+        .locator("article")
+        .first(),
+    ).toBeVisible();
     if (width === 390 || width === 1440)
       await page.screenshot({
         path: testInfo.outputPath("planning-" + width + ".png"),

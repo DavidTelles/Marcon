@@ -13,6 +13,7 @@ const eslintConfig = defineConfig([
     // Default ignores of eslint-config-next:
     ".next/**",
     ".next-james-test/**",
+    ".validation/**",
     "out/**",
     "build/**",
     "next-env.d.ts",

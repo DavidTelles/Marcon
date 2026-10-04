@@ -51,7 +51,7 @@ async function stock(c, part) {
 const available = (r) => Number(r.quantity) - Number(r.reserved) - Number(r.pending_outgoing ?? 0);
 exports.available = available;
 async function partLock(c, code, id) {
-    const p = await (0, exports.first)(c, `SELECT * FROM parts WHERE ${id ? "id" : "code"}=? AND active=TRUE FOR UPDATE`, [id ?? (0, permissions_1.text)(code, 64)]);
+    const p = await (0, exports.first)(c, `SELECT * FROM parts WHERE ${id ? "id" : "code"}=? AND active=TRUE FOR UPDATE`, [id ?? (0, permissions_1.text)(code, 64).toUpperCase()]);
     if (!p)
         throw new permissions_1.ActionError("Peça não encontrada.", 404);
     return p;

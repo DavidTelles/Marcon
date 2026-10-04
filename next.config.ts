@@ -1,6 +1,14 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  ...(process.env.MARCON_DISABLE_BUILD_CACHE === "1"
+    ? {
+        experimental: {
+          turbopackFileSystemCacheForDev: false,
+          turbopackFileSystemCacheForBuild: false,
+        },
+      }
+    : {}),
   distDir: process.env.JAMES_TEST_DIST_DIR || ".next",
   serverExternalPackages: ["tesseract.js"],
   outputFileTracingIncludes: {

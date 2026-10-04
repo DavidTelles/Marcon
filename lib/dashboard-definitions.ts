@@ -55,7 +55,7 @@ export const metricDefinitions = {
     label: "Anormalidades",
     unit: "requisições",
     definition:
-      "Requisições não canceladas com urgência Urgente ou justificativa registrada. Não indica fraude.",
+      "Pedidos sinalizados por peça ou quantidade incomum no histórico aprovado de 90 dias do setor/bloco. Pedidos rejeitados e cancelados ficam fora. Não indica fraude.",
   },
   critical: {
     label: "Abaixo do mínimo",
@@ -131,6 +131,9 @@ const statuses = [
   "Entregue",
   "Cancelada",
   "Cancelamento solicitado",
+  "Em separação",
+  "Em entrega",
+  "Rejeitada",
 ];
 export function dashboardFilters(
   user: Account,

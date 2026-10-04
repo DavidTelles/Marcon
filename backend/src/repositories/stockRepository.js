@@ -18,7 +18,7 @@ async function list(filters = {}) {
   const rows = await query(
     `SELECT i.part_id AS product_id, p.code AS sku, p.name,
             i.warehouse_id, w.code AS warehouse_code, w.name AS warehouse_name,
-            CASE WHEN w.is_central THEN 'CENTRAL' ELSE 'AUXILIARY' END AS warehouse_type,
+            CASE WHEN w.is_central = 1 THEN 'CENTRAL' ELSE 'AUXILIARY' END AS warehouse_type,
             i.quantity,p.unit,${commitments},i.minimum_quantity AS min_quantity, i.aisle AS corridor, i.shelf, i.updated_at
      FROM inventory i
      JOIN parts p ON p.id = i.part_id
@@ -33,7 +33,7 @@ async function list(filters = {}) {
 async function listByProduct(productId) {
   return query(
     `SELECT i.warehouse_id, w.code AS warehouse_code, w.name AS warehouse_name,
-            CASE WHEN w.is_central THEN 'CENTRAL' ELSE 'AUXILIARY' END AS warehouse_type,
+            CASE WHEN w.is_central = 1 THEN 'CENTRAL' ELSE 'AUXILIARY' END AS warehouse_type,
             i.quantity,p.unit,${commitments},i.minimum_quantity AS min_quantity, i.aisle AS corridor, i.shelf
      FROM inventory i JOIN warehouses w ON w.id = i.warehouse_id JOIN parts p ON p.id=i.part_id
      WHERE i.part_id = ?

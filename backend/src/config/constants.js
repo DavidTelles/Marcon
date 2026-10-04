@@ -15,9 +15,7 @@ const ROLE_CODES = {
 const ROLE_ENUMS = Object.fromEntries(Object.entries(ROLE_CODES).map(([k, v]) => [v, k]));
 
 // Status da tabela unificada `requests`.
-// RECEIVED/REJECTED/SEPARATING são alvos virtuais da API REST: recebimento é
-// confirmado via received_at, rejeição vira 'Cancelada' e a separação física
-// acontece na aprovação (reserva automática de saldo).
+// Recebimento é confirmado via received_at. Retirada e entrega são etapas distintas.
 const REQUEST_STATUS = {
   PENDING: 'Pendente',
   ANALYZING: 'Em análise',
@@ -26,8 +24,9 @@ const REQUEST_STATUS = {
   CANCELLED: 'Cancelada',
   CANCELLATION_REQUESTED: 'Cancelamento solicitado',
   RECEIVED: '__RECEIVED__',
-  REJECTED: '__REJECTED__',
-  SEPARATING: '__SEPARATING__'
+  REJECTED: 'Rejeitada',
+  SEPARATING: 'Em separação',
+  DELIVERING: 'Em entrega'
 };
 
 const URGENCY = {
@@ -77,6 +76,7 @@ const ROLE_PERMISSIONS = {
   [ROLES.SECTOR_REPRESENTATIVE]: [
     PERMISSIONS.REQUESTS_VIEW_SECTOR,
     PERMISSIONS.REQUESTS_ANALYZE,
+    PERMISSIONS.REQUESTS_APPROVE,
     PERMISSIONS.REQUESTS_CREATE,
     PERMISSIONS.REQUESTS_RECEIVE,
     PERMISSIONS.RFID_ACCESS

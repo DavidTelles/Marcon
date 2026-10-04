@@ -76,6 +76,7 @@ const addItemBody = z.object({
 
 const requestBody = z.object({
   body: z.object({
+    requestedUnit: z.enum(['piece', 'box']).optional(),
     id: z.any().optional(),
     requestKey: z.string().regex(/^[\w-]{16,64}$/).optional(),
     id_item: z.coerce.number().int().positive().optional(),
@@ -91,6 +92,7 @@ const requestBody = z.object({
     quantity: z.coerce.number().int().positive().optional(),
     urgency: z.enum(['LEVE', 'MODERADO', 'URGENTE']).optional(),
     items: z.array(z.object({
+      requestedUnit: z.enum(['piece', 'box']).optional(),
       product_id: z.coerce.number().int().positive(),
       quantity: z.coerce.number().int().positive()
     })).optional()
@@ -106,9 +108,17 @@ const movementBody = z.object({
     notes: z.string().optional(),
     requestKey: z.string().regex(/^[\w-]{16,64}$/),
     request_id: z.coerce.number().int().positive().optional(),
-    qr_code: z.string().min(1).max(128).optional()
+    qr_code: z.string().min(1).max(128).optional(),
+    confirmation: z.string().uuid().optional()
   })
 });
+const pickupFields = {
+  qr_code: z.string().min(1).max(128),
+  confirmed_quantity: z.coerce.number().int().positive().max(1000000000),
+  requestKey: z.string().regex(/^[\w-]{16,64}$/)
+};
+const preparePickupBody = z.object({ body: z.object(pickupFields) });
+const confirmPickupBody = z.object({ body: z.object({ ...pickupFields, confirmation: z.string().uuid() }) });
 
 module.exports = {
   rfidBody,
@@ -118,5 +128,7 @@ module.exports = {
   idParam,
   addItemBody,
   requestBody,
-  movementBody
+  movementBody,
+  preparePickupBody,
+  confirmPickupBody
 };

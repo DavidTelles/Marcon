@@ -63,7 +63,7 @@ async function register(payload, actor) {
     employee_code: employeeCode,
     name,
     email,
-    password_hash: hashPassword(password),
+    password_hash: await hashPassword(password),
     role_enum: roleEnum,
     sector: payload.sector || 'Geral',
     block_id: blockId,
@@ -80,7 +80,7 @@ async function login({ login, password }) {
   const identifier = String(login || '').trim();
   let user = await userRepository.findByEmail(identifier.toLowerCase());
   if (!user) user = await userRepository.findByEmployeeCode(identifier);
-  if (!user || !comparePassword(password, user.password_hash)) {
+  if (!user || !(await comparePassword(password, user.password_hash))) {
     throw new AppError(401, 'Credenciais inválidas');
   }
   if (!user.active) throw new AppError(403, 'Usuário inativo');
@@ -132,7 +132,7 @@ async function resetPassword({ token, password }) {
     [tokenHash]
   );
   if (!rows[0]) throw new AppError(400, 'Token inválido ou expirado');
-  await userRepository.update(rows[0].user_id, { password_hash: hashPassword(password) });
+  await userRepository.update(rows[0].user_id, { password_hash: await hashPassword(password) });
   await query('UPDATE password_reset_tokens SET used_at = NOW() WHERE id = ?', [rows[0].id]);
   return { message: 'Senha atualizada' };
 }

@@ -5,7 +5,7 @@ const BASE = `
   SELECT r.id, r.requester_id, u.employee_no AS requester_code, u.name AS requester_name,
          r.sector, r.block_id, b.name AS block_name,
          r.part_id AS product_id, p.code AS sku, p.name AS product_name,
-         r.quantity, r.priority AS urgency, r.status, r.justification AS description,
+         r.quantity, r.requested_unit, r.requested_amount, r.pack_size_at_request, r.anomaly, r.picked_at, r.priority AS urgency, r.status, r.justification AS description,
          r.batch_id, r.approved_by, r.approved_at, r.fulfilled_by, r.fulfilled_from AS warehouse_id,
          r.delivered_at, r.received_at, r.cancellation_reason, r.created_at, r.updated_at
   FROM requests r
@@ -43,6 +43,10 @@ async function list(filters = {}) {
   if (filters.status) {
     where.push('r.status = ?');
     params.push(filters.status);
+  }
+  if (Array.isArray(filters.statuses) && filters.statuses.length) {
+    where.push(`r.status IN (${filters.statuses.map(() => '?').join(',')})`);
+    params.push(...filters.statuses);
   }
   if (filters.part_id) {
     where.push('r.part_id = ?');

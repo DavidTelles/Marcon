@@ -10,6 +10,7 @@ __pycache__/
 .next-james-test/
 test-results/
 test-results-mysql/
+test-results-neon/
 playwright-report/
 coverage/
 out/

@@ -15,7 +15,13 @@ import {
   stock,
   type Row,
 } from "./stock-ledger";
-import { shortestPath, type FacilityGraph } from "./routing";
+import { deliveryTargets, shortestPath, type FacilityGraph } from "./routing";
+import {
+  requestPattern,
+  requestAnomaly,
+  requestedUnits,
+  type HistoricalRequest,
+} from "./request-policy";
 export const requestActions = new Set([
   "createRequests",
   "changeRequestStatus",
@@ -23,7 +29,23 @@ export const requestActions = new Set([
   "deleteRequest",
   "requestCancellation",
   "confirmReceipt",
+  "claimRequest",
+  "preparePick",
+  "confirmPick",
 ]);
+async function patternFor(c: PoolConnection, actor: Row, partId: number) {
+  const history = await rows(
+    c,
+    "SELECT part_id,block_id,sector,quantity FROM requests WHERE (block_id=? OR sector=?) AND approved_at IS NOT NULL AND status NOT IN ('Cancelada','Rejeitada') AND created_at>=DATE_SUB(NOW(),INTERVAL 90 DAY)",
+    [actor.block_id, actor.sector],
+  );
+  return requestPattern(
+    history as HistoricalRequest[],
+    partId,
+    Number(actor.block_id),
+    String(actor.sector),
+  );
+}
 export async function executeRequestAction(
   c: PoolConnection,
   user: Account,
@@ -77,11 +99,29 @@ export async function executeRequestAction(
     for (const e of [...entries].sort((x, y) =>
       String(x.code).localeCompare(String(y.code)),
     )) {
-      const p = await partLock(c, e.code),
-        q = integer(e.quantity);
+      const p = await partLock(c, e.code);
+      let q: number;
+      try {
+        q = requestedUnits(
+          integer(e.quantity),
+          e.requestedUnit,
+          Number(p.pack_size),
+        );
+      } catch (error) {
+        throw new ActionError(
+          error instanceof Error ? error.message : "Quantidade inválida.",
+        );
+      }
       if (!["Leve", "Moderado", "Urgente"].includes(String(e.priority)))
         throw new ActionError("Urgência inválida.");
-      if ((q > 10 || e.priority === "Urgente") && !text(e.justification))
+      const anomaly = requestAnomaly(
+        q,
+        await patternFor(c, actor, Number(p.id)),
+      );
+      if (
+        (anomaly.unusual || e.priority === "Urgente") &&
+        text(e.justification).length < 3
+      )
         throw new ActionError("Justifique o pedido fora do padrão.");
       if (
         q >
@@ -89,7 +129,7 @@ export async function executeRequestAction(
       )
         throw new ActionError("Saldo disponível insuficiente.", 409);
       const [r] = await c.execute<ResultSetHeader>(
-        "INSERT INTO requests(requester_id,block_id,part_id,quantity,priority,justification,batch_id,sector) VALUES(?,?,?,?,?,?,?,?)",
+        "INSERT INTO requests(requester_id,block_id,part_id,quantity,priority,justification,batch_id,sector,requested_unit,requested_amount,pack_size_at_request,anomaly) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
         [
           actorId,
           actor.block_id,
@@ -99,6 +139,10 @@ export async function executeRequestAction(
           text(e.justification) || null,
           batch,
           actor.sector,
+          e.requestedUnit ?? "piece",
+          e.quantity,
+          p.pack_size,
+          JSON.stringify(anomaly),
         ],
       );
       ids.push(r.insertId);
@@ -137,16 +181,153 @@ export async function executeRequestAction(
       );
     if (a.type === "editRequest") {
       const q = integer(a.quantity);
+      const anomaly = requestAnomaly(
+        q,
+        await patternFor(c, actor, Number(p.id)),
+      );
+      const justification = text(a.justification ?? r.justification);
+      if (
+        (anomaly.unusual || r.priority === "Urgente") &&
+        justification.length < 3
+      )
+        throw new ActionError("Justifique o pedido fora do padrão.");
       if (
         q > (await stock(c, Number(p.id))).reduce((s, v) => s + available(v), 0)
       )
         throw new ActionError("Saldo insuficiente.", 409);
-      await c.execute("UPDATE requests SET quantity=? WHERE id=?", [q, id]);
+      await c.execute(
+        "UPDATE requests SET quantity=?,requested_unit='piece',requested_amount=?,anomaly=?,justification=? WHERE id=?",
+        [q, q, JSON.stringify(anomaly), justification || null, id],
+      );
     } else
       await c.execute(
         "UPDATE requests SET status='Cancelada',cancellation_reason='Excluída pelo requisitor antes da aprovação' WHERE id=?",
         [id],
       );
+  } else if (a.type === "claimRequest") {
+    demand(user, "stock", "requests.deliver");
+    if (r.status !== "Aprovada")
+      throw new ActionError(
+        "Pedido já assumido ou indisponível para separação.",
+        409,
+      );
+    await recordDeliveryPlan(c, user, { action: "planDelivery" }, id);
+    await c.execute(
+      "UPDATE requests SET status='Em separação',fulfilled_by=? WHERE id=?",
+      [actorId, id],
+    );
+  } else if (a.type === "preparePick" || a.type === "confirmPick") {
+    demand(user, "stock", "requests.deliver");
+    if (
+      a.code !== undefined &&
+      text(a.code).toUpperCase() !== String(p.code).toUpperCase()
+    )
+      throw new ActionError("Material diferente da requisição.", 422);
+    if (r.status !== "Em separação" || Number(r.fulfilled_by) !== actorId)
+      throw new ActionError(
+        "Somente o almoxarife responsável pode confirmar esta retirada.",
+        409,
+      );
+    scan(p, a.qrCode);
+    if (integer(a.confirmedQuantity) !== Number(r.quantity))
+      throw new ActionError("Confirme a quantidade exata reservada.", 422);
+    const digest = createHash("sha256")
+      .update(
+        JSON.stringify([
+          actorId,
+          id,
+          text(a.qrCode).toUpperCase(),
+          a.confirmedQuantity,
+          a.confirmation,
+        ]),
+      )
+      .digest("hex");
+    if (a.type === "preparePick") {
+      const confirmation = randomUUID();
+      const hash = createHash("sha256")
+        .update(
+          JSON.stringify([
+            actorId,
+            id,
+            text(a.qrCode).toUpperCase(),
+            a.confirmedQuantity,
+            confirmation,
+          ]),
+        )
+        .digest("hex");
+      await c.execute("UPDATE requests SET pickup_confirmation=? WHERE id=?", [
+        JSON.stringify({ hash, expiresAt: Date.now() + 5 * 60_000 }),
+        id,
+      ]);
+      return { id, confirmation };
+    }
+    const confirmation =
+      typeof r.pickup_confirmation === "string"
+        ? JSON.parse(r.pickup_confirmation)
+        : r.pickup_confirmation;
+    if (
+      !confirmation ||
+      confirmation.hash !== digest ||
+      confirmation.expiresAt < Date.now()
+    )
+      throw new ActionError(
+        "Confirmação expirada ou alterada. Confirme a retirada novamente.",
+        409,
+      );
+    await recordDeliveryPlan(
+      c,
+      user,
+      { action: "planDelivery", atDelivery: true },
+      id,
+    );
+    const reserved = await rows(
+      c,
+      "SELECT * FROM request_reservations WHERE request_id=? ORDER BY warehouse_id FOR UPDATE",
+      [id],
+    );
+    if (
+      a.sourceWarehouseId !== undefined &&
+      (reserved.length !== 1 ||
+        Number(reserved[0].warehouse_id) !== integer(a.sourceWarehouseId))
+    )
+      throw new ActionError(
+        "Origem diferente da reserva. Para múltiplos locais, confira a retirada pelo atendimento da requisição.",
+        422,
+      );
+    if (
+      reserved.reduce((sum, v) => sum + Number(v.quantity), 0) !==
+      Number(r.quantity)
+    )
+      throw new ActionError(
+        "Reserva incompleta. Peça revalidação ao gestor.",
+        409,
+      );
+    for (const v of reserved) {
+      const [updated] = await c.execute<ResultSetHeader>(
+        "UPDATE inventory SET quantity=quantity-? WHERE part_id=? AND warehouse_id=? AND quantity>=?",
+        [v.quantity, p.id, v.warehouse_id, v.quantity],
+      );
+      if (updated.affectedRows !== 1)
+        throw new ActionError("Saldo inconsistente. Retirada bloqueada.", 409);
+      await movement(
+        c,
+        actorId,
+        Number(p.id),
+        Number(v.warehouse_id),
+        "saida",
+        Number(v.quantity),
+        "Retirada conferida; aguardando entrega no bloco",
+        id,
+        Number(r.block_id),
+      );
+    }
+    await c.execute("DELETE FROM request_reservations WHERE request_id=?", [
+      id,
+    ]);
+    await c.execute(
+      "UPDATE requests SET status='Em entrega',fulfilled_from=?,picked_at=UTC_TIMESTAMP(3),pickup_confirmation=NULL WHERE id=?",
+      [reserved[0].warehouse_id, id],
+    );
   } else if (a.type === "confirmReceipt") {
     if (!owns || r.status !== "Entregue" || r.received_at)
       throw new ActionError("Recebimento indisponível nesta etapa.", 409);
@@ -185,26 +366,25 @@ export async function executeRequestAction(
             ? JSON.parse(published.graph)
             : published.graph) as FacilityGraph)
         : null;
-      const destination = graph?.nodes.find(
-        (n) =>
-          n.blockId === Number(r.block_id) &&
-          (n.kind === "delivery" || n.kind === "block"),
-      );
+      const destinations = graph ? deliveryTargets(graph, Number(r.block_id), String(r.sector)) : [];
       const ranked = locations
         .map((l) => {
           const node =
             graph?.nodes.find((n) => n.id === l.map_node_id) ??
             graph?.nodes.find((n) => n.warehouseId === Number(l.warehouse_id));
-          const path =
-            graph && node && destination
-              ? shortestPath(graph, node.id, destination.id)
-              : null;
+          const paths = graph && node ? destinations.map((destination) => shortestPath(graph, node.id, destination.id)).filter((path) => path !== null) : [];
           return {
             l,
-            score: graph?.reviewed && path ? path.cost : Infinity,
+            score: graph?.reviewed ? Math.min(Infinity, ...paths.map((path) => path.cost)) : Infinity,
           };
         })
-        .sort((a, b) => a.score - b.score || Number(b.l.block_id === r.block_id) - Number(a.l.block_id === r.block_id) || available(b.l) - available(a.l));
+        .sort(
+          (a, b) =>
+            a.score - b.score ||
+            Number(b.l.block_id === r.block_id) -
+              Number(a.l.block_id === r.block_id) ||
+            available(b.l) - available(a.l),
+        );
       const existing = await rows(
         c,
         "SELECT warehouse_id,quantity FROM request_reservations WHERE request_id=? FOR UPDATE",
@@ -217,7 +397,7 @@ export async function executeRequestAction(
         const q = Math.min(remaining, available(l));
         if (q > 0) {
           await c.execute(
-            "INSERT INTO request_reservations(request_id,part_id,warehouse_id,quantity) VALUES(?,?,?,?) ON DUPLICATE KEY UPDATE quantity=quantity+VALUES(quantity)",
+            "INSERT INTO request_reservations(request_id,part_id,warehouse_id,quantity) VALUES(?,?,?,?) ON DUPLICATE KEY UPDATE quantity=request_reservations.quantity+VALUES(quantity)",
             [id, p.id, l.warehouse_id, q],
           );
           remaining -= q;
@@ -231,6 +411,12 @@ export async function executeRequestAction(
       await c.execute(
         "UPDATE requests SET status='Aprovada',approved_by=?,approved_at=COALESCE(approved_at,UTC_TIMESTAMP(3)) WHERE id=?",
         [actorId, id],
+      );
+    } else if (next === "Rejeitada" && pending) {
+      demand(user, "approve");
+      await c.execute(
+        "UPDATE requests SET status='Rejeitada',cancellation_reason=? WHERE id=?",
+        [reason(a.reason), id],
       );
     } else if (
       next === "Cancelada" &&
@@ -253,58 +439,17 @@ export async function executeRequestAction(
         "UPDATE requests SET status='Cancelada',cancellation_reason=COALESCE(cancellation_reason,?) WHERE id=?",
         [reason(a.reason ?? "Cancelamento confirmado pelo responsável"), id],
       );
-    } else if (next === "Entregue" && r.status === "Aprovada") {
+    } else if (next === "Entregue" && r.status === "Em entrega") {
       demand(user, "stock");
       demand(user, "stock", "requests.deliver");
-      scan(p, a.qrCode);
-      if (integer(a.confirmedQuantity) !== Number(r.quantity))
-        throw new ActionError("Confirme a quantidade exata separada.", 422);
-      // Capture the current publication at delivery as well; earlier departures
-      // remain in history and do not certify that their path was travelled.
-      await recordDeliveryPlan(
-          c,
-          user,
-          { action: "planDelivery", atDelivery: true },
-          id,
-        );
-      const reserved = await rows(
-        c,
-        "SELECT * FROM request_reservations WHERE request_id=? ORDER BY warehouse_id FOR UPDATE",
-        [id],
-      );
-      if (
-        reserved.reduce((s, v) => s + Number(v.quantity), 0) !==
-        Number(r.quantity)
-      )
+      if (Number(r.fulfilled_by) !== actorId || !r.picked_at)
         throw new ActionError(
-          "Reserva incompleta. Peça revalidação ao gestor.",
+          "Confirme primeiro a retirada com o almoxarife responsável.",
           409,
         );
-      for (const v of reserved) {
-        const [updated] = await c.execute<ResultSetHeader>(
-          "UPDATE inventory SET quantity=quantity-? WHERE part_id=? AND warehouse_id=? AND quantity>=?",
-          [v.quantity, p.id, v.warehouse_id, v.quantity],
-        );
-        if (updated.affectedRows !== 1)
-          throw new ActionError("Saldo inconsistente. Entrega bloqueada.", 409);
-        await movement(
-          c,
-          actorId,
-          Number(p.id),
-          Number(v.warehouse_id),
-          "saida",
-          Number(v.quantity),
-          "Entrega conferida",
-          id,
-          Number(r.block_id),
-        );
-      }
-      await c.execute("DELETE FROM request_reservations WHERE request_id=?", [
-        id,
-      ]);
       await c.execute(
-        "UPDATE requests SET status='Entregue',fulfilled_by=?,fulfilled_from=?,delivered_at=UTC_TIMESTAMP(3) WHERE id=?",
-        [actorId, reserved[0].warehouse_id, id],
+        "UPDATE requests SET status='Entregue',delivered_at=UTC_TIMESTAMP(3) WHERE id=?",
+        [id],
       );
     } else throw new ActionError("Transição de estado inválida.", 409);
   }

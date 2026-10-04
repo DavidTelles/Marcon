@@ -30,7 +30,9 @@ test("logística real: sugestões, etapas concorrentes, rotas versionadas e saí
     return ctx;
   }
   async function act(ctx: APIRequestContext, data: object, status = 200) {
-    const r = await ctx.post("/api/workspace", { data: { requestKey: randomUUID(), ...data } });
+    const r = await ctx.post("/api/workspace", {
+      data: { requestKey: randomUUID(), ...data },
+    });
     expect(r.status(), await r.text()).toBe(status);
     return r.json();
   }
@@ -91,7 +93,7 @@ test("logística real: sugestões, etapas concorrentes, rotas versionadas e saí
     // Historical fixture: actual withdrawal kind, distinct from request creation and returns.
     for (let day = 1; day <= 70; day++)
       await pool.execute(
-        "INSERT INTO stock_movements(part_id,warehouse_id,kind,quantity,block_id,actor_id,created_at,reason) VALUES(?,?,'saida',1,?,?,UTC_TIMESTAMP()-INTERVAL ? DAY,'Histórico de teste')",
+        "INSERT INTO stock_movements(part_id,warehouse_id,kind,quantity,block_id,actor_id,created_at,reason) VALUES(?,?,'saida',1,?,?,UTC_TIMESTAMP()-(? * INTERVAL '1 day'),'Histórico de teste')",
         [part, central, block, actors[0].id, day],
       );
     const graph: FacilityGraph = {
@@ -516,7 +518,14 @@ test("logística real: sugestões, etapas concorrentes, rotas versionadas e saí
     );
     const created = await act(employee, {
       type: "createRequests",
-      entries: [{ code, quantity: 2, priority: "Leve" }],
+      entries: [
+        {
+          code,
+          quantity: 2,
+          priority: "Leve",
+          justification: "Atividade técnica de teste",
+        },
+      ],
     });
     const requestId = created.ids[0];
     await act(admin, {
@@ -526,10 +535,18 @@ test("logística real: sugestões, etapas concorrentes, rotas versionadas e saí
     });
     const physical = await balances();
     await map(employee, { action: "planDelivery", requestId }, 403);
+    const allocated = (
+      await (await staff.get("/api/workspace")).json()
+    ).requests.find((r: { id: number }) => r.id === requestId).allocations[0]
+      .warehouse;
+    const pickupId = data.warehouses.find(
+      (w: { name: string }) => w.name === allocated,
+    ).id;
+    const pickupNode = graph.nodes.find((n) => n.warehouseId === pickupId)!;
     const plan = await map(staff, {
       action: "planDelivery",
       requestId,
-      start: "a",
+      start: pickupNode.id,
       destinations: ["e"],
     });
     expect(plan.metric).toBe("m");
@@ -569,6 +586,20 @@ test("logística real: sugestões, etapas concorrentes, rotas versionadas e saí
     expect(
       (await employee.get(`/api/maps?delivery=${requestId}`)).status(),
     ).toBe(403);
+    await act(staff, { type: "claimRequest", id: requestId });
+    const prepared = await act(staff, {
+      type: "preparePick",
+      id: requestId,
+      qrCode: code,
+      confirmedQuantity: 2,
+    });
+    await act(staff, {
+      type: "confirmPick",
+      id: requestId,
+      qrCode: code,
+      confirmedQuantity: 2,
+      confirmation: prepared.confirmation,
+    });
     await act(staff, {
       type: "changeRequestStatus",
       id: requestId,
@@ -587,7 +618,14 @@ test("logística real: sugestões, etapas concorrentes, rotas versionadas e saí
     ]);
     const manualRequest = await act(employee, {
       type: "createRequests",
-      entries: [{ code, quantity: 1, priority: "Leve" }],
+      entries: [
+        {
+          code,
+          quantity: 1,
+          priority: "Leve",
+          justification: "Atividade técnica de teste",
+        },
+      ],
     });
     const manualId = manualRequest.ids[0];
     await act(admin, {

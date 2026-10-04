@@ -18,6 +18,8 @@ import {
 } from "lucide-react";
 import type { Part, Request } from "@/lib/demo-data";
 import { boxLabel } from "@/lib/packaging";
+import { requestAnomaly } from "@/lib/request-policy";
+import { RequestWorkflowScreen } from "./request-workflow-screen";
 import { useDemoStore } from "../demo-store";
 import { useEmployeeName, useEmployeeBlock } from "../employee-identity";
 import { PartArt } from "./part-art";
@@ -76,6 +78,7 @@ export function EmployeeRequestScreen({ routePart }: { routePart?: string }) {
   const [availableOnly, setAvailableOnly] = useState(false);
   const [mode, setMode] = useState<Mode>(null);
   const [quantity, setQuantity] = useState("1");
+  const [requestedUnit, setRequestedUnit] = useState<"piece" | "box">("piece");
   const [confirmQuantity, setConfirmQuantity] = useState("");
   const [priority, setPriority] = useState<Request["priority"]>("Leve");
   const [justification, setJustification] = useState("");
@@ -119,10 +122,15 @@ export function EmployeeRequestScreen({ routePart }: { routePart?: string }) {
   const availableForPart = selectedPart
     ? Math.max(0, selectedPart.quantity - reservedForPart)
     : 0;
-  const unusual = Number(quantity) > 10 || priority === "Urgente";
+  const unitMultiplier =
+    requestedUnit === "box" ? (selectedPart?.packSize ?? 1) : 1;
+  const unitsRequested = Number(quantity) * unitMultiplier;
+  const anomaly = requestAnomaly(unitsRequested, selectedPart?.requestPattern);
+  const unusual = anomaly.unusual || priority === "Urgente";
 
   function resetForm() {
     setQuantity("1");
+    setRequestedUnit("piece");
     setConfirmQuantity("");
     setPriority("Leve");
     setJustification("");
@@ -133,7 +141,8 @@ export function EmployeeRequestScreen({ routePart }: { routePart?: string }) {
   async function submitItem(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedPart || !mode) return;
-    const amount = Number(quantity);
+    const requestedAmount = Number(quantity);
+    const amount = unitsRequested;
     if (
       !Number.isSafeInteger(amount) ||
       amount < 1 ||
@@ -142,20 +151,33 @@ export function EmployeeRequestScreen({ routePart }: { routePart?: string }) {
       setError("Informe uma quantidade inteira dentro do saldo disponível.");
       return;
     }
-    if (Number(confirmQuantity) !== amount || confirmQuantity.trim() === "") {
+    if (
+      Number(confirmQuantity) !== requestedAmount ||
+      confirmQuantity.trim() === ""
+    ) {
       setError("Digite a mesma quantidade nos dois campos.");
       return;
     }
     if (unusual && !justification.trim()) {
-      setError("Justifique a quantidade elevada ou a prioridade urgente.");
+      setError(
+        "Justifique a anormalidade identificada ou a prioridade urgente.",
+      );
       return;
     }
     if (mode === "cart") {
+      if (cart.some((entry) => entry.code === selectedPart.code)) {
+        setError(
+          "Esta peça já está no carrinho. Remova o item anterior antes de alterar a quantidade.",
+        );
+        return;
+      }
       setCart((items) => [
         ...items,
         {
           code: selectedPart.code,
           quantity: amount,
+          requestedUnit,
+          requestedAmount,
           priority,
           justification: justification.trim(),
         },
@@ -171,7 +193,8 @@ export function EmployeeRequestScreen({ routePart }: { routePart?: string }) {
           entries: [
             {
               code: selectedPart.code,
-              quantity: amount,
+              quantity: requestedAmount,
+              requestedUnit,
               priority,
               justification: justification.trim(),
             },
@@ -213,7 +236,11 @@ export function EmployeeRequestScreen({ routePart }: { routePart?: string }) {
       if (
         !Number.isSafeInteger(entry.quantity) ||
         entry.quantity < 1 ||
-        ((entry.quantity > 10 || entry.priority === "Urgente") &&
+        ((requestAnomaly(
+          entry.quantity,
+          stock.find((p) => p.code === entry.code)?.requestPattern,
+        ).unusual ||
+          entry.priority === "Urgente") &&
           !entry.justification.trim())
       ) {
         setError("Revise as quantidades e justificativas do carrinho.");
@@ -231,10 +258,16 @@ export function EmployeeRequestScreen({ routePart }: { routePart?: string }) {
     }
     if (persistent) {
       try {
-        await runAction({ type: "createRequests", entries: cart });
+        await runAction({
+          type: "createRequests",
+          entries: cart.map((entry) => ({
+            ...entry,
+            quantity: entry.requestedAmount ?? entry.quantity,
+          })),
+        });
         setCart([]);
         setError("");
-        router.push("/employee/history");
+        router.push("/employee/request#meus-pedidos");
       } catch (error) {
         setError(
           error instanceof Error
@@ -261,7 +294,7 @@ export function EmployeeRequestScreen({ routePart }: { routePart?: string }) {
     setRequests((items) => [...newRequests, ...items]);
     setCart([]);
     setError("");
-    router.push("/employee/history");
+    router.push("/employee/request#meus-pedidos");
   }
 
   const cartPanel = (
@@ -303,8 +336,10 @@ export function EmployeeRequestScreen({ routePart }: { routePart?: string }) {
             <div>
               <strong>{part?.name ?? entry.code}</strong>
               <small>
-                {entry.quantity} un. · {entry.priority} ·{" "}
-                {part?.code ?? entry.code}
+                {entry.requestedUnit === "box"
+                  ? `${entry.requestedAmount} caixas · ${entry.quantity} peças`
+                  : `${entry.quantity} peças`}{" "}
+                · {entry.priority} · {part?.code ?? entry.code}
               </small>
               {entry.justification && (
                 <small>Justificativa: {entry.justification}</small>
@@ -425,7 +460,7 @@ export function EmployeeRequestScreen({ routePart }: { routePart?: string }) {
                 <div>
                   <strong>Requisição #{createdId} registrada</strong>
                   <p>O líder do {employeeBlock} poderá analisar o pedido.</p>
-                  <Link href="/employee/history">Ver minhas requisições</Link>
+                  <Link href="/employee/request#meus-pedidos">Ver minhas requisições</Link>
                 </div>
               </div>
             ) : mode ? (
@@ -438,11 +473,26 @@ export function EmployeeRequestScreen({ routePart }: { routePart?: string }) {
                 <p>Confirme a quantidade duas vezes e informe a prioridade.</p>
                 <div className={styles.employeeFields}>
                   <label>
+                    Requisitar por
+                    <select
+                      value={requestedUnit}
+                      onChange={(event) => {
+                        setRequestedUnit(event.target.value as "piece" | "box");
+                        setConfirmQuantity("");
+                      }}
+                    >
+                      <option value="piece">Peça</option>
+                      <option value="box">
+                        Caixa ({selectedPart.packSize} peças)
+                      </option>
+                    </select>
+                  </label>
+                  <label>
                     Quantidade
                     <input
                       type="number"
                       min="1"
-                      max={availableForPart}
+                      max={Math.floor(availableForPart / unitMultiplier)}
                       step="1"
                       inputMode="numeric"
                       value={quantity}
@@ -455,7 +505,7 @@ export function EmployeeRequestScreen({ routePart }: { routePart?: string }) {
                     <input
                       type="number"
                       min="1"
-                      max={availableForPart}
+                      max={Math.floor(availableForPart / unitMultiplier)}
                       step="1"
                       inputMode="numeric"
                       value={confirmQuantity}
@@ -489,10 +539,27 @@ export function EmployeeRequestScreen({ routePart }: { routePart?: string }) {
                       value={justification}
                       onChange={(event) => setJustification(event.target.value)}
                       required={unusual}
-                      placeholder="Descreva o motivo do pedido, especialmente em caso de urgência ou volume alto"
+                      minLength={unusual ? 3 : undefined}
+                      placeholder="Explique a necessidade deste material para a atividade do seu setor/bloco"
                     />
                   </label>
                 </div>
+                <p>
+                  {Number(quantity) || 0}{" "}
+                  {requestedUnit === "box" ? "caixas" : "peças"} ={" "}
+                  {unitsRequested || 0} peças.
+                </p>
+                {anomaly.reasons.map((reason) => (
+                  <p key={reason} role="note">
+                    {reason}
+                  </p>
+                ))}
+                {!anomaly.historySufficient && (
+                  <p>
+                    Histórico ainda insuficiente para comparar o consumo do
+                    setor/bloco. Pedidos urgentes exigem justificativa.
+                  </p>
+                )}
                 <p className={styles.employeeAvailable}>
                   Disponível para novo pedido: {availableForPart} unidades{" "}
                   {reservedForPart > 0 && `(${reservedForPart} no carrinho)`}
@@ -708,6 +775,7 @@ export function EmployeeRequestScreen({ routePart }: { routePart?: string }) {
         </p>
       )}
       {cartPanel}
+      {persistent && <RequestWorkflowScreen role="funcionario" compact />}
     </main>
   );
 }

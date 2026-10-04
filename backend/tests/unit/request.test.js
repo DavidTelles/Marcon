@@ -43,7 +43,7 @@ describe('Requisições via camada de workspace', () => {
     expect(executeWorkspaceAction).toHaveBeenCalledWith(employee, {
       type: 'createRequests',
       requestKey: undefined,
-      entries: [{ code: 'ROL-1', quantity: 2, priority: 'Moderado', justification: undefined }]
+      entries: [{ code: 'ROL-1', quantity: 2, requestedUnit: 'piece', priority: 'Moderado', justification: undefined }]
     });
   });
 
@@ -61,10 +61,10 @@ describe('Requisições via camada de workspace', () => {
     });
   });
 
-  test('entrega exige QR e quantidade confirmada', async () => {
+  test('entrega encerra a etapa posterior à retirada conferida', async () => {
     await requestService.transition(keeper, 10, REQUEST_STATUS.DELIVERED, undefined, { qr_code: 'ROL-1', confirmed_quantity: 2 });
     expect(executeWorkspaceAction).toHaveBeenCalledWith(keeper, {
-      type: 'changeRequestStatus', id: 10, status: 'Entregue', qrCode: 'ROL-1', confirmedQuantity: 2
+      type: 'changeRequestStatus', id: 10, status: 'Entregue', requestKey: undefined
     });
   });
 

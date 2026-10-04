@@ -22,6 +22,7 @@ __export(workspace_db_exports, {
 });
 module.exports = __toCommonJS(workspace_db_exports);
 var import_db = require("./db");
+const { requestPattern } = require('./request-policy');
 const roles = {
   admin: "Administrador",
   lider: "L\xEDder de bloco",
@@ -32,8 +33,12 @@ async function workspaceSnapshot(user, catalogOnly = false) {
   return (0, import_db.transaction)(async (c) => {
     const scope = user.role === "funcionario" ? "u.employee_no=?" : user.role === "lider" ? "b.name=?" : "1=1";
     const params = user.role === "funcionario" ? [user.id] : user.role === "lider" ? [user.block ?? ""] : [];
+    const requestScope = `(${scope} OR r.status='Entregue')`;
+    const [actors] = await c.execute("SELECT block_id,sector FROM users WHERE employee_no=?", [user.id]);
+    const actor = actors[0];
+    const [patterns] = actor ? await c.execute("SELECT part_id,block_id,sector,quantity FROM requests WHERE (block_id=? OR sector=?) AND approved_at IS NOT NULL AND status NOT IN ('Cancelada','Rejeitada') AND created_at>=DATE_SUB(NOW(),INTERVAL 90 DAY)", [actor.block_id, actor.sector]) : [[]];
     const [rr] = await c.execute(
-      `SELECT r.*,COALESCE((SELECT SUM(m.quantity) FROM stock_movements m WHERE m.request_id=r.id AND m.kind='saida'),0) AS delivered_quantity,p.name AS material,p.code,u.employee_no,u.name AS person,b.name AS block,DATE_FORMAT(r.created_at,'%d/%m/%Y') AS date FROM requests r JOIN parts p ON p.id=r.part_id JOIN users u ON u.id=r.requester_id JOIN blocks b ON b.id=r.block_id WHERE ${scope} ${catalogOnly ? "AND FALSE" : ""} ORDER BY r.created_at DESC,r.id DESC`,
+      `SELECT r.*,COALESCE((SELECT SUM(m.quantity) FROM stock_movements m WHERE m.request_id=r.id AND m.kind='saida'),0) AS delivered_quantity,p.name AS material,p.code,p.unit,fu.employee_no AS fulfilled_no,u.employee_no,u.name AS person,b.name AS block,DATE_FORMAT(r.created_at,'%d/%m/%Y') AS date FROM requests r JOIN parts p ON p.id=r.part_id JOIN users u ON u.id=r.requester_id JOIN blocks b ON b.id=r.block_id LEFT JOIN users fu ON fu.id=r.fulfilled_by WHERE ${requestScope} ${catalogOnly ? "AND FALSE" : ""} ORDER BY r.created_at DESC,r.id DESC`,
       params
     );
     const [br] = await c.query(
@@ -54,10 +59,21 @@ async function workspaceSnapshot(user, catalogOnly = false) {
       nodeId: b.map_node_id ? String(b.map_node_id) : void 0
     }));
     const [ar] = await c.execute(
-      `SELECT a.request_id,a.quantity,w.name,CONCAT(i.aisle,' / ',i.shelf) AS location,i.map_node_id FROM request_reservations a JOIN requests r ON r.id=a.request_id JOIN users u ON u.id=r.requester_id JOIN blocks b ON b.id=r.block_id JOIN warehouses w ON w.id=a.warehouse_id JOIN inventory i ON i.part_id=a.part_id AND i.warehouse_id=a.warehouse_id WHERE ${scope} ${catalogOnly ? "AND FALSE" : ""}`,
+      `SELECT a.request_id,a.quantity,w.name,CONCAT(i.aisle,' / ',i.shelf) AS location,i.map_node_id FROM request_reservations a JOIN requests r ON r.id=a.request_id JOIN users u ON u.id=r.requester_id JOIN blocks b ON b.id=r.block_id JOIN warehouses w ON w.id=a.warehouse_id JOIN inventory i ON i.part_id=a.part_id AND i.warehouse_id=a.warehouse_id WHERE ${requestScope} ${catalogOnly ? "AND FALSE" : ""}`,
+      params
+    );
+    const [collected] = await c.execute(
+      `SELECT m.request_id,SUM(m.quantity) AS quantity,w.name,CONCAT(i.aisle,' / ',i.shelf) AS location,i.map_node_id FROM stock_movements m JOIN requests r ON r.id=m.request_id JOIN users u ON u.id=r.requester_id JOIN blocks b ON b.id=r.block_id JOIN warehouses w ON w.id=m.warehouse_id LEFT JOIN inventory i ON i.part_id=m.part_id AND i.warehouse_id=m.warehouse_id WHERE ${requestScope} AND m.kind='saida' ${catalogOnly ? "AND FALSE" : ""} GROUP BY m.request_id,w.id,w.name,i.aisle,i.shelf,i.map_node_id`,
       params
     );
     const requests = rr.map((r) => ({
+      unit: String(r.unit),
+      requestedUnit: r.requested_unit || 'piece',
+      requestedAmount: Number(r.requested_amount ?? r.quantity),
+      packSizeAtRequest: Number(r.pack_size_at_request ?? 1),
+      anomaly: typeof r.anomaly === 'string' ? JSON.parse(r.anomaly) : r.anomaly ?? undefined,
+      pickedAt: r.picked_at || undefined,
+      fulfilledBy: r.fulfilled_no || undefined,
       id: Number(r.id),
       material: String(r.material),
       code: String(r.code),
@@ -79,7 +95,7 @@ async function workspaceSnapshot(user, catalogOnly = false) {
       deliveredAt: r.delivered_at ? String(r.delivered_at) : void 0,
       cancellationReason: r.cancellation_reason ? String(r.cancellation_reason) : void 0,
       reserved: ar.filter((a) => Number(a.request_id) === Number(r.id)).reduce((sum, a) => sum + Number(a.quantity), 0),
-      allocations: ar.filter((a) => Number(a.request_id) === Number(r.id)).map((a) => ({
+      allocations: (r.picked_at ? collected : ar).filter((a) => Number(a.request_id) === Number(r.id)).map((a) => ({
         warehouse: String(a.name),
         quantity: Number(a.quantity),
         location: String(a.location),
@@ -87,7 +103,7 @@ async function workspaceSnapshot(user, catalogOnly = false) {
       }))
     }));
     const [mr] = await c.execute(
-      `SELECT m.*,p.code,w.name AS warehouse,b.name AS block,COALESCE(u.name,au.name) AS requester,au.name AS actor,DATE_FORMAT(m.created_at,'%Y-%m-%d') AS date FROM stock_movements m JOIN parts p ON p.id=m.part_id JOIN warehouses w ON w.id=m.warehouse_id LEFT JOIN requests r ON r.id=m.request_id LEFT JOIN users u ON u.id=r.requester_id LEFT JOIN blocks b ON b.id=m.block_id JOIN users au ON au.id=m.actor_id WHERE ${scope} ${catalogOnly ? "AND FALSE" : ""} ORDER BY m.created_at DESC,m.id DESC LIMIT 10000`,
+      `SELECT m.*,p.code,w.name AS warehouse,b.name AS block,COALESCE(u.name,au.name) AS requester,au.name AS actor,DATE_FORMAT(m.created_at,'%Y-%m-%d') AS date FROM stock_movements m JOIN parts p ON p.id=m.part_id JOIN warehouses w ON w.id=m.warehouse_id LEFT JOIN requests r ON r.id=m.request_id LEFT JOIN users u ON u.id=r.requester_id LEFT JOIN blocks b ON b.id=m.block_id JOIN users au ON au.id=m.actor_id WHERE ${requestScope} ${catalogOnly ? "AND FALSE" : ""} ORDER BY m.created_at DESC,m.id DESC LIMIT 10000`,
       params
     );
     const movements = mr.map((m) => ({
@@ -124,6 +140,7 @@ async function workspaceSnapshot(user, catalogOnly = false) {
         (m) => m.partCode === p.code && m.kind === "saida"
       );
       return {
+        requestPattern: actor ? requestPattern(patterns, Number(p.id), Number(actor.block_id), String(actor.sector)) : undefined,
         id: Number(p.id),
         name: String(p.name),
         description: p.description ? String(p.description) : void 0,
@@ -163,10 +180,11 @@ async function workspaceSnapshot(user, catalogOnly = false) {
       };
     });
     const [ret] = await c.execute(
-      `SELECT ret.*,p.code,p.pack_size,b.name AS block,w.name AS warehouse,DATE_FORMAT(ret.created_at,'%Y-%m-%d') AS date FROM return_records ret JOIN parts p ON p.id=ret.part_id JOIN warehouses w ON w.id=ret.warehouse_id JOIN blocks b ON b.id=ret.block_id LEFT JOIN requests r ON r.id=ret.request_id LEFT JOIN users u ON u.id=r.requester_id WHERE ${scope} ${catalogOnly ? "AND FALSE" : ""} ORDER BY ret.created_at DESC`,
+      `SELECT ret.*,p.code,p.pack_size,b.name AS block,w.name AS warehouse,DATE_FORMAT(ret.created_at,'%Y-%m-%d') AS date FROM return_records ret JOIN parts p ON p.id=ret.part_id JOIN warehouses w ON w.id=ret.warehouse_id JOIN blocks b ON b.id=ret.block_id LEFT JOIN requests r ON r.id=ret.request_id LEFT JOIN users u ON u.id=r.requester_id WHERE ${requestScope} ${catalogOnly ? "AND FALSE" : ""} ORDER BY ret.created_at DESC`,
       params
     );
     const returns = ret.map((r) => ({
+      inspectedAt: r.inspected_at || undefined,
       id: Number(r.id),
       partCode: String(r.code),
       packSize: Number(r.pack_size),

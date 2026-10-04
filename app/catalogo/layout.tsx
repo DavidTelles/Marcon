@@ -2,7 +2,6 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { LayoutGrid, LogOut, UserRound } from "lucide-react";
 import { currentUser } from "@/lib/auth";
-import { databaseEnabled } from "@/lib/db";
 import { roleLanding } from "@/lib/workspace-routes";
 import { BrandLogo } from "@/app/components/brand-logo";
 import styles from "./catalog.module.css";
@@ -16,7 +15,7 @@ export default async function CatalogLayout({
 }) {
   const user = await currentUser();
   if (!user) redirect("/login");
-  if (databaseEnabled()) redirect(user.role === "funcionario" ? "/employee/request" : roleLanding[user.role]);
+  if (user.role !== "funcionario") redirect(roleLanding[user.role]);
 
   return (
     <div className={styles.appShell}>

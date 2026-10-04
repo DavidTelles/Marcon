@@ -18,6 +18,7 @@ exports.inventoryActions = new Set([
     "savePart",
     "deletePart",
     "stockEntry",
+    "replenishStock",
     "adjustStock",
     "registerReturn",
     "inspectReturn",
@@ -135,7 +136,7 @@ async function executeInventoryAction(user, a, connection) {
                 : "Atualização cadastral";
             const mapNodeId = (0, permissions_1.text)(d.mapNodeId === undefined && id ? b.map_node_id : d.mapNodeId, 64);
             if (mapNodeId) {
-                const map = await (0, stock_ledger_1.first)(c, "SELECT graph FROM map_versions WHERE status='Publicada' LOCK IN SHARE MODE");
+                const map = await (0, stock_ledger_1.first)(c, "SELECT graph FROM map_versions WHERE status='Publicada' FOR SHARE");
                 const graph = map && (typeof map.graph === "string" ? JSON.parse(map.graph) : map.graph);
                 if (!graph?.nodes?.some((n) => n.id === mapNodeId && n.warehouseId === Number(w.id)))
                     throw new permissions_1.ActionError("Vincule a posição a um ponto do seu almoxarifado na planta publicada.", 409);
@@ -269,13 +270,15 @@ async function executeInventoryAction(user, a, connection) {
         }
         const w = await (0, stock_ledger_1.place)(c, a.type === "transfer" ? (a.from ?? "Central") : a.warehouse);
         await c.execute("INSERT IGNORE INTO inventory(part_id,warehouse_id) VALUES(?,?)", [p.id, w.id]);
-        if (a.type === "stockEntry" || a.type === "adjustStock") {
-            const b = (await (0, stock_ledger_1.stock)(c, Number(p.id))).find((b) => Number(b.warehouse_id) === Number(w.id)), q = (0, permissions_1.integer)(a.quantity, a.type === "adjustStock" ? 0 : 1), next = a.type === "stockEntry" ? Number(b.quantity) + q : q, delta = next - Number(b.quantity), note = (0, permissions_1.reason)(a.reason);
+        if (a.type === "stockEntry" || a.type === "replenishStock" || a.type === "adjustStock") {
+            if (a.type === "replenishStock")
+                (0, stock_ledger_1.scan)(p, a.qrCode);
+            const b = (await (0, stock_ledger_1.stock)(c, Number(p.id))).find((b) => Number(b.warehouse_id) === Number(w.id)), q = (0, permissions_1.integer)(a.quantity, a.type === "adjustStock" ? 0 : 1), next = a.type !== "adjustStock" ? Number(b.quantity) + q : q, delta = next - Number(b.quantity), note = (0, permissions_1.reason)(a.reason);
             if (next < Number(b.reserved) + Number(b.pending_outgoing ?? 0))
                 throw new permissions_1.ActionError("O saldo não pode ficar abaixo do reservado.", 409);
             (0, stock_ledger_1.capacity)(b, next);
             await c.execute("UPDATE inventory SET quantity=? WHERE part_id=? AND warehouse_id=?", [next, p.id, w.id]);
-            await (0, stock_ledger_1.movement)(c, actorId, Number(p.id), Number(w.id), a.type === "stockEntry"
+            await (0, stock_ledger_1.movement)(c, actorId, Number(p.id), Number(w.id), a.type !== "adjustStock"
                 ? "entrada"
                 : delta > 0
                     ? "ajuste_entrada"

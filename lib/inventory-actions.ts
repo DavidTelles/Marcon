@@ -26,6 +26,7 @@ export const inventoryActions = new Set([
   "savePart",
   "deletePart",
   "stockEntry",
+  "replenishStock",
   "adjustStock",
   "registerReturn",
   "inspectReturn",
@@ -176,7 +177,7 @@ export async function executeInventoryAction(
         : "Atualização cadastral";
       const mapNodeId = text(d.mapNodeId === undefined && id ? b.map_node_id : d.mapNodeId, 64);
       if (mapNodeId) {
-        const map = await first(c, "SELECT graph FROM map_versions WHERE status='Publicada' LOCK IN SHARE MODE");
+        const map = await first(c, "SELECT graph FROM map_versions WHERE status='Publicada' FOR SHARE");
         const graph = map && (typeof map.graph === "string" ? JSON.parse(map.graph) : map.graph);
         if (!graph?.nodes?.some((n: { id: string; warehouseId?: number }) => n.id === mapNodeId && n.warehouseId === Number(w.id)))
           throw new ActionError("Vincule a posição a um ponto do seu almoxarifado na planta publicada.", 409);
@@ -422,12 +423,13 @@ export async function executeInventoryAction(
       "INSERT IGNORE INTO inventory(part_id,warehouse_id) VALUES(?,?)",
       [p.id, w.id],
     );
-    if (a.type === "stockEntry" || a.type === "adjustStock") {
+    if (a.type === "stockEntry" || a.type === "replenishStock" || a.type === "adjustStock") {
+      if (a.type === "replenishStock") scan(p, a.qrCode);
       const b = (await stock(c, Number(p.id))).find(
           (b) => Number(b.warehouse_id) === Number(w.id),
         )!,
         q = integer(a.quantity, a.type === "adjustStock" ? 0 : 1),
-        next = a.type === "stockEntry" ? Number(b.quantity) + q : q,
+        next = a.type !== "adjustStock" ? Number(b.quantity) + q : q,
         delta = next - Number(b.quantity),
         note = reason(a.reason);
       if (next < Number(b.reserved) + Number(b.pending_outgoing ?? 0))
@@ -445,7 +447,7 @@ export async function executeInventoryAction(
         actorId,
         Number(p.id),
         Number(w.id),
-        a.type === "stockEntry"
+        a.type !== "adjustStock"
           ? "entrada"
           : delta > 0
             ? "ajuste_entrada"

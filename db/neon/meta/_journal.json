@@ -15,6 +15,20 @@
       "when": 1790876502670,
       "tag": "0001_updated_at_triggers",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791145673449,
+      "tag": "0002_pink_flatman",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791145782042,
+      "tag": "0003_orange_alex_power",
+      "breakpoints": true
     }
   ]
 }

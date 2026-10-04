@@ -1,10 +1,8 @@
 import { redirect } from "next/navigation";
 import { currentUser } from "@/lib/auth";
 import { BrandPanel } from "./components/brand-panel";
-import { DemoCredentials } from "./components/demo-credentials";
 import LoginForm from "./login-form";
 import styles from "./login.module.css";
-import { databaseEnabled } from "@/lib/db";
 import { roleLanding } from "@/lib/workspace-routes";
 import { ThemeToggle } from "@/components/workspace/theme-toggle";
 
@@ -25,7 +23,7 @@ export default async function LoginPage() {
         <header className={styles.accessHeader}>
           <span>Portal do colaborador</span>
           <div className={styles.accessControls}>
-            <span className={styles.demoBadge}>{databaseEnabled() ? "Acesso seguro" : "Demonstração"}</span>
+            <span className={styles.demoBadge}>Acesso seguro</span>
             <ThemeToggle />
           </div>
         </header>
@@ -37,9 +35,7 @@ export default async function LoginPage() {
             </h1>
             <p>Acesse sua conta e continue de onde parou.</p>
           </div>
-          <LoginForm demoMode={!databaseEnabled()}>
-            {!databaseEnabled() && <DemoCredentials />}
-          </LoginForm>
+          <LoginForm demoMode={false} />
         </div>
         <footer className={styles.accessFooter}>
           <span>Marcon · Smartway</span>

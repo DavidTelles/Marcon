@@ -14,6 +14,7 @@
   suggestedLabel?: string;
   warehouseId?: number;
   blockId?: number;
+  sector?: string;
 };
 export type MapEdge = {
   from: string;
@@ -51,7 +52,7 @@ export const mapKinds = {
   block: "Bloco",
   delivery: "Entrega",
   shelf: "Acesso à prateleira",
-  local_stock: "Estoque local",
+  local_stock: "Almoxarifado menor",
   sector: "Setor",
   production_line: "Linha de produção",
   gate: "Portão",
@@ -69,6 +70,12 @@ export const mapKinds = {
   support: "Área de apoio",
   custom: "Personalizado",
 } as const;
+export function deliveryTargets(graph: FacilityGraph, blockId: number, sector?: string) {
+  const points = graph.nodes.filter((node) => node.blockId === blockId && ["block", "sector", "production_line", "delivery", "replenishment"].includes(node.kind));
+  const normalize = (value: string) => value.trim().toLocaleLowerCase("pt-BR");
+  const specific = sector ? points.filter((node) => node.sector && normalize(node.sector) === normalize(sector)) : [];
+  return specific.length ? specific : points.filter((node) => !node.sector);
+}
 export function nextPointLabel(g: FacilityGraph, kind: keyof typeof mapKinds) {
   let number = 1;
   while (g.nodes.some((n) => n.label === `${mapKinds[kind]} ${number}`))
@@ -185,6 +192,7 @@ export function graphProblems(g: FacilityGraph): string[] {
       (n.access !== undefined && (typeof n.access !== "string" || n.access.length > 120)) ||
       [n.blocked, n.restricted].some((v) => v !== undefined && typeof v !== "boolean") ||
       !validTransport(n.allowedTransport) ||
+      (n.sector !== undefined && (typeof n.sector !== "string" || !n.sector.trim() || n.sector.length > 80 || !n.blockId)) ||
       ![n.x, n.y].every((v) => Number.isFinite(v) && v >= 0 && v <= 1) ||
       [n.warehouseId, n.blockId].some(
         (v) => v !== undefined && (!Number.isSafeInteger(v) || v < 1),

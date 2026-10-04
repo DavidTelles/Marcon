@@ -38,7 +38,7 @@ export type DetailRecord = {
   request?: import("./demo-data").Request;
 };
 const open =
-  "r.status IN ('Pendente','Em análise','Aprovada','Cancelamento solicitado')";
+  "r.status IN ('Pendente','Em análise','Aprovada','Cancelamento solicitado','Em separação','Em entrega')";
 const requestMetric = (metric: Metric) =>
   ["pending", "urgent", "requests", "anomalies", "delivery"].includes(metric);
 const movementMetric = (metric: Metric) =>
@@ -49,7 +49,7 @@ function metricPredicate(metric: Metric) {
     : metric === "urgent"
       ? open + " AND r.priority='Urgente'"
       : metric === "anomalies"
-        ? "r.status<>'Cancelada' AND (r.priority='Urgente' OR COALESCE(r.justification,'')<>'')"
+        ? "r.status NOT IN ('Cancelada','Rejeitada') AND JSON_UNQUOTE(JSON_EXTRACT(r.anomaly,'$.unusual'))='true'"
         : "1=1";
 }
 async function validateReferences(f: DashboardFilter) {
@@ -86,7 +86,7 @@ export async function dashboardDetail(
       params,
     );
     const [rows] = await pool.execute<RowDataPacket[]>(
-      `SELECT r.*,COALESCE((SELECT SUM(m.quantity) FROM stock_movements m WHERE m.request_id=r.id AND m.kind='saida'),0) AS delivered_quantity,p.code,p.name AS item,p.unit,u.name AS person,u.employee_no,b.name AS block,COALESCE(au.name,ap.name,'Não atribuído') AS actor,TIMESTAMPDIFF(SECOND,r.created_at,r.delivered_at)/3600 AS hours ${requestJoins} LEFT JOIN users au ON au.id=r.fulfilled_by LEFT JOIN users ap ON ap.id=r.approved_by WHERE ${condition} ORDER BY CASE WHEN ${open} THEN 0 ELSE 1 END,FIELD(r.priority,'Urgente','Moderado','Leve'),r.created_at,r.id LIMIT ${limit} OFFSET ${offset}`,
+      `SELECT r.*,COALESCE((SELECT SUM(m.quantity) FROM stock_movements m WHERE m.request_id=r.id AND m.kind='saida'),0) AS delivered_quantity,p.code,p.name AS item,p.unit,au.employee_no AS fulfilled_no,u.name AS person,u.employee_no,b.name AS block,COALESCE(au.name,ap.name,'Não atribuído') AS actor,TIMESTAMPDIFF(SECOND,r.created_at,r.delivered_at)/3600 AS hours ${requestJoins} LEFT JOIN users au ON au.id=r.fulfilled_by LEFT JOIN users ap ON ap.id=r.approved_by WHERE ${condition} ORDER BY CASE WHEN ${open} THEN 0 ELSE 1 END,FIELD(r.priority,'Urgente','Moderado','Leve'),r.created_at,r.id LIMIT ${limit} OFFSET ${offset}`,
       params,
     );
     const records: DetailRecord[] = [];
@@ -100,6 +100,12 @@ export async function dashboardDetail(
         [r.id],
       );
       const request = {
+        requestedUnit: r.requested_unit || "piece",
+        requestedAmount: Number(r.requested_amount ?? r.quantity),
+        packSizeAtRequest: Number(r.pack_size_at_request ?? 1),
+        anomaly: typeof r.anomaly === "string" ? JSON.parse(r.anomaly) : r.anomaly ?? undefined,
+        pickedAt: r.picked_at ?? undefined,
+        fulfilledBy: r.fulfilled_no ?? undefined,
         id: Number(r.id),
         code: String(r.code),
         material: String(r.item),
@@ -135,7 +141,8 @@ export async function dashboardDetail(
           at: events.find((e) => e.status === "Em análise")?.created_at ?? null,
         },
         { label: "Aprovada / reservada", at: r.approved_at },
-        { label: "Entregue / baixada", at: r.delivered_at },
+        { label: "Retirada conferida / baixa de estoque", at: r.picked_at },
+        { label: "Entrega confirmada no bloco", at: r.delivered_at },
         { label: "Recebimento confirmado", at: r.received_at },
       ];
       if (r.status === "Cancelada")
@@ -260,7 +267,7 @@ export async function dashboardReport(
     }),
     w = requestWhere(user, f);
   const [requestCounts] = await pool.execute<RowDataPacket[]>(
-    `SELECT COUNT(*) requests,COALESCE(SUM(CASE WHEN ${open} THEN 1 ELSE 0 END),0) pending,COALESCE(SUM(CASE WHEN ${open} AND r.priority='Urgente' THEN 1 ELSE 0 END),0) urgent,COALESCE(SUM(CASE WHEN r.status<>'Cancelada' AND (r.priority='Urgente' OR COALESCE(r.justification,'')<>'') THEN 1 ELSE 0 END),0) anomalies ${requestJoins} WHERE ${w.sql}`,
+    `SELECT COUNT(*) requests,COALESCE(SUM(CASE WHEN ${open} THEN 1 ELSE 0 END),0) pending,COALESCE(SUM(CASE WHEN ${open} AND r.priority='Urgente' THEN 1 ELSE 0 END),0) urgent,COALESCE(SUM(CASE WHEN r.status NOT IN ('Cancelada','Rejeitada') AND JSON_UNQUOTE(JSON_EXTRACT(r.anomaly,'$.unusual'))='true' THEN 1 ELSE 0 END),0) anomalies ${requestJoins} WHERE ${w.sql}`,
     w.params,
   );
   const deliveryWhere = requestWhere(user, f, false);

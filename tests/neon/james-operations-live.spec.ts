@@ -79,7 +79,14 @@ test("API/Neon real: conversation, all profiles, confirmed operations and persis
       data: {
         type: "createRequests",
         requestKey: crypto.randomUUID(),
-        entries: [{ code, quantity: 2, priority: "Leve", justification: "" }],
+        entries: [
+          {
+            code,
+            quantity: 2,
+            priority: "Leve",
+            justification: "Atividade técnica de teste",
+          },
+        ],
       },
     });
     expect(r.status(), await r.text()).toBe(200);
@@ -119,7 +126,14 @@ test("API/Neon real: conversation, all profiles, confirmed operations and persis
     const id = await create();
     const correction = await post({
       message: "Troque para 5 caixas",
-      cart: [{ code, quantity: 6, priority: "Leve", justification: "" }],
+      cart: [
+        {
+          code,
+          quantity: 6,
+          priority: "Leve",
+          justification: "Atividade técnica de teste",
+        },
+      ],
     });
     expect(correction.status(), await correction.text()).toBe(200);
     expect((await correction.json()).cart[0].quantity).toBe(10);
@@ -247,7 +261,27 @@ test("API/Neon real: conversation, all profiles, confirmed operations and persis
     const receiptId = await create();
     await login("1004");
     await confirm(await preview(`Aprove a requisição ${receiptId}`));
-    // Delivery uses the official scan/quantity API. This is test input, not a physical scan.
+    // Withdrawal uses the official two-step confirmation before final delivery.
+    const pickupInput = { id: receiptId, qrCode: code, confirmedQuantity: 2 };
+    const claimed = await request.post("/api/workspace", {
+      headers,
+      data: { type: "claimRequest", id: receiptId },
+    });
+    expect(claimed.status(), await claimed.text()).toBe(200);
+    const prepared = await request.post("/api/workspace", {
+      headers,
+      data: { type: "preparePick", ...pickupInput },
+    });
+    expect(prepared.status(), await prepared.text()).toBe(200);
+    const picked = await request.post("/api/workspace", {
+      headers,
+      data: {
+        type: "confirmPick",
+        ...pickupInput,
+        confirmation: (await prepared.json()).confirmation,
+      },
+    });
+    expect(picked.status(), await picked.text()).toBe(200);
     const delivered = await request.post("/api/workspace", {
       headers,
       data: {

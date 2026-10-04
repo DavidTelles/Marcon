@@ -8,7 +8,7 @@ const userController = require('../controllers/userController');
 const { ROLES, PERMISSIONS } = require('../config/constants');
 
 const router = express.Router();
-const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30, standardHeaders: true });
+const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30, standardHeaders: true, skipSuccessfulRequests: true });
 
 router.post('/register', authenticate, authorize(ROLES.ADMIN, PERMISSIONS.USERS_MANAGE), validate(schemas.registerBody), authController.register);
 router.post('/login', loginLimiter, validate(schemas.loginBody), authController.login);

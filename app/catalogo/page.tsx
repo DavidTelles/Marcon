@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { CatalogView } from "./catalog-view";
+import { redirect } from "next/navigation";
 
 export const metadata: Metadata = {
   title: "Catálogo de materiais | Marcon",
@@ -8,5 +8,5 @@ export const metadata: Metadata = {
 };
 
 export default function CatalogPage() {
-  return <CatalogView />;
+  redirect("/employee/request");
 }

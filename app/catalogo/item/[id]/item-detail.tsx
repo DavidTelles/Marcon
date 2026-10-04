@@ -1,13 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
-  CheckCircle2,
   CircleAlert,
   MapPin,
-  Minus,
   Package,
   Plus,
   ShieldCheck,
@@ -17,7 +15,6 @@ import { ItemArt } from "../../item-art";
 import styles from "../../catalog.module.css";
 
 type DetailState = "loading" | "ready" | "error" | "missing";
-type RequestState = "idle" | "submitting" | "success";
 
 export function ItemDetail({
   id,
@@ -29,13 +26,6 @@ export function ItemDetail({
   const [item, setItem] = useState<CatalogItem | null>(null);
   const [state, setState] = useState<DetailState>("loading");
   const [attempt, setAttempt] = useState(0);
-  const [requestState, setRequestState] = useState<RequestState>("idle");
-  const [persisted, setPersisted] = useState(false);
-  const submission = useRef<{ signature: string; key: string } | null>(null);
-  const [quantity, setQuantity] = useState(1);
-  const [showRequest, setShowRequest] = useState(false);
-  const [error, setError] = useState("");
-  const [protocol, setProtocol] = useState("");
 
   useEffect(() => {
     const controller = new AbortController();
@@ -64,36 +54,6 @@ export function ItemDetail({
   function retry() {
     setState("loading");
     setAttempt((value) => value + 1);
-  }
-
-  async function requestItem(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!item || requestState !== "idle") return;
-    setError("");
-    setRequestState("submitting");
-    const justification = String(new FormData(event.currentTarget).get("justification") ?? "");
-    const signature = JSON.stringify([item.id, quantity, justification]);
-    if (submission.current?.signature !== signature) submission.current = { signature, key: crypto.randomUUID() };
-    try {
-      const response = await fetch("/api/requisicoes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itemId: item.id, quantity, justification, requestKey: submission.current.key }),
-      });
-      const result = await response.json();
-      if (!response.ok) {
-        setError(result.error || "Não foi possível iniciar a requisição.");
-        setRequestState("idle");
-        return;
-      }
-      setProtocol(result.protocol);
-      setPersisted(result.persistent === true);
-      window.dispatchEvent(new CustomEvent("marcon:workspace-updated"));
-      setRequestState("success");
-    } catch {
-      setError("Não foi possível conectar. Tente novamente.");
-      setRequestState("idle");
-    }
   }
 
   return (
@@ -168,112 +128,20 @@ export function ItemDetail({
                   </span>
                 </div>
               </div>
-              {requestState === "success" ? (
-                <div className={styles.successCard} role="status">
-                  <CheckCircle2 size={28} />
-                  <div>
-                    <strong>Requisição iniciada!</strong>
-                    <p>
-                      Protocolo {protocol} · {quantity} {item.unit}
-                    </p>
-                    <small>
-                      {persisted ? "Requisição registrada; aguarde aprovação e atendimento." : "Demonstração: solicitação registrada temporariamente, sem envio ao almoxarifado."}
-                    </small>
-                  </div>
-                </div>
-              ) : !canRequest ? (
+              {!canRequest ? (
                 <p className={styles.roleNotice}>
                   Este perfil pode consultar o catálogo. Para requisitar
                   materiais, entre com uma conta de funcionário.
                 </p>
-              ) : !showRequest ? (
-                <button
-                  type="button"
+              ) : item.stock > 0 ? (
+                <Link
+                  href={`/employee/request/material/${encodeURIComponent(item.id)}`}
                   className={styles.primaryAction}
-                  disabled={item.stock === 0}
-                  onClick={() => setShowRequest(true)}
                 >
-                  {item.stock > 0
-                    ? "Requisitar este item"
-                    : "Indisponível no momento"}{" "}
-                  <Plus size={18} />
-                </button>
+                  Requisitar este item <Plus size={18} />
+                </Link>
               ) : (
-                <form className={styles.requestForm} onSubmit={requestItem}>
-                  <h2>Iniciar requisição</h2>
-                  <p>Escolha a quantidade desejada.</p>
-                  <div className={styles.quantityRow}>
-                    <label htmlFor="quantity">Quantidade</label>
-                    <div className={styles.stepper}>
-                      <button
-                        type="button"
-                        disabled={
-                          quantity <= 1 || requestState === "submitting"
-                        }
-                        onClick={() => setQuantity((value) => value - 1)}
-                        aria-label="Diminuir quantidade"
-                      >
-                        <Minus size={18} />
-                      </button>
-                      <input
-                        id="quantity"
-                        type="number"
-                        min="1"
-                        max={item.stock}
-                        step="1"
-                        value={quantity}
-                        onChange={(event) =>
-                          setQuantity(Number(event.target.value))
-                        }
-                        required
-                      />
-                      <button
-                        type="button"
-                        disabled={
-                          quantity >= item.stock ||
-                          requestState === "submitting"
-                        }
-                        onClick={() => setQuantity((value) => value + 1)}
-                        aria-label="Aumentar quantidade"
-                      >
-                        <Plus size={18} />
-                      </button>
-                    </div>
-                  </div>
-                  {quantity > 10 && <label>Justificativa<textarea name="justification" required minLength={3} maxLength={1000} /></label>}
-                  {error && (
-                    <p role="alert" className={styles.formError}>
-                      {error}
-                    </p>
-                  )}
-                  <div className={styles.formActions}>
-                    <button
-                      type="button"
-                      className={styles.outlineButton}
-                      disabled={requestState === "submitting"}
-                      onClick={() => {
-                        setShowRequest(false);
-                        setError("");
-                      }}
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="submit"
-                      className={styles.primaryAction}
-                      disabled={
-                        requestState === "submitting" ||
-                        !Number.isSafeInteger(quantity) ||
-                        quantity < 1 ||
-                        quantity > item.stock
-                      }
-                    >
-                      {requestState === "submitting"
-                        ? "Enviando…"
-                        : "Confirmar requisição"}
-                    </button>
-                  </div>
-                </form>
+                <p className={styles.roleNotice}>Indisponível no momento</p>
               )}
             </div>
           </div>

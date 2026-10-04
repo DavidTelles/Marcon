@@ -3,7 +3,6 @@ import "./globals.css";
 import "./theme.css";
 import { ThemeSync } from "@/components/workspace/theme-toggle";
 import { DemoProvider } from "@/components/workspace/demo-store";
-import { databaseEnabled } from "@/lib/db";
 
 export const metadata: Metadata = {
   title: "MARCON | Portal e gestão de materiais",
@@ -28,7 +27,7 @@ export default async function RootLayout({
       <body>
         <ThemeSync />
         <DemoProvider
-          persistent={databaseEnabled()}
+          persistent
           key={user?.id ?? "anonymous"}
           accountId={user?.id}
         >
