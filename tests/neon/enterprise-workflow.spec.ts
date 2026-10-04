@@ -345,7 +345,7 @@ test("perfis integrados: planta, caixas, análise, retirada dupla, entrega, mate
     await expect(row).toContainText("7");
     await page.goto("/department-head/history");
     await expect(
-      page.getByRole("heading", { name: "Histórico de entregas", exact: true }),
+      page.getByRole("heading", { name: "Histórico geral de entregas", exact: true }),
     ).toBeVisible();
     await expect(page.locator(`[data-request-id="${id}"]`)).toHaveCount(1);
     await expect(

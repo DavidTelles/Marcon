@@ -14,6 +14,7 @@ export default defineConfig({
   testDir: "./tests/neon",
   testMatch: [
     "enterprise-workflow.spec.ts",
+    "network-consumption.spec.ts",
     "ledger-idempotency.spec.ts",
     "operations.spec.ts",
     "workspace.spec.ts",

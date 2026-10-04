@@ -96,12 +96,12 @@ async function partsConsumption(user, query) {
         params.push(filters.warehouse);
     }
     const pool = (0, db_1.getPool)();
-    const [records] = await pool.execute(`SELECT r.id,p.code,p.name,p.unit,b.name AS block,r.sector,u.employee_no AS requester,u.name AS person,r.delivered_at AS deliveredAt,r.quantity,COALESCE((SELECT SUM(ret.quantity) FROM return_records ret WHERE ret.request_id=r.id AND ret.inspection_status='Conferida' AND ret.condition='Apto'),0) AS returned FROM requests r JOIN parts p ON p.id=r.part_id JOIN blocks b ON b.id=r.block_id JOIN users u ON u.id=r.requester_id WHERE ${clauses.join(" AND ")} ORDER BY r.delivered_at,r.id`, params);
+    const [records] = await pool.execute(`SELECT r.id,p.code,p.name,p.unit,b.name AS block,r.sector,u.employee_no AS requester,u.name AS person,r.delivered_at AS delivered_at,r.quantity,COALESCE((SELECT SUM(ret.quantity) FROM return_records ret WHERE ret.request_id=r.id AND ret.inspection_status='Conferida' AND ret.condition_type='Apto'),0) AS returned FROM requests r JOIN parts p ON p.id=r.part_id JOIN blocks b ON b.id=r.block_id JOIN users u ON u.id=r.requester_id WHERE ${clauses.join(" AND ")} ORDER BY r.delivered_at,r.id`, params);
     const rows = records.map((row) => ({
         ...row,
         quantity: Number(row.quantity),
         returned: Number(row.returned),
-        deliveredAt: String(row.deliveredAt),
+        deliveredAt: String(row.delivered_at),
     }));
     const current = consumptionSummary(rows, from, to), previous = consumptionSummary(rows, compareFrom, compareTo);
     const [parts] = await pool.query("SELECT code,name,unit FROM parts WHERE active=TRUE OR id IN (SELECT part_id FROM requests WHERE status='Entregue') ORDER BY name");

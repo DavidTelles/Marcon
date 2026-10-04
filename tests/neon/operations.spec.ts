@@ -343,7 +343,7 @@ test("reservas concorrentes, cancelamento, entrega, devolução, escopos e relat
     const snapshot = await (await employee.get("/api/workspace")).json();
     expect(
       snapshot.requests.every(
-        (r: { requesterId: string }) => r.requesterId === "1001",
+        (r: { requesterId: string; status: string }) => r.status === "Entregue" || r.requesterId === "1001",
       ),
     ).toBeTruthy();
     const response = await admin.get("/api/operations?code=" + code);

@@ -9,7 +9,10 @@ export async function GET(request: NextRequest) {
     if (!user)
       return NextResponse.json({ error: "Faça login." }, { status: 401 });
     return NextResponse.json(
-      await backendFetch("/api/parts/consumption?" + request.nextUrl.searchParams, { token: await apiToken() }),
+      await backendFetch(
+        "/api/parts/consumption?" + request.nextUrl.searchParams,
+        { token: await apiToken() },
+      ),
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {
@@ -20,7 +23,12 @@ export async function GET(request: NextRequest) {
             ? error.message
             : "Não foi possível consultar o consumo no banco.",
       },
-      { status: error instanceof ActionError || error instanceof BackendError ? error.status : 503 },
+      {
+        status:
+          error instanceof ActionError || error instanceof BackendError
+            ? error.status
+            : 503,
+      },
     );
   }
 }

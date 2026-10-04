@@ -27,7 +27,7 @@ await request("/api/login", 400, { ...login("1004", password), body: "{" });
 await request("/api/login", 400, { ...login("1004", password), body: "{}" });
 await request("/api/login", 401, login("1004", "incorrect-password"));
 
-const apiRoutes = ["/api/workspace", "/api/items", "/api/operations", "/api/requisicoes"];
+const apiRoutes = ["/api/workspace", "/api/items", "/api/operations", "/api/requisicoes", "/api/parts-consumption"];
 const backendRoutes = ["/me", "/api/users", "/api/blocks", "/api/sectors", "/api/warehouses", "/api/products", "/api/stock", "/api/stock/movements", "/api/requests", "/api/workspace/snapshot", "/api/workspace/transfers", "/admin/dashboard", "/warehouse/dashboard", "/department-head/dashboard"];
 for (const path of apiRoutes) await request(path, 401);
 for (const path of backendRoutes) await check(backend + path, 401);
@@ -49,13 +49,15 @@ for (const [identity, landing] of [["1001", "/employee/request"], ["1002", "/dep
   const profilePages = {
     "1001": ["/employee/history"],
     "1002": ["/department-head/requests", "/department-head/history", "/department-head/materials"],
-    "1003": ["/warehouse/requests", "/warehouse/history", "/warehouse/returns", "/warehouse/stock/all/all"],
+    "1003": ["/warehouse/requests", "/warehouse/history", "/warehouse/returns", "/warehouse/stock/all/all", "/warehouse/dashboard/parts", "/warehouse/dashboard/by-part"],
   };
   for (const path of profilePages[identity] || []) await request(path, 200, { headers });
+  await request("/api/parts-consumption", ["1003", "1004"].includes(identity) ? 200 : 403, { headers });
+  await check(backend + "/api/parts/consumption", ["1003", "1004"].includes(identity) ? 200 : 403, { headers: { Authorization: `Bearer ${token}` } });
   if (identity === "1004") {
     for (const path of apiRoutes) await request(path, 200, { headers });
     for (const path of backendRoutes) await check(backend + path, 200, { headers: { Authorization: `Bearer ${token}` } });
-    for (const path of ["/admin/map", "/admin/all-requests", "/admin/history", "/admin/create", "/admin/purchases", "/admin/recommendations", "/profile"]) await request(path, 200, { headers });
+    for (const path of ["/admin/map", "/admin/all-requests", "/admin/history", "/admin/create", "/admin/purchases", "/admin/recommendations", "/admin/dashboard/parts", "/admin/dashboard/by-part", "/profile"]) await request(path, 200, { headers });
     const catalog = await request("/catalogo", [200, 307], { headers });
     if (catalog.status === 307) assert.equal(catalog.headers.get("location"), "/admin/dashboard");
     else assert.match(await catalog.text(), /NEXT_REDIRECT;replace;\/admin\/dashboard;307;/);

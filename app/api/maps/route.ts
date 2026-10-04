@@ -62,9 +62,12 @@ export async function GET(request: NextRequest) {
       "SELECT id,name FROM blocks",
     );
     const [sectors] = await getPool().query<RowDataPacket[]>(
-      "SELECT u.block_id AS blockId,b.name AS block,u.sector,COUNT(*) AS employees FROM users u JOIN blocks b ON b.id=u.block_id WHERE u.active=TRUE GROUP BY u.block_id,b.name,u.sector ORDER BY b.name,u.sector",
+      "SELECT u.block_id AS block_id,b.name AS block,u.sector,COUNT(*) AS employees FROM users u JOIN blocks b ON b.id=u.block_id WHERE u.active=TRUE GROUP BY u.block_id,b.name,u.sector ORDER BY b.name,u.sector",
     );
-    return json({ maps, warehouses, blocks, sectors });
+    return json({ maps, warehouses, blocks, sectors: sectors.map((sector) => ({
+      blockId: Number(sector.block_id), block: String(sector.block),
+      sector: String(sector.sector), employees: Number(sector.employees),
+    })) });
   } catch (e) {
     if (e instanceof ActionError) return json({ error: e.message }, e.status);
     return json(
