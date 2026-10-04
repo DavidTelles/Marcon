@@ -238,6 +238,7 @@ export function RecommendationCards({
                       Físico: {r.physical}; reservado: {r.reserved}; disponível:{" "}
                       {r.available}; mínimo sugerido: {r.minimum}; alvo:{" "}
                       {r.target} {r.unit}.
+                      {mode === "distribution" && r.distribution?.idealTarget !== undefined && r.distribution.idealTarget > r.target && ` O saldo da rede é insuficiente para o alvo ideal de ${r.distribution.idealTarget} ${r.unit}; a cobertura foi dividida proporcionalmente ao consumo, preservando os mínimos.`}
                       {mode === "purchase" &&
                         ` Mínimo cadastrado do item no conjunto dos locais: ${r.itemMinimum} ${r.unit}.`}
                     </dd>

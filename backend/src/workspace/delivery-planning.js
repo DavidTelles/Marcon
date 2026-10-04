@@ -10,13 +10,25 @@ const permissions_1 = require("./permissions");
 const stock_ledger_1 = require("./stock-ledger");
 const routing_1 = require("./routing");
 async function storageRoute(c, part, source, destination, options = {}) {
-    const parameters = { objective: options.objective ?? "distance", transport: options.transport ?? "walking" };
-    if (!["distance", "time"].includes(parameters.objective) || !Object.hasOwn(routing_1.transports, parameters.transport))
+    const parameters = {
+        objective: options.objective ?? "distance",
+        transport: options.transport ?? "walking",
+    };
+    if (!["distance", "time"].includes(parameters.objective) ||
+        !Object.hasOwn(routing_1.transports, parameters.transport))
         throw new permissions_1.ActionError("Objetivo ou transporte inválido.");
     const map = await (0, stock_ledger_1.first)(c, "SELECT id,graph FROM map_versions WHERE status='Publicada' FOR SHARE");
-    const graph = map ? typeof map.graph === "string" ? JSON.parse(map.graph) : map.graph : null;
+    const graph = map
+        ? typeof map.graph === "string"
+            ? JSON.parse(map.graph)
+            : map.graph
+        : null;
     if (!graph?.reviewed || (0, routing_1.graphProblems)(graph).length)
-        return { mapVersion: null, route: null, reason: "Publique uma planta revisada e mapeie os locais reais de retirada e entrega." };
+        return {
+            mapVersion: null,
+            route: null,
+            reason: "Publique uma planta revisada e mapeie os locais reais de retirada e entrega.",
+        };
     const locations = await (0, stock_ledger_1.rows)(c, "SELECT warehouse_id,map_node_id FROM inventory WHERE part_id=? AND warehouse_id IN (?,?)", [part, typeof source === "number" ? source : destination, destination]);
     const points = (id) => {
         if (typeof id === "string")
@@ -24,8 +36,18 @@ async function storageRoute(c, part, source, destination, options = {}) {
         const linked = locations.find((l) => Number(l.warehouse_id) === id)?.map_node_id;
         return graph.nodes.filter((n) => n.warehouseId === id && (!linked || n.id === linked));
     };
-    const paths = points(source).flatMap((a) => points(destination).map((b) => (0, routing_1.shortestPath)(graph, a.id, b.id, parameters))).filter((p) => p !== null).sort((a, b) => a.cost - b.cost);
-    return { mapVersion: Number(map.id), route: paths[0] ?? null, reason: paths.length ? "Percurso pela rede publicada, com bloqueios e restrições cadastrados." : "Sem acesso transitável ou vínculo válido entre os locais. Mapeie o percurso necessário.", parameters };
+    const paths = points(source)
+        .flatMap((a) => points(destination).map((b) => (0, routing_1.shortestPath)(graph, a.id, b.id, parameters)))
+        .filter((p) => p !== null)
+        .sort((a, b) => a.cost - b.cost);
+    return {
+        mapVersion: Number(map.id),
+        route: paths[0] ?? null,
+        reason: paths.length
+            ? "Percurso pela rede publicada, com bloqueios e restrições cadastrados."
+            : "Sem acesso transitável ou vínculo válido entre os locais. Mapeie o percurso necessário.",
+        parameters,
+    };
 }
 async function deliveryHistory(id, page = 1) {
     const [history] = await (0, db_1.getPool)().execute(`SELECT h.id,h.map_version_id,h.event,h.payload,h.created_at,u.name AS actor FROM delivery_route_history h JOIN users u ON u.id=h.actor_id WHERE h.request_id=? ORDER BY h.id DESC LIMIT 20 OFFSET ${(page - 1) * 20}`, [id]);
@@ -65,11 +87,18 @@ async function recordDeliveryPlan(c, user, a, id) {
             : previous.payload)
         : null;
     const depart = a.action === "departDelivery";
-    const parameters = depart ? old?.parameters ?? {} : {
-        objective: a.objective === undefined ? "distance" : a.objective,
-        transport: a.transport === undefined ? "walking" : a.transport,
-    };
-    if (!["distance", "time"].includes(parameters.objective ?? "distance") || !Object.hasOwn(routing_1.transports, parameters.transport ?? "walking"))
+    const parameters = depart
+        ? (old?.parameters ?? {})
+        : {
+            objective: a.objective === undefined
+                ? "distance"
+                : a.objective,
+            transport: a.transport === undefined
+                ? "walking"
+                : a.transport,
+        };
+    if (!["distance", "time"].includes(parameters.objective ?? "distance") ||
+        !Object.hasOwn(routing_1.transports, parameters.transport ?? "walking"))
         throw new permissions_1.ActionError("Objetivo ou transporte inválido.");
     const destinations = depart
         ? (old?.destinations ?? [])
@@ -85,9 +114,10 @@ async function recordDeliveryPlan(c, user, a, id) {
         graph.scaleCalibrated = graph.scaleCalibrated === true;
         const reservations = await (0, stock_ledger_1.rows)(c, "SELECT rr.warehouse_id,i.map_node_id FROM request_reservations rr JOIN inventory i ON i.part_id=rr.part_id AND i.warehouse_id=rr.warehouse_id WHERE rr.request_id=? ORDER BY rr.warehouse_id", [id]);
         const pickups = reservations.map((v) => v.map_node_id
-            ? graph.nodes.find((n) => n.id === v.map_node_id && n.warehouseId === Number(v.warehouse_id))?.id
+            ? graph.nodes.find((n) => n.id === v.map_node_id &&
+                n.warehouseId === Number(v.warehouse_id))?.id
             : graph.nodes.find((n) => n.warehouseId === Number(v.warehouse_id))?.id);
-        const end = graph.nodes.find((n) => n.blockId === Number(r.block_id) && n.kind === "delivery") ?? graph.nodes.find((n) => n.blockId === Number(r.block_id));
+        const ends = (0, routing_1.deliveryTargets)(graph, Number(r.block_id), String(r.sector));
         if (destinations.some((d) => !graph.nodes.some((n) => n.id === d && n.kind === "delivery")))
             throw new permissions_1.ActionError("Destino adicional não é um ponto de entrega do mapa atual.");
         start ||= pickups[0] ?? "";
@@ -95,10 +125,13 @@ async function recordDeliveryPlan(c, user, a, id) {
             throw new permissions_1.ActionError("Escolha uma origem de retirada reservada nesta requisição.", 409);
         reason =
             "Rota indisponível: falta ligação transitável ou vínculo de origem/destino. Operação manual.";
-        if (pickups.length && pickups.every(Boolean) && end) {
+        if (pickups.length && pickups.every(Boolean) && ends.length) {
             const collection = (0, routing_1.planStops)(graph, start, pickups, parameters);
             const delivery = collection &&
-                (0, routing_1.planStops)(graph, collection.nodes.at(-1), destinations, { ...parameters, final: end.id });
+                ends
+                    .map((end) => (0, routing_1.planStops)(graph, collection.nodes.at(-1), destinations, { ...parameters, final: end.id }))
+                    .filter((path) => path !== null)
+                    .sort((a, b) => a.cost - b.cost)[0];
             if (collection && delivery) {
                 route = {
                     ...delivery,
@@ -118,7 +151,11 @@ async function recordDeliveryPlan(c, user, a, id) {
         throw new permissions_1.ActionError(reason + " Confirme a saída manual explicitamente.", 409);
     const payload = {
         route,
-        metric: parameters.objective === "time" ? "s" : graph?.scaleCalibrated === true ? "m" : "unidades do mapa",
+        metric: parameters.objective === "time"
+            ? "s"
+            : graph?.scaleCalibrated === true
+                ? "m"
+                : "unidades do mapa",
         parameters,
         reason,
         labels: route?.nodes.map((id) => graph.nodes.find((n) => n.id === id).label) ??
@@ -127,7 +164,8 @@ async function recordDeliveryPlan(c, user, a, id) {
         start,
     };
     if (a.atDelivery === true)
-        payload.reason += " Cálculo registrado na retirada conferida; a confirmação da entrega no bloco ocorre em etapa posterior.";
+        payload.reason +=
+            " Cálculo registrado na retirada conferida; a confirmação da entrega no bloco ocorre em etapa posterior.";
     const event = depart ? "Saída" : previous ? "Recalculada" : "Planejada";
     const [saved] = await c.execute("INSERT INTO delivery_route_history(request_id,map_version_id,actor_id,event,payload) VALUES(?,?,?,?,?)", [id, map?.id ?? null, actor.id, event, JSON.stringify(payload)]);
     await (0, stock_ledger_1.audit)(c, Number(actor.id), "request", id, "route", {

@@ -225,18 +225,23 @@ async function executeRequestAction(c, user, actor, a) {
                     ? JSON.parse(published.graph)
                     : published.graph)
                 : null;
-            const destination = graph?.nodes.find((n) => n.blockId === Number(r.block_id) &&
-                (n.kind === "delivery" || n.kind === "block"));
+            const destinations = graph
+                ? (0, routing_1.deliveryTargets)(graph, Number(r.block_id), String(r.sector))
+                : [];
             const ranked = locations
                 .map((l) => {
                 const node = graph?.nodes.find((n) => n.id === l.map_node_id) ??
                     graph?.nodes.find((n) => n.warehouseId === Number(l.warehouse_id));
-                const path = graph && node && destination
-                    ? (0, routing_1.shortestPath)(graph, node.id, destination.id)
-                    : null;
+                const paths = graph && node
+                    ? destinations
+                        .map((destination) => (0, routing_1.shortestPath)(graph, node.id, destination.id))
+                        .filter((path) => path !== null)
+                    : [];
                 return {
                     l,
-                    score: graph?.reviewed && path ? path.cost : Infinity,
+                    score: graph?.reviewed
+                        ? Math.min(Infinity, ...paths.map((path) => path.cost))
+                        : Infinity,
                 };
             })
                 .sort((a, b) => a.score - b.score ||

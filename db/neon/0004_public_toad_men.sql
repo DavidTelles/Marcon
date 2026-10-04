@@ -1,0 +1,1 @@
+ALTER TABLE "warehouses" DROP CONSTRAINT "warehouses_block_id_unique";

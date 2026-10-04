@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import sharp from "sharp";
+import { randomUUID } from "node:crypto";
 import { currentUser } from "@/lib/auth";
 import { databaseEnabled, getPool, transaction } from "@/lib/db";
 import { ActionError, demand, integer, text } from "@/lib/permissions";
-import { graphProblems, planStops, transports, type FacilityGraph, type RouteOptions } from "@/lib/routing";
+import {
+  graphProblems,
+  planStops,
+  transports,
+  type FacilityGraph,
+  type RouteOptions,
+} from "@/lib/routing";
 import type { RowDataPacket, ResultSetHeader } from "@/lib/db-types";
 import { imageObstacles, imageSuggestions } from "@/lib/map-image";
 import { deliveryHistory, planDelivery } from "@/lib/delivery-planning";
@@ -54,7 +61,10 @@ export async function GET(request: NextRequest) {
     const [blocks] = await getPool().query<RowDataPacket[]>(
       "SELECT id,name FROM blocks",
     );
-    return json({ maps, warehouses, blocks });
+    const [sectors] = await getPool().query<RowDataPacket[]>(
+      "SELECT u.block_id AS blockId,b.name AS block,u.sector,COUNT(*) AS employees FROM users u JOIN blocks b ON b.id=u.block_id WHERE u.active=TRUE GROUP BY u.block_id,b.name,u.sector ORDER BY b.name,u.sector",
+    );
+    return json({ maps, warehouses, blocks, sectors });
   } catch (e) {
     if (e instanceof ActionError) return json({ error: e.message }, e.status);
     return json(
@@ -146,9 +156,13 @@ export async function POST(request: NextRequest) {
         graph =
           typeof r[0].graph === "string" ? JSON.parse(r[0].graph) : r[0].graph;
         mapVersion = Number(r[0].id);
-        if (!graph.reviewed) throw new ActionError("A planta publicada não está revisada.", 409);
+        if (!graph.reviewed)
+          throw new ActionError("A planta publicada não está revisada.", 409);
         if (a.mapVersion !== undefined && a.mapVersion !== mapVersion)
-          throw new ActionError("A planta publicada mudou. Atualize a rota.", 409);
+          throw new ActionError(
+            "A planta publicada mudou. Atualize a rota.",
+            409,
+          );
       }
       if (
         !Array.isArray(a.stops) ||
@@ -157,16 +171,32 @@ export async function POST(request: NextRequest) {
       )
         throw new ActionError("Paradas inválidas.");
       const options: RouteOptions = {
-        objective: a.objective === undefined ? "distance" : a.objective as RouteOptions["objective"],
-        transport: a.transport === undefined ? "walking" : a.transport as RouteOptions["transport"],
+        objective:
+          a.objective === undefined
+            ? "distance"
+            : (a.objective as RouteOptions["objective"]),
+        transport:
+          a.transport === undefined
+            ? "walking"
+            : (a.transport as RouteOptions["transport"]),
         final: a.final === undefined ? undefined : text(a.final, 64),
       };
-      if (!["distance", "time"].includes(options.objective!) || !Object.hasOwn(transports, options.transport!))
+      if (
+        !["distance", "time"].includes(options.objective!) ||
+        !Object.hasOwn(transports, options.transport!)
+      )
         throw new ActionError("Objetivo ou transporte inválido.");
-      const route = planStops(graph, text(a.start, 64), a.stops as string[], options);
+      const route = planStops(
+        graph,
+        text(a.start, 64),
+        a.stops as string[],
+        options,
+      );
       return json({
         route,
-        graph, mapVersion, parameters: options,
+        graph,
+        mapVersion,
+        parameters: options,
         reason: route
           ? "Rota sugerida, sem movimentação de saldo."
           : "Rota indisponível: revise pontos, paredes e acessos bloqueados.",
@@ -203,6 +233,39 @@ export async function POST(request: NextRequest) {
         [user.id],
       );
       if (!actors[0]) throw new ActionError("Sessão inválida.", 401);
+      if (a.action === "createWarehouse") {
+        const name = text(a.name, 80),
+          blockId = a.blockId ? integer(a.blockId) : null;
+        if (name.length < 3)
+          throw new ActionError(
+            "Informe um nome de almoxarifado com pelo menos três caracteres.",
+          );
+        const [duplicates] = await c.execute<RowDataPacket[]>(
+          "SELECT id FROM warehouses WHERE name=?",
+          [name],
+        );
+        if (duplicates.length)
+          throw new ActionError(
+            "Já existe um almoxarifado com esse nome.",
+            409,
+          );
+        if (blockId) {
+          const [blocks] = await c.execute<RowDataPacket[]>(
+            "SELECT id FROM blocks WHERE id=?",
+            [blockId],
+          );
+          if (!blocks.length) throw new ActionError("Bloco inexistente.");
+        }
+        const [created] = await c.execute<ResultSetHeader>(
+          "INSERT INTO warehouses(code,name,block_id,is_central,active) VALUES(?,?,?,0,1)",
+          ["LOCAL-" + randomUUID().slice(0, 16), name, blockId],
+        );
+        await c.execute(
+          "INSERT INTO audit_log(actor_id,entity_type,entity_id,action,details) VALUES(?,'warehouse',?,'create',?)",
+          [actors[0].id, created.insertId, JSON.stringify({ name, blockId })],
+        );
+        return json({ id: created.insertId, name }, 201);
+      }
       if (a.action === "publish") {
         const id = integer(a.id),
           [r] = await c.execute<RowDataPacket[]>(
@@ -220,13 +283,43 @@ export async function POST(request: NextRequest) {
           n.kind === "shelf" ? { ...n, kind: "access" } : n,
         );
         const errors = graphProblems(graph);
-        const [activeWarehouses] = await c.query<RowDataPacket[]>("SELECT id FROM warehouses WHERE active=TRUE");
-        const [activeBlocks] = await c.query<RowDataPacket[]>("SELECT id FROM blocks");
-        if (graph.nodes.some((n: FacilityGraph["nodes"][number]) => (n.warehouseId && !activeWarehouses.some((w) => Number(w.id) === n.warehouseId)) || (n.blockId && !activeBlocks.some((b) => Number(b.id) === n.blockId))))
-          throw new ActionError("Um local ou bloco vinculado foi removido ou desativado. Resolva os vínculos antes de publicar.", 409);
-        const [linked] = await c.query<RowDataPacket[]>("SELECT i.map_node_id,i.warehouse_id,p.code FROM inventory i JOIN parts p ON p.id=i.part_id WHERE i.map_node_id IS NOT NULL AND p.active=TRUE");
-        const missing = linked.find((l) => !graph.nodes.some((n: FacilityGraph["nodes"][number]) => n.id === l.map_node_id && n.warehouseId === Number(l.warehouse_id)));
-        if (missing) throw new ActionError(`O ponto ${missing.map_node_id} está vinculado ao estoque de ${missing.code}. Resolva o vínculo no cadastro antes de publicar.`, 409);
+        const [activeWarehouses] = await c.query<RowDataPacket[]>(
+          "SELECT id FROM warehouses WHERE active=TRUE",
+        );
+        const [activeBlocks] = await c.query<RowDataPacket[]>(
+          "SELECT id FROM blocks",
+        );
+        if (
+          graph.nodes.some(
+            (n: FacilityGraph["nodes"][number]) =>
+              (n.warehouseId &&
+                !activeWarehouses.some(
+                  (w) => Number(w.id) === n.warehouseId,
+                )) ||
+              (n.blockId &&
+                !activeBlocks.some((b) => Number(b.id) === n.blockId)),
+          )
+        )
+          throw new ActionError(
+            "Um local ou bloco vinculado foi removido ou desativado. Resolva os vínculos antes de publicar.",
+            409,
+          );
+        const [linked] = await c.query<RowDataPacket[]>(
+          "SELECT i.map_node_id,i.warehouse_id,p.code FROM inventory i JOIN parts p ON p.id=i.part_id WHERE i.map_node_id IS NOT NULL AND p.active=TRUE",
+        );
+        const missing = linked.find(
+          (l) =>
+            !graph.nodes.some(
+              (n: FacilityGraph["nodes"][number]) =>
+                n.id === l.map_node_id &&
+                n.warehouseId === Number(l.warehouse_id),
+            ),
+        );
+        if (missing)
+          throw new ActionError(
+            `O ponto ${missing.map_node_id} está vinculado ao estoque de ${missing.code}. Resolva o vínculo no cadastro antes de publicar.`,
+            409,
+          );
         if (
           errors.length ||
           !graph.reviewed ||

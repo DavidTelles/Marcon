@@ -103,7 +103,7 @@ async function workspaceSnapshot(user, catalogOnly = false) {
       }))
     }));
     const [mr] = await c.execute(
-      `SELECT m.*,p.code,w.name AS warehouse,b.name AS block,COALESCE(u.name,au.name) AS requester,au.name AS actor,DATE_FORMAT(m.created_at,'%Y-%m-%d') AS date FROM stock_movements m JOIN parts p ON p.id=m.part_id JOIN warehouses w ON w.id=m.warehouse_id LEFT JOIN requests r ON r.id=m.request_id LEFT JOIN users u ON u.id=r.requester_id LEFT JOIN blocks b ON b.id=m.block_id JOIN users au ON au.id=m.actor_id WHERE ${requestScope} ${catalogOnly ? "AND FALSE" : ""} ORDER BY m.created_at DESC,m.id DESC LIMIT 10000`,
+      `SELECT m.*,p.code,w.name AS warehouse,b.name AS block,COALESCE(u.name,au.name) AS requester,au.name AS actor,DATE_FORMAT(m.created_at,'%Y-%m-%d') AS date FROM stock_movements m JOIN parts p ON p.id=m.part_id JOIN warehouses w ON w.id=m.warehouse_id LEFT JOIN requests r ON r.id=m.request_id LEFT JOIN users u ON u.id=r.requester_id LEFT JOIN blocks b ON b.id=m.block_id JOIN users au ON au.id=m.actor_id WHERE ${scope} ${catalogOnly ? "AND FALSE" : ""} ORDER BY m.created_at DESC,m.id DESC LIMIT 10000`,
       params
     );
     const movements = mr.map((m) => ({
@@ -180,7 +180,7 @@ async function workspaceSnapshot(user, catalogOnly = false) {
       };
     });
     const [ret] = await c.execute(
-      `SELECT ret.*,p.code,p.pack_size,b.name AS block,w.name AS warehouse,DATE_FORMAT(ret.created_at,'%Y-%m-%d') AS date FROM return_records ret JOIN parts p ON p.id=ret.part_id JOIN warehouses w ON w.id=ret.warehouse_id JOIN blocks b ON b.id=ret.block_id LEFT JOIN requests r ON r.id=ret.request_id LEFT JOIN users u ON u.id=r.requester_id WHERE ${requestScope} ${catalogOnly ? "AND FALSE" : ""} ORDER BY ret.created_at DESC`,
+      `SELECT ret.*,p.code,p.pack_size,b.name AS block,w.name AS warehouse,DATE_FORMAT(ret.created_at,'%Y-%m-%d') AS date FROM return_records ret JOIN parts p ON p.id=ret.part_id JOIN warehouses w ON w.id=ret.warehouse_id JOIN blocks b ON b.id=ret.block_id LEFT JOIN requests r ON r.id=ret.request_id LEFT JOIN users u ON u.id=r.requester_id WHERE ${scope} ${catalogOnly ? "AND FALSE" : ""} ORDER BY ret.created_at DESC`,
       params
     );
     const returns = ret.map((r) => ({

@@ -39,10 +39,26 @@ export type FacilityGraph = {
   scaleCalibrated?: boolean;
   obstacles?: { width: number; height: number; cells: string };
 };
-export const transports = { walking: "A pé", cart: "Carrinho", forklift: "Empilhadeira" } as const;
+export const transports = {
+  walking: "A pé",
+  cart: "Carrinho",
+  forklift: "Empilhadeira",
+} as const;
 export type Transport = keyof typeof transports;
-export type RouteOptions = { objective?: "distance" | "time"; transport?: Transport; final?: string };
-export type Path = { nodes: string[]; cost: number; stops?: string[]; unit?: "m" | "unidades do mapa" | "s"; objective?: "distance" | "time"; transport?: Transport; approximate?: boolean };
+export type RouteOptions = {
+  objective?: "distance" | "time";
+  transport?: Transport;
+  final?: string;
+};
+export type Path = {
+  nodes: string[];
+  cost: number;
+  stops?: string[];
+  unit?: "m" | "unidades do mapa" | "s";
+  objective?: "distance" | "time";
+  transport?: Transport;
+  approximate?: boolean;
+};
 export const mapKinds = {
   warehouse: "Almoxarifado",
   aisle: "Corredor",
@@ -70,10 +86,28 @@ export const mapKinds = {
   support: "Área de apoio",
   custom: "Personalizado",
 } as const;
-export function deliveryTargets(graph: FacilityGraph, blockId: number, sector?: string) {
-  const points = graph.nodes.filter((node) => node.blockId === blockId && ["block", "sector", "production_line", "delivery", "replenishment"].includes(node.kind));
+export function deliveryTargets(
+  graph: FacilityGraph,
+  blockId: number,
+  sector?: string,
+) {
+  const points = graph.nodes.filter(
+    (node) =>
+      node.blockId === blockId &&
+      [
+        "block",
+        "sector",
+        "production_line",
+        "delivery",
+        "replenishment",
+      ].includes(node.kind),
+  );
   const normalize = (value: string) => value.trim().toLocaleLowerCase("pt-BR");
-  const specific = sector ? points.filter((node) => node.sector && normalize(node.sector) === normalize(sector)) : [];
+  const specific = sector
+    ? points.filter(
+        (node) => node.sector && normalize(node.sector) === normalize(sector),
+      )
+    : [];
   return specific.length ? specific : points.filter((node) => !node.sector);
 }
 export function nextPointLabel(g: FacilityGraph, kind: keyof typeof mapKinds) {
@@ -112,7 +146,19 @@ export function routeLegs(g: FacilityGraph, path: Path) {
     return {
       from: a.label,
       to: b.label,
-      meters: g.scaleCalibrated === true ? edgeDistance(g, a, b, g.edges.find((e) => e.from === a.id && e.to === b.id || !e.oneWay && e.to === a.id && e.from === b.id)!) : null,
+      meters:
+        g.scaleCalibrated === true
+          ? edgeDistance(
+              g,
+              a,
+              b,
+              g.edges.find(
+                (e) =>
+                  (e.from === a.id && e.to === b.id) ||
+                  (!e.oneWay && e.to === a.id && e.from === b.id),
+              )!,
+            )
+          : null,
     };
   });
 }
@@ -163,7 +209,11 @@ export function graphProblems(g: FacilityGraph): string[] {
     return ["Dimensões ou escala inválidas."];
   const errors: string[] = [],
     ids = new Set<string>();
-  if (typeof g.reviewed !== "boolean" || g.scaleCalibrated !== undefined && typeof g.scaleCalibrated !== "boolean") return ["Estado de revisão ou calibração inválido."];
+  if (
+    typeof g.reviewed !== "boolean" ||
+    (g.scaleCalibrated !== undefined && typeof g.scaleCalibrated !== "boolean")
+  )
+    return ["Estado de revisão ou calibração inválido."];
   const mask = g.obstacles;
   if (
     mask &&
@@ -188,11 +238,19 @@ export function graphProblems(g: FacilityGraph): string[] {
       !n.label.trim() ||
       n.label.length > 120 ||
       !Object.hasOwn(mapKinds, n.kind) ||
-      (n.floor !== undefined && (!Number.isInteger(n.floor) || Math.abs(n.floor) > 200)) ||
-      (n.access !== undefined && (typeof n.access !== "string" || n.access.length > 120)) ||
-      [n.blocked, n.restricted].some((v) => v !== undefined && typeof v !== "boolean") ||
+      (n.floor !== undefined &&
+        (!Number.isInteger(n.floor) || Math.abs(n.floor) > 200)) ||
+      (n.access !== undefined &&
+        (typeof n.access !== "string" || n.access.length > 120)) ||
+      [n.blocked, n.restricted].some(
+        (v) => v !== undefined && typeof v !== "boolean",
+      ) ||
       !validTransport(n.allowedTransport) ||
-      (n.sector !== undefined && (typeof n.sector !== "string" || !n.sector.trim() || n.sector.length > 80 || !n.blockId)) ||
+      (n.sector !== undefined &&
+        (typeof n.sector !== "string" ||
+          !n.sector.trim() ||
+          n.sector.length > 80 ||
+          !n.blockId)) ||
       ![n.x, n.y].every((v) => Number.isFinite(v) && v >= 0 && v <= 1) ||
       [n.warehouseId, n.blockId].some(
         (v) => v !== undefined && (!Number.isSafeInteger(v) || v < 1),
@@ -219,16 +277,25 @@ export function graphProblems(g: FacilityGraph): string[] {
       !a ||
       !b ||
       a === b ||
-      [edge.seconds, edge.distance].some((v) => v !== undefined && (!Number.isFinite(v) || v < 0 || v > 1e9)) ||
-      (edge.distanceUnit !== undefined && !["m", "map"].includes(edge.distanceUnit)) ||
-      [edge.oneWay, edge.vertical].some((v) => v !== undefined && typeof v !== "boolean") ||
+      [edge.seconds, edge.distance].some(
+        (v) => v !== undefined && (!Number.isFinite(v) || v < 0 || v > 1e9),
+      ) ||
+      (edge.distanceUnit !== undefined &&
+        !["m", "map"].includes(edge.distanceUnit)) ||
+      [edge.oneWay, edge.vertical].some(
+        (v) => v !== undefined && typeof v !== "boolean",
+      ) ||
       !validTransport(edge.allowedTransport) ||
       ((a.floor ?? 0) !== (b.floor ?? 0) && !edge.vertical) ||
       (edge.vertical && edge.distance === undefined)
     )
       return ["Caminho ou tempo inválido."];
-    const keys = [`${edge.from}:${edge.to}`, ...(!edge.oneWay ? [`${edge.to}:${edge.from}`] : [])];
-    if (keys.some((k) => directions.has(k))) return ["Conexão duplicada no mesmo sentido."];
+    const keys = [
+      `${edge.from}:${edge.to}`,
+      ...(!edge.oneWay ? [`${edge.to}:${edge.from}`] : []),
+    ];
+    if (keys.some((k) => directions.has(k)))
+      return ["Conexão duplicada no mesmo sentido."];
     keys.forEach((k) => directions.add(k));
     if (!edge.blocked && !edge.vertical && !passageClear(g, a, b))
       errors.push(
@@ -243,16 +310,22 @@ export function shortestPath(
   to: string,
   options: RouteOptions = {},
 ): Path | null {
-  const objective = options.objective ?? "distance", transport = options.transport ?? "walking";
+  const objective = options.objective ?? "distance",
+    transport = options.transport ?? "walking";
   if (
-    !["distance", "time"].includes(objective) || !Object.hasOwn(transports, transport) ||
+    !["distance", "time"].includes(objective) ||
+    !Object.hasOwn(transports, transport) ||
     graphProblems(g).length ||
     !g.nodes.some((n) => n.id === from) ||
     !g.nodes.some((n) => n.id === to)
   )
     return null;
-  const usable = (n: MapNode) => !n.blocked && !n.restricted && (!n.allowedTransport || n.allowedTransport.includes(transport));
-  if (![from, to].every((id) => usable(g.nodes.find((n) => n.id === id)!))) return null;
+  const usable = (n: MapNode) =>
+    !n.blocked &&
+    !n.restricted &&
+    (!n.allowedTransport || n.allowedTransport.includes(transport));
+  if (![from, to].every((id) => usable(g.nodes.find((n) => n.id === id)!)))
+    return null;
   const costs = new Map(g.nodes.map((n) => [n.id, Infinity])),
     previous = new Map<string, string>(),
     todo = new Set(costs.keys());
@@ -263,7 +336,11 @@ export function shortestPath(
     todo.delete(current);
     if (current === to) break;
     for (const edge of g.edges) {
-      if (edge.blocked || edge.allowedTransport && !edge.allowedTransport.includes(transport)) continue;
+      if (
+        edge.blocked ||
+        (edge.allowedTransport && !edge.allowedTransport.includes(transport))
+      )
+        continue;
       const next =
         edge.from === current
           ? edge.to
@@ -275,7 +352,8 @@ export function shortestPath(
         b = g.nodes.find((n) => n.id === next)!;
       if (!usable(b)) continue;
       // Missing durations make a segment unavailable for the time objective.
-      const weight = objective === "time" ? edge.seconds : edgeDistance(g, a, b, edge);
+      const weight =
+        objective === "time" ? edge.seconds : edgeDistance(g, a, b, edge);
       if (weight === undefined || !Number.isFinite(weight)) continue;
       const cost = costs.get(current)! + weight;
       if (cost < costs.get(next)!) {
@@ -291,28 +369,67 @@ export function shortestPath(
     if (!p) return null;
     nodes.unshift(p);
   }
-  return { nodes, cost: costs.get(to)!, objective, transport, unit: objective === "time" ? "s" : g.scaleCalibrated === true ? "m" : "unidades do mapa" };
+  return {
+    nodes,
+    cost: costs.get(to)!,
+    objective,
+    transport,
+    unit:
+      objective === "time"
+        ? "s"
+        : g.scaleCalibrated === true
+          ? "m"
+          : "unidades do mapa",
+  };
 }
 export function pathValid(g: FacilityGraph, path: Path) {
   if (graphProblems(g).length || !path.nodes.length) return false;
   const transport = path.transport ?? "walking";
-  const usable = (n: MapNode) => !n.blocked && !n.restricted && (!n.allowedTransport || n.allowedTransport.includes(transport));
-  if (!path.nodes.every((id) => g.nodes.some((n) => n.id === id && usable(n)))) return false;
-  return path.nodes.slice(1).every((id, i) => g.edges.some((e) =>
-    !e.blocked && (!e.allowedTransport || e.allowedTransport.includes(transport)) &&
-    (path.objective !== "time" || e.seconds !== undefined) &&
-    (path.objective === "time" || Number.isFinite(edgeDistance(g, g.nodes.find((n) => n.id === path.nodes[i])!, g.nodes.find((n) => n.id === id)!, e))) &&
-    (e.from === path.nodes[i] && e.to === id || !e.oneWay && e.to === path.nodes[i] && e.from === id)));
+  const usable = (n: MapNode) =>
+    !n.blocked &&
+    !n.restricted &&
+    (!n.allowedTransport || n.allowedTransport.includes(transport));
+  if (!path.nodes.every((id) => g.nodes.some((n) => n.id === id && usable(n))))
+    return false;
+  return path.nodes.slice(1).every((id, i) =>
+    g.edges.some(
+      (e) =>
+        !e.blocked &&
+        (!e.allowedTransport || e.allowedTransport.includes(transport)) &&
+        (path.objective !== "time" || e.seconds !== undefined) &&
+        (path.objective === "time" ||
+          Number.isFinite(
+            edgeDistance(
+              g,
+              g.nodes.find((n) => n.id === path.nodes[i])!,
+              g.nodes.find((n) => n.id === id)!,
+              e,
+            ),
+          )) &&
+        ((e.from === path.nodes[i] && e.to === id) ||
+          (!e.oneWay && e.to === path.nodes[i] && e.from === id)),
+    ),
+  );
 }
 function validTransport(value: unknown) {
-  return value === undefined || Array.isArray(value) && value.length <= 3 && value.every((v) => typeof v === "string" && Object.hasOwn(transports, v));
+  return (
+    value === undefined ||
+    (Array.isArray(value) &&
+      value.length <= 3 &&
+      value.every((v) => typeof v === "string" && Object.hasOwn(transports, v)))
+  );
 }
 function edgeDistance(g: FacilityGraph, a: MapNode, b: MapNode, edge: MapEdge) {
   if (edge.distance !== undefined && edge.distanceUnit) {
-    if (edge.distanceUnit === "m") return g.scaleCalibrated === true ? edge.distance : Infinity;
+    if (edge.distanceUnit === "m")
+      return g.scaleCalibrated === true ? edge.distance : Infinity;
     return edge.distance * (g.scaleCalibrated === true ? g.metersPerPixel : 1);
   }
-  return edge?.distance ?? Math.hypot((a.x - b.x) * g.width, (a.y - b.y) * g.height) * (g.scaleCalibrated === true ? g.metersPerPixel : 1);
+  return (
+    edge?.distance ??
+    Math.hypot((a.x - b.x) * g.width, (a.y - b.y) * g.height) *
+      (g.scaleCalibrated === true ? g.metersPerPixel : 1)
+  );
 }
 export function planStops(
   g: FacilityGraph,
@@ -321,12 +438,21 @@ export function planStops(
   options: RouteOptions = {},
 ): Path | null {
   if (!shortestPath(g, start, start, options)) return null;
-  const pending = [...new Set(stops)].filter((s) => s !== start && s !== options.final);
+  const pending = [...new Set(stops)].filter(
+    (s) => s !== start && s !== options.final,
+  );
   if (pending.length > 25) return null;
-  const ids = [...new Set([start, ...pending, ...(options.final ? [options.final] : [])])],
+  const ids = [
+      ...new Set([
+        start,
+        ...pending,
+        ...(options.final ? [options.final] : []),
+      ]),
+    ],
     matrix = new Map<string, Path | null>();
   for (const a of ids)
-    for (const b of ids) matrix.set(`${a}:${b}`, shortestPath(g, a, b, options));
+    for (const b of ids)
+      matrix.set(`${a}:${b}`, shortestPath(g, a, b, options));
   const order = [start];
   while (pending.length) {
     const from = order.at(-1)!;
@@ -339,7 +465,8 @@ export function planStops(
     if (!matrix.get(`${from}:${next}`)) return null;
     order.push(next);
   }
-  if (options.final && order.at(-1) !== options.final) order.push(options.final);
+  if (options.final && order.at(-1) !== options.final)
+    order.push(options.final);
   const score = (arr: string[]) =>
     arr
       .slice(1)
@@ -370,5 +497,11 @@ export function planStops(
     if (!leg) return null;
     nodes.push(...leg.nodes.slice(1));
   }
-  return { ...shortestPath(g, start, start, options)!, nodes, cost: score(order), stops: order, approximate: true };
+  return {
+    ...shortestPath(g, start, start, options)!,
+    nodes,
+    cost: score(order),
+    stops: order,
+    approximate: true,
+  };
 }

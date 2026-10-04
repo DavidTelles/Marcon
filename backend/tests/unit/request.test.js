@@ -38,6 +38,12 @@ beforeEach(() => {
 });
 
 describe('Requisições via camada de workspace', () => {
+  test('histórico é geral e permite somente entregas, sem liberar alterações fora do escopo', async () => {
+    await requestService.history(employee, { requester_id: 99, status: 'Pendente', statuses: ['Pendente'] });
+    expect(requestRepository.list).toHaveBeenCalledWith({ requester_id: undefined, status: 'Entregue', statuses: undefined });
+    requestRepository.findById.mockResolvedValue({ ...request, status: 'Entregue', requester_code: '9999', block_name: 'Bloco C' });
+    await expect(requestService.getById(employee, 10)).resolves.toMatchObject({ status: 'Entregue' });
+  });
   test('criar converte product_id em código da peça e delega', async () => {
     await requestService.createRequest(employee, { product_id: 5, quantity: 2, urgency: 'Moderado' });
     expect(executeWorkspaceAction).toHaveBeenCalledWith(employee, {

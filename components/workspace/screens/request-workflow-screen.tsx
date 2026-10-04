@@ -41,15 +41,20 @@ export function RequestWorkflowScreen({
         (status === "Todas" || r.status === status) &&
         (!priority || r.priority === priority) &&
         (!block || r.block === block) &&
-        (!warehouse || r.allocations?.some((allocation) => allocation.warehouse === warehouse)) &&
+        (!warehouse ||
+          r.allocations?.some(
+            (allocation) => allocation.warehouse === warehouse,
+          )) &&
         `${r.id} ${r.material} ${r.code} ${r.person} ${r.block}`
           .toLowerCase()
           .includes(query.toLowerCase()),
     )
-    .sort(
-      (a, b) =>
-        history ? new Date(b.deliveredAt ?? b.createdAt ?? 0).getTime() - new Date(a.deliveredAt ?? a.createdAt ?? 0).getTime() || b.id - a.id : ({ Urgente: 0, Moderado: 1, Leve: 2 })[a.priority] -
-          { Urgente: 0, Moderado: 1, Leve: 2 }[b.priority] || b.id - a.id,
+    .sort((a, b) =>
+      history
+        ? new Date(b.deliveredAt ?? b.createdAt ?? 0).getTime() -
+            new Date(a.deliveredAt ?? a.createdAt ?? 0).getTime() || b.id - a.id
+        : { Urgente: 0, Moderado: 1, Leve: 2 }[a.priority] -
+            { Urgente: 0, Moderado: 1, Leve: 2 }[b.priority] || b.id - a.id,
     );
   const selected = requests.find((r) => r.id === selectedId);
   const title = history
@@ -74,9 +79,23 @@ export function RequestWorkflowScreen({
               : "Assuma o atendimento, confira a retirada e confirme a entrega no destino.",
         )
       )}
-      {!history && !compact && <div className={styles.summary} aria-label="Prioridades de atendimento">
-        {["Urgente", "Moderado", "Leve"].map((value) => <button key={value} className={styles[`priority${value}`]} aria-pressed={priority === value} onClick={() => setPriority(priority === value ? "" : value)}><strong>{value}</strong><span>{rows.filter((row) => row.priority === value).length} pedidos</span></button>)}
-      </div>}
+      {!history && !compact && (
+        <div className={styles.summary} aria-label="Prioridades de atendimento">
+          {["Urgente", "Moderado", "Leve"].map((value) => (
+            <button
+              key={value}
+              className={styles[`priority${value}`]}
+              aria-pressed={priority === value}
+              onClick={() => setPriority(priority === value ? "" : value)}
+            >
+              <strong>{value}</strong>
+              <span>
+                {rows.filter((row) => row.priority === value).length} pedidos
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
       {!history && role === "lider" && (
         <div className={styles.summary}>
           {[
@@ -119,83 +138,139 @@ export function RequestWorkflowScreen({
             </select>
           </label>
           <span>{shown.length} pedidos</span>
-          {history && <>
-            <label>Bloco<select value={block} onChange={(event) => setBlock(event.target.value)}><option value="">Todos os blocos</option>{[...new Set(rows.map((row) => row.block))].sort().map((value) => <option key={value}>{value}</option>)}</select></label>
-            <label>Local de retirada<select value={warehouse} onChange={(event) => setWarehouse(event.target.value)}><option value="">Todos os locais</option>{[...new Set(rows.flatMap((row) => row.allocations?.map((allocation) => allocation.warehouse) ?? []))].sort().map((value) => <option key={value}>{value}</option>)}</select></label>
-          </>}
+          {history && (
+            <>
+              <label>
+                Bloco
+                <select
+                  value={block}
+                  onChange={(event) => setBlock(event.target.value)}
+                >
+                  <option value="">Todos os blocos</option>
+                  {[...new Set(rows.map((row) => row.block))]
+                    .sort()
+                    .map((value) => (
+                      <option key={value}>{value}</option>
+                    ))}
+                </select>
+              </label>
+              <label>
+                Local de retirada
+                <select
+                  value={warehouse}
+                  onChange={(event) => setWarehouse(event.target.value)}
+                >
+                  <option value="">Todos os locais</option>
+                  {[
+                    ...new Set(
+                      rows.flatMap(
+                        (row) =>
+                          row.allocations?.map(
+                            (allocation) => allocation.warehouse,
+                          ) ?? [],
+                      ),
+                    ),
+                  ]
+                    .sort()
+                    .map((value) => (
+                      <option key={value}>{value}</option>
+                    ))}
+                </select>
+              </label>
+            </>
+          )}
         </div>
         <div className={styles.cards}>
           {shown.map((r, index) => (
             <Fragment key={r.id}>
-            {!history && !compact && (index === 0 || shown[index - 1].priority !== r.priority) && <h2 className={styles.priorityGroup}>{r.priority} · {shown.filter((row) => row.priority === r.priority).length} pedidos</h2>}
-            <article data-request-id={r.id} data-priority={r.priority} className={styles.card}>
-              <div className={styles.cardTop}>
-                <strong>#{r.id}</strong>
-                {badge(r.status)}
-                <strong className={`${styles.priority} ${styles[`priority${r.priority}`]}`}>{r.priority}</strong>
-              </div>
-              <h2>{r.material}</h2>
-              <p>
-                {r.code} · {r.quantity} peças
-                {r.requestedUnit === "box" &&
-                  ` (${r.requestedAmount} caixas de ${r.packSizeAtRequest})`}
-              </p>
-              <p>
-                {r.person} · {r.block} · {r.sector || "Setor não informado"}
-              </p>
-              {r.anomaly?.unusual && (
-                <div className={styles.anomaly}>
-                  <strong>Pedido fora do padrão</strong>
-                  {r.anomaly.reasons.map((reason) => (
-                    <p key={reason}>{reason}</p>
-                  ))}
-                  <p>
-                    <strong>Justificativa:</strong>{" "}
-                    {r.justification || "Não registrada no pedido legado"}
-                  </p>
-                </div>
-              )}
-              {!r.anomaly?.unusual && r.justification && (
-                <p>
-                  <strong>Justificativa:</strong> {r.justification}
-                </p>
-              )}
-              {r.status === "Rejeitada" && (
-                <p>
-                  <strong>Motivo da rejeição:</strong> {r.cancellationReason}
-                </p>
-              )}
-              {r.allocations?.map((a) => (
-                <p key={a.warehouse}>
-                  {r.pickedAt ? "Retirada registrada" : "Retirada recomendada"}:{" "}
-                  {a.warehouse} · {a.location} · {a.quantity} peças
-                </p>
-              ))}
-              {r.fulfilledBy && (
-                <p>
-                  {r.fulfilledBy === accountId
-                    ? "Atendimento assumido por você"
-                    : `Responsável: matrícula ${r.fulfilledBy}`}
-                </p>
-              )}
-              {r.deliveredAt && (
-                <p>
-                  Entregue em {new Date(r.deliveredAt).toLocaleString("pt-BR")}
-                </p>
-              )}
-              <button
-                className="button primary"
-                onClick={() => setSelectedId(r.id)}
+              {!history &&
+                !compact &&
+                (index === 0 || shown[index - 1].priority !== r.priority) && (
+                  <h2 className={styles.priorityGroup}>
+                    {r.priority} ·{" "}
+                    {shown.filter((row) => row.priority === r.priority).length}{" "}
+                    pedidos
+                  </h2>
+                )}
+              <article
+                data-request-id={r.id}
+                data-priority={r.priority}
+                className={styles.card}
               >
-                {history
-                  ? "Ver entrega"
-                  : role === "lider"
-                    ? "Analisar solicitação"
-                    : role === "funcionario"
-                      ? "Ver meu pedido"
-                      : "Abrir atendimento"}
-              </button>
-            </article>
+                <div className={styles.cardTop}>
+                  <strong>#{r.id}</strong>
+                  {badge(r.status)}
+                  <strong
+                    className={`${styles.priority} ${styles[`priority${r.priority}`]}`}
+                  >
+                    {r.priority}
+                  </strong>
+                </div>
+                <h2>{r.material}</h2>
+                <p>
+                  {r.code} · {r.quantity} peças
+                  {r.requestedUnit === "box" &&
+                    ` (${r.requestedAmount} caixas de ${r.packSizeAtRequest})`}
+                </p>
+                <p>
+                  {r.person} · {r.block} · {r.sector || "Setor não informado"}
+                </p>
+                {r.anomaly?.unusual && (
+                  <div className={styles.anomaly}>
+                    <strong>Pedido fora do padrão</strong>
+                    {r.anomaly.reasons.map((reason) => (
+                      <p key={reason}>{reason}</p>
+                    ))}
+                    <p>
+                      <strong>Justificativa:</strong>{" "}
+                      {r.justification || "Não registrada no pedido legado"}
+                    </p>
+                  </div>
+                )}
+                {!r.anomaly?.unusual && r.justification && (
+                  <p>
+                    <strong>Justificativa:</strong> {r.justification}
+                  </p>
+                )}
+                {r.status === "Rejeitada" && (
+                  <p>
+                    <strong>Motivo da rejeição:</strong> {r.cancellationReason}
+                  </p>
+                )}
+                {r.allocations?.map((a) => (
+                  <p key={a.warehouse}>
+                    {r.pickedAt
+                      ? "Retirada registrada"
+                      : "Retirada recomendada"}
+                    : {a.warehouse} · {a.location} · {a.quantity} peças
+                  </p>
+                ))}
+                {r.fulfilledBy && (
+                  <p>
+                    {r.fulfilledBy === accountId
+                      ? "Atendimento assumido por você"
+                      : `Responsável: matrícula ${r.fulfilledBy}`}
+                  </p>
+                )}
+                {r.deliveredAt && (
+                  <p>
+                    Entregue em{" "}
+                    {new Date(r.deliveredAt).toLocaleString("pt-BR")}
+                  </p>
+                )}
+                <button
+                  className="button primary"
+                  onClick={() => setSelectedId(r.id)}
+                >
+                  {history
+                    ? "Ver entrega"
+                    : role === "lider"
+                      ? "Analisar solicitação"
+                      : role === "funcionario"
+                        ? "Ver meu pedido"
+                        : "Abrir atendimento"}
+                </button>
+              </article>
             </Fragment>
           ))}
         </div>
@@ -220,12 +295,36 @@ export function RequestWorkflowScreen({
               {selected.sector || "não informado"} · solicitante{" "}
               {selected.person}
             </p>
-            {history ? <div className="ops-actions"><p>{selected.quantity} peças · Prioridade: <strong>{selected.priority}</strong></p><p>Entregue em {selected.deliveredAt ? new Date(selected.deliveredAt).toLocaleString("pt-BR") : "Data não registrada"}</p><p>Justificativa: {selected.justification || "Não informada"}</p>{selected.allocations?.map((allocation) => <p key={allocation.warehouse}>{allocation.quantity} peças retiradas de {allocation.warehouse} · {allocation.location}</p>)}</div> : <RequestOperations
-              key={selected.id}
-              id={selected.id}
-              role={role}
-              request={selected}
-            />}
+            {history ? (
+              <div className="ops-actions">
+                <p>
+                  {selected.quantity} peças · Prioridade:{" "}
+                  <strong>{selected.priority}</strong>
+                </p>
+                <p>
+                  Entregue em{" "}
+                  {selected.deliveredAt
+                    ? new Date(selected.deliveredAt).toLocaleString("pt-BR")
+                    : "Data não registrada"}
+                </p>
+                <p>
+                  Justificativa: {selected.justification || "Não informada"}
+                </p>
+                {selected.allocations?.map((allocation) => (
+                  <p key={allocation.warehouse}>
+                    {allocation.quantity} peças retiradas de{" "}
+                    {allocation.warehouse} · {allocation.location}
+                  </p>
+                ))}
+              </div>
+            ) : (
+              <RequestOperations
+                key={selected.id}
+                id={selected.id}
+                role={role}
+                request={selected}
+              />
+            )}
           </>
         )}
       </DashboardDialog>

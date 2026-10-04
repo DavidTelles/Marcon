@@ -2,6 +2,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.mapKinds = exports.transports = void 0;
+exports.deliveryTargets = deliveryTargets;
 exports.nextPointLabel = nextPointLabel;
 exports.passageClear = passageClear;
 exports.routeLegs = routeLegs;
@@ -10,7 +11,11 @@ exports.graphProblems = graphProblems;
 exports.shortestPath = shortestPath;
 exports.pathValid = pathValid;
 exports.planStops = planStops;
-exports.transports = { walking: "A pé", cart: "Carrinho", forklift: "Empilhadeira" };
+exports.transports = {
+    walking: "A pé",
+    cart: "Carrinho",
+    forklift: "Empilhadeira",
+};
 exports.mapKinds = {
     warehouse: "Almoxarifado",
     aisle: "Corredor",
@@ -20,7 +25,7 @@ exports.mapKinds = {
     block: "Bloco",
     delivery: "Entrega",
     shelf: "Acesso à prateleira",
-    local_stock: "Estoque local",
+    local_stock: "Almoxarifado menor",
     sector: "Setor",
     production_line: "Linha de produção",
     gate: "Portão",
@@ -38,6 +43,21 @@ exports.mapKinds = {
     support: "Área de apoio",
     custom: "Personalizado",
 };
+function deliveryTargets(graph, blockId, sector) {
+    const points = graph.nodes.filter((node) => node.blockId === blockId &&
+        [
+            "block",
+            "sector",
+            "production_line",
+            "delivery",
+            "replenishment",
+        ].includes(node.kind));
+    const normalize = (value) => value.trim().toLocaleLowerCase("pt-BR");
+    const specific = sector
+        ? points.filter((node) => node.sector && normalize(node.sector) === normalize(sector))
+        : [];
+    return specific.length ? specific : points.filter((node) => !node.sector);
+}
 function nextPointLabel(g, kind) {
     let number = 1;
     while (g.nodes.some((n) => n.label === `${exports.mapKinds[kind]} ${number}`))
@@ -68,7 +88,10 @@ function routeLegs(g, path) {
         return {
             from: a.label,
             to: b.label,
-            meters: g.scaleCalibrated === true ? edgeDistance(g, a, b, g.edges.find((e) => e.from === a.id && e.to === b.id || !e.oneWay && e.to === a.id && e.from === b.id)) : null,
+            meters: g.scaleCalibrated === true
+                ? edgeDistance(g, a, b, g.edges.find((e) => (e.from === a.id && e.to === b.id) ||
+                    (!e.oneWay && e.to === a.id && e.from === b.id)))
+                : null,
         };
     });
 }
@@ -99,7 +122,8 @@ function graphProblems(g) {
         g.metersPerPixel > 100)
         return ["Dimensões ou escala inválidas."];
     const errors = [], ids = new Set();
-    if (typeof g.reviewed !== "boolean" || g.scaleCalibrated !== undefined && typeof g.scaleCalibrated !== "boolean")
+    if (typeof g.reviewed !== "boolean" ||
+        (g.scaleCalibrated !== undefined && typeof g.scaleCalibrated !== "boolean"))
         return ["Estado de revisão ou calibração inválido."];
     const mask = g.obstacles;
     if (mask &&
@@ -122,10 +146,17 @@ function graphProblems(g) {
             !n.label.trim() ||
             n.label.length > 120 ||
             !Object.hasOwn(exports.mapKinds, n.kind) ||
-            (n.floor !== undefined && (!Number.isInteger(n.floor) || Math.abs(n.floor) > 200)) ||
-            (n.access !== undefined && (typeof n.access !== "string" || n.access.length > 120)) ||
+            (n.floor !== undefined &&
+                (!Number.isInteger(n.floor) || Math.abs(n.floor) > 200)) ||
+            (n.access !== undefined &&
+                (typeof n.access !== "string" || n.access.length > 120)) ||
             [n.blocked, n.restricted].some((v) => v !== undefined && typeof v !== "boolean") ||
             !validTransport(n.allowedTransport) ||
+            (n.sector !== undefined &&
+                (typeof n.sector !== "string" ||
+                    !n.sector.trim() ||
+                    n.sector.length > 80 ||
+                    !n.blockId)) ||
             ![n.x, n.y].every((v) => Number.isFinite(v) && v >= 0 && v <= 1) ||
             [n.warehouseId, n.blockId].some((v) => v !== undefined && (!Number.isSafeInteger(v) || v < 1)))
             return ["Ponto inválido ou duplicado."];
@@ -144,13 +175,17 @@ function graphProblems(g) {
             !b ||
             a === b ||
             [edge.seconds, edge.distance].some((v) => v !== undefined && (!Number.isFinite(v) || v < 0 || v > 1e9)) ||
-            (edge.distanceUnit !== undefined && !["m", "map"].includes(edge.distanceUnit)) ||
+            (edge.distanceUnit !== undefined &&
+                !["m", "map"].includes(edge.distanceUnit)) ||
             [edge.oneWay, edge.vertical].some((v) => v !== undefined && typeof v !== "boolean") ||
             !validTransport(edge.allowedTransport) ||
             ((a.floor ?? 0) !== (b.floor ?? 0) && !edge.vertical) ||
             (edge.vertical && edge.distance === undefined))
             return ["Caminho ou tempo inválido."];
-        const keys = [`${edge.from}:${edge.to}`, ...(!edge.oneWay ? [`${edge.to}:${edge.from}`] : [])];
+        const keys = [
+            `${edge.from}:${edge.to}`,
+            ...(!edge.oneWay ? [`${edge.to}:${edge.from}`] : []),
+        ];
         if (keys.some((k) => directions.has(k)))
             return ["Conexão duplicada no mesmo sentido."];
         keys.forEach((k) => directions.add(k));
@@ -161,12 +196,15 @@ function graphProblems(g) {
 }
 function shortestPath(g, from, to, options = {}) {
     const objective = options.objective ?? "distance", transport = options.transport ?? "walking";
-    if (!["distance", "time"].includes(objective) || !Object.hasOwn(exports.transports, transport) ||
+    if (!["distance", "time"].includes(objective) ||
+        !Object.hasOwn(exports.transports, transport) ||
         graphProblems(g).length ||
         !g.nodes.some((n) => n.id === from) ||
         !g.nodes.some((n) => n.id === to))
         return null;
-    const usable = (n) => !n.blocked && !n.restricted && (!n.allowedTransport || n.allowedTransport.includes(transport));
+    const usable = (n) => !n.blocked &&
+        !n.restricted &&
+        (!n.allowedTransport || n.allowedTransport.includes(transport));
     if (![from, to].every((id) => usable(g.nodes.find((n) => n.id === id))))
         return null;
     const costs = new Map(g.nodes.map((n) => [n.id, Infinity])), previous = new Map(), todo = new Set(costs.keys());
@@ -179,7 +217,8 @@ function shortestPath(g, from, to, options = {}) {
         if (current === to)
             break;
         for (const edge of g.edges) {
-            if (edge.blocked || edge.allowedTransport && !edge.allowedTransport.includes(transport))
+            if (edge.blocked ||
+                (edge.allowedTransport && !edge.allowedTransport.includes(transport)))
                 continue;
             const next = edge.from === current
                 ? edge.to
@@ -211,22 +250,40 @@ function shortestPath(g, from, to, options = {}) {
             return null;
         nodes.unshift(p);
     }
-    return { nodes, cost: costs.get(to), objective, transport, unit: objective === "time" ? "s" : g.scaleCalibrated === true ? "m" : "unidades do mapa" };
+    return {
+        nodes,
+        cost: costs.get(to),
+        objective,
+        transport,
+        unit: objective === "time"
+            ? "s"
+            : g.scaleCalibrated === true
+                ? "m"
+                : "unidades do mapa",
+    };
 }
 function pathValid(g, path) {
     if (graphProblems(g).length || !path.nodes.length)
         return false;
     const transport = path.transport ?? "walking";
-    const usable = (n) => !n.blocked && !n.restricted && (!n.allowedTransport || n.allowedTransport.includes(transport));
+    const usable = (n) => !n.blocked &&
+        !n.restricted &&
+        (!n.allowedTransport || n.allowedTransport.includes(transport));
     if (!path.nodes.every((id) => g.nodes.some((n) => n.id === id && usable(n))))
         return false;
-    return path.nodes.slice(1).every((id, i) => g.edges.some((e) => !e.blocked && (!e.allowedTransport || e.allowedTransport.includes(transport)) &&
+    return path.nodes.slice(1).every((id, i) => g.edges.some((e) => !e.blocked &&
+        (!e.allowedTransport || e.allowedTransport.includes(transport)) &&
         (path.objective !== "time" || e.seconds !== undefined) &&
-        (path.objective === "time" || Number.isFinite(edgeDistance(g, g.nodes.find((n) => n.id === path.nodes[i]), g.nodes.find((n) => n.id === id), e))) &&
-        (e.from === path.nodes[i] && e.to === id || !e.oneWay && e.to === path.nodes[i] && e.from === id)));
+        (path.objective === "time" ||
+            Number.isFinite(edgeDistance(g, g.nodes.find((n) => n.id === path.nodes[i]), g.nodes.find((n) => n.id === id), e))) &&
+        ((e.from === path.nodes[i] && e.to === id) ||
+            (!e.oneWay && e.to === path.nodes[i] && e.from === id))));
 }
 function validTransport(value) {
-    return value === undefined || Array.isArray(value) && value.length <= 3 && value.every((v) => typeof v === "string" && Object.hasOwn(exports.transports, v));
+    return (value === undefined ||
+        (Array.isArray(value) &&
+            value.length <= 3 &&
+            value.every((v) => typeof v === "string" && Object.hasOwn(exports.transports, v))));
 }
 function edgeDistance(g, a, b, edge) {
     if (edge.distance !== undefined && edge.distanceUnit) {
@@ -234,7 +291,9 @@ function edgeDistance(g, a, b, edge) {
             return g.scaleCalibrated === true ? edge.distance : Infinity;
         return edge.distance * (g.scaleCalibrated === true ? g.metersPerPixel : 1);
     }
-    return edge?.distance ?? Math.hypot((a.x - b.x) * g.width, (a.y - b.y) * g.height) * (g.scaleCalibrated === true ? g.metersPerPixel : 1);
+    return (edge?.distance ??
+        Math.hypot((a.x - b.x) * g.width, (a.y - b.y) * g.height) *
+            (g.scaleCalibrated === true ? g.metersPerPixel : 1));
 }
 function planStops(g, start, stops, options = {}) {
     if (!shortestPath(g, start, start, options))
@@ -242,7 +301,13 @@ function planStops(g, start, stops, options = {}) {
     const pending = [...new Set(stops)].filter((s) => s !== start && s !== options.final);
     if (pending.length > 25)
         return null;
-    const ids = [...new Set([start, ...pending, ...(options.final ? [options.final] : [])])], matrix = new Map();
+    const ids = [
+        ...new Set([
+            start,
+            ...pending,
+            ...(options.final ? [options.final] : []),
+        ]),
+    ], matrix = new Map();
     for (const a of ids)
         for (const b of ids)
             matrix.set(`${a}:${b}`, shortestPath(g, a, b, options));
@@ -286,5 +351,11 @@ function planStops(g, start, stops, options = {}) {
             return null;
         nodes.push(...leg.nodes.slice(1));
     }
-    return { ...shortestPath(g, start, start, options), nodes, cost: score(order), stops: order, approximate: true };
+    return {
+        ...shortestPath(g, start, start, options),
+        nodes,
+        cost: score(order),
+        stops: order,
+        approximate: true,
+    };
 }

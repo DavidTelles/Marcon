@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 import { useEffect, useRef, useState } from "react";
 import { MapViewport } from "./map-viewport";
 import {
@@ -14,6 +14,7 @@ import {
   type RouteOptions,
 } from "@/lib/routing";
 import { RouteSummary } from "./route-summary";
+import styles from "../screens/workflow.module.css";
 type Version = {
   id: number;
   title: string;
@@ -31,6 +32,12 @@ const empty: FacilityGraph = {
   reviewed: false,
 };
 export function MapEditor() {
+  const [sectors, setSectors] = useState<
+    { blockId: number; block: string; sector: string; employees: number }[]
+  >([]);
+  const [placing, setPlacing] = useState<Partial<MapNode> | null>(null);
+  const [warehouseName, setWarehouseName] = useState("");
+  const [warehouseBlock, setWarehouseBlock] = useState("");
   const [versions, setVersions] = useState<Version[]>([]),
     [warehouses, setWarehouses] = useState<{ id: number; name: string }[]>([]),
     [blocks, setBlocks] = useState<{ id: number; name: string }[]>([]),
@@ -61,6 +68,7 @@ export function MapEditor() {
     );
     setWarehouses(body.warehouses);
     setBlocks(body.blocks);
+    setSectors(body.sectors ?? []);
   }
   useEffect(() => {
     void Promise.resolve()
@@ -74,8 +82,19 @@ export function MapEditor() {
     const edges = next.edges.map((e) => {
       const a = next.nodes.find((n) => n.id === e.from),
         b = next.nodes.find((n) => n.id === e.to);
-      const edge = e.distance !== undefined && !e.distanceUnit ? { ...e, distanceUnit: graph.scaleCalibrated === true ? "m" as const : "map" as const } : e;
-      return a && b && !e.vertical && !passageClear(next, a, b) ? { ...edge, blocked: true } : edge;
+      const edge =
+        e.distance !== undefined && !e.distanceUnit
+          ? {
+              ...e,
+              distanceUnit:
+                graph.scaleCalibrated === true
+                  ? ("m" as const)
+                  : ("map" as const),
+            }
+          : e;
+      return a && b && !e.vertical && !passageClear(next, a, b)
+        ? { ...edge, blocked: true }
+        : edge;
     });
     setGraph({ ...next, edges, reviewed: false });
     setRoute(null);
@@ -135,14 +154,19 @@ export function MapEditor() {
           ...graph.nodes,
           {
             id,
-            label: nextPointLabel(graph, kind === "shelf" ? "access" : kind),
-            kind,
+            label:
+              placing?.label ??
+              nextPointLabel(graph, kind === "shelf" ? "access" : kind),
+            kind: placing?.kind ?? kind,
+            ...placing,
             x,
             y,
           },
         ],
       });
       setSelected(id);
+      setPlacing(null);
+      setMode("select");
     } else if (mode === "wall") {
       if (anchor) {
         change({
@@ -263,8 +287,176 @@ export function MapEditor() {
       nodes: graph.nodes.map((n) => (n.id === selected ? { ...n, ...p } : n)),
     });
   }
+  function locate(binding: Partial<MapNode>) {
+    const existing = graph.nodes.find((point) =>
+      binding.warehouseId
+        ? point.warehouseId === binding.warehouseId
+        : point.blockId === binding.blockId &&
+          (point.sector ?? "") === (binding.sector ?? ""),
+    );
+    if (existing) {
+      setSelected(existing.id);
+      setMode("select");
+      setMessage(
+        "Ponto já cadastrado. Revise o vínculo e use Mover selecionado para ajustar a posição.",
+      );
+      return;
+    }
+    setPlacing(binding);
+    setMode("point");
+    setMessage(`Clique na planta para posicionar ${binding.label}.`);
+  }
+  async function createWarehouse(event: React.FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    try {
+      const response = await fetch("/api/maps", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "createWarehouse",
+          name: warehouseName,
+          blockId: Number(warehouseBlock) || undefined,
+        }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error);
+      await refresh();
+      setWarehouseName("");
+      locate({ warehouseId: body.id, label: body.name, kind: "local_stock" });
+      window.dispatchEvent(new CustomEvent("marcon:workspace-updated"));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Falha no cadastro.");
+    } finally {
+      setBusy(false);
+    }
+  }
   return (
     <section className="panel ops-panel">
+      <div className={styles.summary} aria-label="Etapas do mapeamento">
+        <div>
+          <strong>1</strong>
+          <span>Abra a planta e posicione os locais reais</span>
+        </div>
+        <div>
+          <strong>2</strong>
+          <span>Conecte os acessos livres e teste a rota</span>
+        </div>
+        <div>
+          <strong>3</strong>
+          <span>Confira a escala, salve e publique a revisão</span>
+        </div>
+      </div>
+      <details className={styles.mappingBindings} open>
+        <summary>Vincular almoxarifados, blocos e setores</summary>
+        <p>
+          Escolha o local abaixo e clique na posição correspondente na planta.
+          Funcionários usam automaticamente o ponto do seu bloco e setor.
+        </p>
+        <div className={styles.bindingGrid}>
+          <section>
+            <h3>Locais de estoque</h3>
+            {warehouses.map((warehouse) => (
+              <button
+                type="button"
+                disabled={!url}
+                key={warehouse.id}
+                onClick={() =>
+                  locate({
+                    label: warehouse.name,
+                    kind: "warehouse",
+                    warehouseId: warehouse.id,
+                  })
+                }
+              >
+                {graph.nodes.some((point) => point.warehouseId === warehouse.id)
+                  ? "✓ "
+                  : "+ "}
+                {warehouse.name}
+              </button>
+            ))}
+          </section>
+          <section>
+            <h3>Blocos e setores</h3>
+            {blocks.map((block) => (
+              <button
+                type="button"
+                disabled={!url}
+                key={block.id}
+                onClick={() =>
+                  locate({
+                    label: block.name,
+                    kind: "delivery",
+                    blockId: block.id,
+                  })
+                }
+              >
+                {graph.nodes.some(
+                  (point) => point.blockId === block.id && !point.sector,
+                )
+                  ? "✓ "
+                  : "+ "}
+                {block.name}
+              </button>
+            ))}
+            {sectors.map((sector) => (
+              <button
+                type="button"
+                disabled={!url}
+                key={`${sector.blockId}:${sector.sector}`}
+                onClick={() =>
+                  locate({
+                    label: `${sector.block} · ${sector.sector}`,
+                    kind: "sector",
+                    blockId: sector.blockId,
+                    sector: sector.sector,
+                  })
+                }
+              >
+                {graph.nodes.some(
+                  (point) =>
+                    point.blockId === sector.blockId &&
+                    point.sector === sector.sector,
+                )
+                  ? "✓ "
+                  : "+ "}
+                {sector.block} · {sector.sector} · {sector.employees}{" "}
+                funcionários
+              </button>
+            ))}
+          </section>
+        </div>
+        <form onSubmit={createWarehouse} className="ops-form">
+          <label>
+            Nome do almoxarifado menor
+            <input
+              value={warehouseName}
+              onChange={(event) => setWarehouseName(event.target.value)}
+              minLength={3}
+              maxLength={80}
+              required
+              placeholder="Ex.: Almoxarifado 5"
+            />
+          </label>
+          <label>
+            Bloco de referência
+            <select
+              value={warehouseBlock}
+              onChange={(event) => setWarehouseBlock(event.target.value)}
+            >
+              <option value="">Compartilhado entre blocos</option>
+              {blocks.map((block) => (
+                <option key={block.id} value={block.id}>
+                  {block.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button className="button secondary" disabled={busy}>
+            Cadastrar almoxarifado menor
+          </button>
+        </form>
+      </details>
       <div className="panel-head">
         <div>
           <h2>Planta e caminhos transitáveis</h2>
@@ -316,6 +508,7 @@ export function MapEditor() {
             value={mode}
             onChange={(e) => {
               setMode(e.target.value);
+              setPlacing(null);
               setAnchor(null);
             }}
           >
@@ -454,13 +647,24 @@ export function MapEditor() {
                   nodeClick(n.id);
                 }}
               >
-                <title>{mapKinds[n.kind]} · {n.label} · andar {n.floor ?? 0}{n.blocked ? " · bloqueado" : n.restricted ? " · restrito" : ""}</title>
+                <title>
+                  {mapKinds[n.kind]} · {n.label} · andar {n.floor ?? 0}
+                  {n.blocked
+                    ? " · bloqueado"
+                    : n.restricted
+                      ? " · restrito"
+                      : ""}
+                </title>
                 <circle
                   cx={n.x * 1000}
                   cy={n.y * 700}
                   r={selected === n.id ? 12 : 9}
                   fill={
-                    n.blocked ? "var(--danger)" : selected === n.id || n.uncertain || n.restricted ? "#b96a00" : "var(--blue)"
+                    n.blocked
+                      ? "var(--danger)"
+                      : selected === n.id || n.uncertain || n.restricted
+                        ? "#b96a00"
+                        : "var(--blue)"
                   }
                 />
                 <text
@@ -472,7 +676,16 @@ export function MapEditor() {
                   strokeWidth="4"
                   fill="var(--ink)"
                 >
-                  {(["warehouse", "local_stock"].includes(n.kind) ? "▣" : ["block", "sector", "production_line"].includes(n.kind) ? "▦" : ["stairs", "elevator", "ramp"].includes(n.kind) ? "↕" : ["door", "gate", "access", "passage"].includes(n.kind) ? "◇" : "●")} {n.label}
+                  {["warehouse", "local_stock"].includes(n.kind)
+                    ? "▣"
+                    : ["block", "sector", "production_line"].includes(n.kind)
+                      ? "▦"
+                      : ["stairs", "elevator", "ramp"].includes(n.kind)
+                        ? "↕"
+                        : ["door", "gate", "access", "passage"].includes(n.kind)
+                          ? "◇"
+                          : "●"}{" "}
+                  {n.label}
                 </text>
               </g>
             ))}
@@ -481,7 +694,11 @@ export function MapEditor() {
       ) : (
         <p>Envie uma planta ou abra uma versão abaixo.</p>
       )}
-      <p>Legenda: ▣ armazenamento · ▦ produção/setor · ◇ acesso · ↕ circulação vertical · ● demais pontos. Vermelho: bloqueado; âmbar: selecionado, restrito ou pendente de revisão. Linha tracejada: caminho bloqueado.</p>
+      <p>
+        Legenda: ▣ armazenamento · ▦ produção/setor · ◇ acesso · ↕ circulação
+        vertical · ● demais pontos. Vermelho: bloqueado; âmbar: selecionado,
+        restrito ou pendente de revisão. Linha tracejada: caminho bloqueado.
+      </p>
       {anchor && <p>Clique no final da parede.</p>}
       <label>
         Ponto selecionado
@@ -496,12 +713,76 @@ export function MapEditor() {
       </label>
       {node && (
         <div className="ops-form">
-          <p>ID: {node.id}. Remover o ponto também remove suas conexões. Vínculos de estoque devem ser resolvidos antes da publicação.</p>
-          <label>Andar<input type="number" min="-200" max="200" value={node.floor ?? 0} onChange={(e) => patchNode({ floor: Number(e.target.value) })} /></label>
-          <label>Acesso<input maxLength={120} value={node.access ?? ""} onChange={(e) => patchNode({ access: e.target.value })} /></label>
-          <label><input type="checkbox" checked={node.blocked ?? false} onChange={(e) => patchNode({ blocked: e.target.checked })} />Acesso bloqueado</label>
-          <label><input type="checkbox" checked={node.restricted ?? false} onChange={(e) => patchNode({ restricted: e.target.checked })} />Área restrita (fora das rotas)</label>
-          <fieldset><legend>Transportes permitidos no ponto</legend>{Object.entries(transports).map(([key, label]) => <label key={key}><input type="checkbox" checked={!node.allowedTransport || node.allowedTransport.includes(key as keyof typeof transports)} onChange={(e) => patchNode({ allowedTransport: e.target.checked ? [...(node.allowedTransport ?? []), key as keyof typeof transports] : (node.allowedTransport ?? Object.keys(transports) as (keyof typeof transports)[]).filter((v) => v !== key) })} />{label}</label>)}</fieldset>
+          <p>
+            ID: {node.id}. Remover o ponto também remove suas conexões. Vínculos
+            de estoque devem ser resolvidos antes da publicação.
+          </p>
+          <label>
+            Andar
+            <input
+              type="number"
+              min="-200"
+              max="200"
+              value={node.floor ?? 0}
+              onChange={(e) => patchNode({ floor: Number(e.target.value) })}
+            />
+          </label>
+          <label>
+            Acesso
+            <input
+              maxLength={120}
+              value={node.access ?? ""}
+              onChange={(e) => patchNode({ access: e.target.value })}
+            />
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={node.blocked ?? false}
+              onChange={(e) => patchNode({ blocked: e.target.checked })}
+            />
+            Acesso bloqueado
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={node.restricted ?? false}
+              onChange={(e) => patchNode({ restricted: e.target.checked })}
+            />
+            Área restrita (fora das rotas)
+          </label>
+          <fieldset>
+            <legend>Transportes permitidos no ponto</legend>
+            {Object.entries(transports).map(([key, label]) => (
+              <label key={key}>
+                <input
+                  type="checkbox"
+                  checked={
+                    !node.allowedTransport ||
+                    node.allowedTransport.includes(
+                      key as keyof typeof transports,
+                    )
+                  }
+                  onChange={(e) =>
+                    patchNode({
+                      allowedTransport: e.target.checked
+                        ? [
+                            ...(node.allowedTransport ?? []),
+                            key as keyof typeof transports,
+                          ]
+                        : (
+                            node.allowedTransport ??
+                            (Object.keys(
+                              transports,
+                            ) as (keyof typeof transports)[])
+                          ).filter((v) => v !== key),
+                    })
+                  }
+                />
+                {label}
+              </label>
+            ))}
+          </fieldset>
           {node.uncertain && (
             <p role="status">
               Sugestão incerta: {node.suggestion || "Revise este ponto."}
@@ -566,7 +847,10 @@ export function MapEditor() {
             <select
               value={node.blockId ?? ""}
               onChange={(e) =>
-                patchNode({ blockId: Number(e.target.value) || undefined })
+                patchNode({
+                  blockId: Number(e.target.value) || undefined,
+                  sector: undefined,
+                })
               }
             >
               <option value="">Sem vínculo</option>
@@ -577,6 +861,24 @@ export function MapEditor() {
               ))}
             </select>
           </label>
+          {node.blockId && (
+            <label>
+              Setor atendido
+              <select
+                value={node.sector ?? ""}
+                onChange={(event) =>
+                  patchNode({ sector: event.target.value || undefined })
+                }
+              >
+                <option value="">Todo o bloco / entrega geral</option>
+                {sectors
+                  .filter((sector) => sector.blockId === node.blockId)
+                  .map((sector) => (
+                    <option key={sector.sector}>{sector.sector}</option>
+                  ))}
+              </select>
+            </label>
+          )}
           {(["x", "y"] as const).map((axis) => (
             <label key={axis}>
               Posição {axis} (0 a 1)
@@ -638,7 +940,9 @@ export function MapEditor() {
             className="button secondary"
             onClick={() => {
               if (node.warehouseId || node.blockId) {
-                setMessage("Resolva os vínculos de almoxarifado e bloco antes de remover. Estoques que usam este ID também precisam de novo vínculo antes da publicação.");
+                setMessage(
+                  "Resolva os vínculos de almoxarifado e bloco antes de remover. Estoques que usam este ID também precisam de novo vínculo antes da publicação.",
+                );
                 return;
               }
               change({
@@ -660,12 +964,102 @@ export function MapEditor() {
         {graph.edges.map((edge, i) => (
           <div className="ops-form" key={i}>
             <span>
-              {graph.nodes.find((n) => n.id === edge.from)?.label} {edge.oneWay ? "→" : "↔"}{" "}
+              {graph.nodes.find((n) => n.id === edge.from)?.label}{" "}
+              {edge.oneWay ? "→" : "↔"}{" "}
               {graph.nodes.find((n) => n.id === edge.to)?.label}
             </span>
-            {(["oneWay", "vertical"] as const).map((field) => <label key={field}><input type="checkbox" checked={edge[field] ?? false} onChange={(e) => change({ ...graph, edges: graph.edges.map((v, j) => j === i ? { ...v, [field]: e.target.checked } : v) })} />{field === "oneWay" ? "Sentido único (origem → destino)" : "Conexão entre andares; cadastre o comprimento"}</label>)}
-            <label>Comprimento ({edge.distanceUnit === "m" || !edge.distanceUnit && graph.scaleCalibrated === true ? "m" : "unidades do mapa"}; vazio: geometria)<input type="number" min="0" step="any" value={edge.distance ?? ""} onChange={(e) => change({ ...graph, edges: graph.edges.map((v, j) => j === i ? { ...v, distance: e.target.value === "" ? undefined : Number(e.target.value), distanceUnit: edge.distanceUnit ?? (graph.scaleCalibrated === true ? "m" : "map") } : v) })} /></label>
-            <fieldset><legend>Transportes permitidos no trecho</legend>{Object.entries(transports).map(([key, label]) => <label key={key}><input type="checkbox" checked={!edge.allowedTransport || edge.allowedTransport.includes(key as keyof typeof transports)} onChange={(e) => change({ ...graph, edges: graph.edges.map((v, j) => j === i ? { ...v, allowedTransport: e.target.checked ? [...(edge.allowedTransport ?? []), key as keyof typeof transports] : (edge.allowedTransport ?? Object.keys(transports) as (keyof typeof transports)[]).filter((t) => t !== key) } : v) })} />{label}</label>)}</fieldset>
+            {(["oneWay", "vertical"] as const).map((field) => (
+              <label key={field}>
+                <input
+                  type="checkbox"
+                  checked={edge[field] ?? false}
+                  onChange={(e) =>
+                    change({
+                      ...graph,
+                      edges: graph.edges.map((v, j) =>
+                        j === i ? { ...v, [field]: e.target.checked } : v,
+                      ),
+                    })
+                  }
+                />
+                {field === "oneWay"
+                  ? "Sentido único (origem → destino)"
+                  : "Conexão entre andares; cadastre o comprimento"}
+              </label>
+            ))}
+            <label>
+              Comprimento (
+              {edge.distanceUnit === "m" ||
+              (!edge.distanceUnit && graph.scaleCalibrated === true)
+                ? "m"
+                : "unidades do mapa"}
+              ; vazio: geometria)
+              <input
+                type="number"
+                min="0"
+                step="any"
+                value={edge.distance ?? ""}
+                onChange={(e) =>
+                  change({
+                    ...graph,
+                    edges: graph.edges.map((v, j) =>
+                      j === i
+                        ? {
+                            ...v,
+                            distance:
+                              e.target.value === ""
+                                ? undefined
+                                : Number(e.target.value),
+                            distanceUnit:
+                              edge.distanceUnit ??
+                              (graph.scaleCalibrated === true ? "m" : "map"),
+                          }
+                        : v,
+                    ),
+                  })
+                }
+              />
+            </label>
+            <fieldset>
+              <legend>Transportes permitidos no trecho</legend>
+              {Object.entries(transports).map(([key, label]) => (
+                <label key={key}>
+                  <input
+                    type="checkbox"
+                    checked={
+                      !edge.allowedTransport ||
+                      edge.allowedTransport.includes(
+                        key as keyof typeof transports,
+                      )
+                    }
+                    onChange={(e) =>
+                      change({
+                        ...graph,
+                        edges: graph.edges.map((v, j) =>
+                          j === i
+                            ? {
+                                ...v,
+                                allowedTransport: e.target.checked
+                                  ? [
+                                      ...(edge.allowedTransport ?? []),
+                                      key as keyof typeof transports,
+                                    ]
+                                  : (
+                                      edge.allowedTransport ??
+                                      (Object.keys(
+                                        transports,
+                                      ) as (keyof typeof transports)[])
+                                    ).filter((t) => t !== key),
+                              }
+                            : v,
+                        ),
+                      })
+                    }
+                  />
+                  {label}
+                </label>
+              ))}
+            </fieldset>
             <label>
               Bloqueado
               <input
@@ -734,7 +1128,15 @@ export function MapEditor() {
               graph,
               String(f.get("start")),
               f.getAll("stops") as string[],
-              { objective: String(f.get("objective")) as RouteOptions["objective"], transport: String(f.get("transport")) as RouteOptions["transport"], final: String(f.get("final") || "") || undefined },
+              {
+                objective: String(
+                  f.get("objective"),
+                ) as RouteOptions["objective"],
+                transport: String(
+                  f.get("transport"),
+                ) as RouteOptions["transport"],
+                final: String(f.get("final") || "") || undefined,
+              },
             );
           setRoute(result);
           setMessage(
@@ -744,9 +1146,34 @@ export function MapEditor() {
           );
         }}
       >
-        <label>Objetivo<select name="objective"><option value="distance">Menor distância</option><option value="time">Menor tempo cadastrado</option></select></label>
-        <label>Transporte<select name="transport">{Object.entries(transports).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
-        <label>Destino final (opcional)<select name="final"><option value="">Sem destino final fixo</option>{graph.nodes.map((n) => <option key={n.id} value={n.id}>{n.label}</option>)}</select></label>
+        <label>
+          Objetivo
+          <select name="objective">
+            <option value="distance">Menor distância</option>
+            <option value="time">Menor tempo cadastrado</option>
+          </select>
+        </label>
+        <label>
+          Transporte
+          <select name="transport">
+            {Object.entries(transports).map(([key, label]) => (
+              <option key={key} value={key}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Destino final (opcional)
+          <select name="final">
+            <option value="">Sem destino final fixo</option>
+            {graph.nodes.map((n) => (
+              <option key={n.id} value={n.id}>
+                {n.label}
+              </option>
+            ))}
+          </select>
+        </label>
         <label>
           Início
           <select name="start">

@@ -366,16 +366,27 @@ export async function executeRequestAction(
             ? JSON.parse(published.graph)
             : published.graph) as FacilityGraph)
         : null;
-      const destinations = graph ? deliveryTargets(graph, Number(r.block_id), String(r.sector)) : [];
+      const destinations = graph
+        ? deliveryTargets(graph, Number(r.block_id), String(r.sector))
+        : [];
       const ranked = locations
         .map((l) => {
           const node =
             graph?.nodes.find((n) => n.id === l.map_node_id) ??
             graph?.nodes.find((n) => n.warehouseId === Number(l.warehouse_id));
-          const paths = graph && node ? destinations.map((destination) => shortestPath(graph, node.id, destination.id)).filter((path) => path !== null) : [];
+          const paths =
+            graph && node
+              ? destinations
+                  .map((destination) =>
+                    shortestPath(graph, node.id, destination.id),
+                  )
+                  .filter((path) => path !== null)
+              : [];
           return {
             l,
-            score: graph?.reviewed ? Math.min(Infinity, ...paths.map((path) => path.cost)) : Infinity,
+            score: graph?.reviewed
+              ? Math.min(Infinity, ...paths.map((path) => path.cost))
+              : Infinity,
           };
         })
         .sort(

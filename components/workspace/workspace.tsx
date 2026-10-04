@@ -32,6 +32,7 @@ import { WarehouseDashboard } from "./screens/warehouse-dashboard";
 import { RequestsScreen } from "./screens/requests-screen";
 import { RequestWorkflowScreen } from "./screens/request-workflow-screen";
 import { MaterialsScreen } from "./screens/materials-screen";
+import { PartsConsumptionScreen } from "./screens/parts-consumption-screen";
 import { type Request, type Part } from "@/lib/demo-data";
 import {
   pathFor,
@@ -76,7 +77,7 @@ const roles: Record<
     pages: [
       { id: "dashboard", label: "Dashboard" },
       { id: "solicitacoes", label: "Solicitações" },
-      { id: "historico", label: "Histórico do bloco" },
+      { id: "historico", label: "Histórico geral" },
     ],
   },
   almoxarifado: {
@@ -95,11 +96,13 @@ const roles: Record<
     name: "Funcionário",
     pages: [
       { id: "nova", label: "Fazer requisição" },
-      { id: "historico", label: "Minhas requisições" },
+      { id: "historico", label: "Histórico geral" },
     ],
   },
 };
 const pageIcons = {
+  pecas: Boxes,
+  "por-peca": ChartNoAxesCombined,
   materiais: Boxes,
   mapa: MapPinned,
   dashboard: LayoutDashboard,
@@ -165,7 +168,7 @@ export default function Workspace({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [dashboardExpanded, setDashboardExpanded] = useState(
-    page === "dashboard" || page === "materiais",
+    ["dashboard", "materiais", "pecas", "por-peca"].includes(page),
   );
   const {
     requests,
@@ -188,6 +191,8 @@ export default function Workspace({
   const sidebar = useRef<HTMLElement>(null);
   const pagePermissions = {
     materiais: "history",
+    pecas: "stock",
+    "por-peca": "stock",
     mapa: "map",
     funcionarios: "people",
     compra: "planning",
@@ -575,17 +580,19 @@ export default function Workspace({
                     ["estoque", "Estoque"],
                     ["requisicoes", "Requisições"],
                     ["materiais", "Materiais"],
+                    ["pecas", "Peças"],
+                    ["por-peca", "Por peça"],
                   ]
                     .filter(
                       ([view]) =>
-                        role === "lider" ? ["bloco", "materiais"].includes(view) : role === "almoxarifado" ? ["geral", "estoque"].includes(view) : view !== "materiais",
+                        role === "lider" ? ["bloco", "materiais"].includes(view) : role === "almoxarifado" ? ["geral", "estoque", "pecas", "por-peca"].includes(view) : view !== "materiais",
                     )
                     .map(([view, label]) => (
                       <Link
                         key={view}
-                        href={view === "materiais" ? pathFor(role, "materiais") : `${pathFor(role, "dashboard")}?dashboard=${view}&metric=${view === "estoque" ? "stock" : "requests"}`}
+                        href={["materiais", "pecas", "por-peca"].includes(view) ? pathFor(role, view as Page) : `${pathFor(role, "dashboard")}?dashboard=${view}&metric=${view === "estoque" ? "stock" : "requests"}`}
                         aria-current={
-                          (page === "dashboard" && selectedDashboard === view) || (page === "materiais" && view === "materiais")
+                          (page === "dashboard" && selectedDashboard === view) || page === view
                             ? "page"
                             : undefined
                         }
@@ -738,7 +745,7 @@ export default function Workspace({
                 NavIcon={NavIcon}
               />
             )}
-          {role === "funcionario" && page === "historico" && (
+          {!persistent && role === "funcionario" && page === "historico" && (
             <InsightChart
               title="Suas requisições"
               description="Acompanhe rapidamente o andamento dos seus pedidos."
@@ -801,6 +808,7 @@ export default function Workspace({
           {page === "mapa" && <MapEditor />}
           {page === "materiais" && role === "lider" && <MaterialsScreen />}
           {persistent && ["requisicoes", "solicitacoes", "historico"].includes(page) && <RequestWorkflowScreen role={role} history={page === "historico"} />}
+          {["pecas", "por-peca"].includes(page) && <PartsConsumptionScreen key={`${page}:${searchParams.get("code") ?? ""}`} role={role} mode={page === "pecas" ? "comparison" : "share"} initialCode={searchParams.get("code") ?? undefined} />}
           {persistent &&
             [
               "dashboard",

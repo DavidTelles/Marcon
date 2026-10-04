@@ -97,29 +97,63 @@ export type StockTarget = {
 };
 // Only delivered stock events contribute. Apt inspected returns offset their
 // own withdrawal document; unmatched returns never create negative demand.
-export function netConsumption<T extends { kind: string; quantity: number; request_id?: unknown; part_id?: unknown }>(events: T[]): T[] {
+export function netConsumption<
+  T extends {
+    kind: string;
+    quantity: number;
+    request_id?: unknown;
+    part_id?: unknown;
+  },
+>(events: T[]): T[] {
   const returns = new Map<string, number>();
   const key = (e: T) => `${e.part_id}:${e.request_id}`;
   for (const e of events)
     if (e.kind === "devolucao" && e.request_id != null)
-      returns.set(key(e), (returns.get(key(e)) ?? 0) + Math.max(0, Number(e.quantity)));
-  return events.filter((e) => e.kind === "saida").map((e) => {
-    const offset = e.request_id == null ? 0 : Math.min(Number(e.quantity), returns.get(key(e)) ?? 0);
-    if (offset) returns.set(key(e), returns.get(key(e))! - offset);
-    return { ...e, quantity: Math.max(0, Number(e.quantity) - offset) };
-  });
+      returns.set(
+        key(e),
+        (returns.get(key(e)) ?? 0) + Math.max(0, Number(e.quantity)),
+      );
+  return events
+    .filter((e) => e.kind === "saida")
+    .map((e) => {
+      const offset =
+        e.request_id == null
+          ? 0
+          : Math.min(Number(e.quantity), returns.get(key(e)) ?? 0);
+      if (offset) returns.set(key(e), returns.get(key(e))! - offset);
+      return { ...e, quantity: Math.max(0, Number(e.quantity) - offset) };
+    });
 }
-export function coverageTarget(series: number[], lead: number, minimum: number, horizon = 7, margin = 0.2): Forecast {
-  const clean = series.map((v) => Number.isFinite(v) && v > 0 ? v : 0);
-  const daily = mean(clean), active = clean.filter((v) => v > 0).length;
-  const irregular = daily > 0 && Math.sqrt(mean(clean.map((v) => (v - daily) ** 2))) / daily > 1;
+export function coverageTarget(
+  series: number[],
+  lead: number,
+  minimum: number,
+  horizon = 7,
+  margin = 0.2,
+): Forecast {
+  const clean = series.map((v) => (Number.isFinite(v) && v > 0 ? v : 0));
+  const daily = mean(clean),
+    active = clean.filter((v) => v > 0).length;
+  const irregular =
+    daily > 0 &&
+    Math.sqrt(mean(clean.map((v) => (v - daily) ** 2))) / daily > 1;
   return {
     method: "Média diária observada com cobertura e margem",
-    daily, days: clean.length,
+    daily,
+    days: clean.length,
     minimum: Math.max(minimum, Math.ceil(daily * lead * (1 + margin))),
-    target: Math.max(minimum, Math.ceil(daily * (lead + horizon) * (1 + margin))),
-    mae: null, wape: null,
-    confidence: clean.length < 30 || active < 7 ? "Dados insuficientes" : irregular ? "Baixa" : "Moderada",
+    target: Math.max(
+      minimum,
+      Math.ceil(daily * (lead + horizon) * (1 + margin)),
+    ),
+    mae: null,
+    wape: null,
+    confidence:
+      clean.length < 30 || active < 7
+        ? "Dados insuficientes"
+        : irregular
+          ? "Baixa"
+          : "Moderada",
     reason: `Alvo = max(mínimo cadastrado, teto(consumo líquido / dias × (prazo + ${horizon} dias) × (1 + ${margin}))). ${irregular ? "Demanda irregular. " : ""}${active ? "Regra de cobertura; sem previsão avançada." : "Sem baixas observadas; ausência de registro não comprova ausência de necessidade."}`,
   };
 }
@@ -144,14 +178,20 @@ export function suggestTransfers(
     (a, b) =>
       Number(b.available < b.minimum) - Number(a.available < a.minimum) ||
       Math.max(0, b.target - b.available - b.incoming) / Math.max(1, b.target) -
-      Math.max(0, a.target - a.available - a.incoming) / Math.max(1, a.target) ||
-      a.code.localeCompare(b.code) || a.warehouse.localeCompare(b.warehouse),
+        Math.max(0, a.target - a.available - a.incoming) /
+          Math.max(1, a.target) ||
+      a.code.localeCompare(b.code) ||
+      a.warehouse.localeCompare(b.warehouse),
   )) {
     if (!eligible(dest)) continue;
     let need = Math.max(
       0,
-      Math.min(dest.target - dest.available - dest.incoming,
-        (dest.capacity ?? Infinity) - (dest.physical ?? dest.available + (dest.reserved ?? 0)) - dest.incoming),
+      Math.min(
+        dest.target - dest.available - dest.incoming,
+        (dest.capacity ?? Infinity) -
+          (dest.physical ?? dest.available + (dest.reserved ?? 0)) -
+          dest.incoming,
+      ),
     );
     for (const source of supply
       .filter(
@@ -165,10 +205,12 @@ export function suggestTransfers(
         (a, b) =>
           routeCost(a, dest) - routeCost(b, dest) || b.excess - a.excess,
       )) {
-      const a = source.step ?? 1, b = dest.step ?? 1;
+      const a = source.step ?? 1,
+        b = dest.step ?? 1;
       if (![a, b].every((n) => Number.isSafeInteger(n) && n > 0)) continue;
-      const gcd = (x: number, y: number): number => y === 0 ? x : gcd(y, x % y);
-      const step = a / gcd(a, b) * b;
+      const gcd = (x: number, y: number): number =>
+        y === 0 ? x : gcd(y, x % y);
+      const step = (a / gcd(a, b)) * b;
       const q = Math.floor(Math.min(need, source.excess) / step) * step;
       if (q > 0) {
         result.push({
@@ -182,6 +224,66 @@ export function suggestTransfers(
         source.excess -= q;
         need -= q;
       }
+    }
+  }
+  return result;
+}
+// When stock cannot cover every ideal target, share the remaining coverage by
+// demand within each mutually reachable network. Hard minimums stay protected.
+export function proportionalCoverage<T extends StockTarget>(
+  locations: T[],
+  connected: (a: T, b: T) => boolean,
+): T[] {
+  const result = locations.map((location) => ({ ...location }));
+  const visited = new Set<number>();
+  for (let start = 0; start < result.length; start++) {
+    if (visited.has(start)) continue;
+    const component = [start];
+    visited.add(start);
+    for (let i = 0; i < component.length; i++)
+      for (let next = 0; next < result.length; next++) {
+        if (
+          !visited.has(next) &&
+          result[start].code === result[next].code &&
+          result[start].unit === result[next].unit &&
+          connected(result[component[i]], result[next]) &&
+          connected(result[next], result[component[i]])
+        ) {
+          visited.add(next);
+          component.push(next);
+        }
+      }
+    const total = component.reduce(
+      (sum, index) =>
+        sum + Math.max(0, result[index].available) + result[index].incoming,
+      0,
+    );
+    const floors = component.reduce(
+      (sum, index) => sum + result[index].minimum,
+      0,
+    );
+    const ideal = component.reduce(
+      (sum, index) =>
+        sum + Math.max(result[index].minimum, result[index].target),
+      0,
+    );
+    if (total >= ideal || total < floors || ideal === floors) continue;
+    const budget = Math.floor(total - floors);
+    const shares = component.map((index) => ({
+      index,
+      exact:
+        (budget * Math.max(0, result[index].target - result[index].minimum)) /
+        (ideal - floors),
+    }));
+    let remainder =
+      budget - shares.reduce((sum, share) => sum + Math.floor(share.exact), 0);
+    for (const share of shares.sort(
+      (a, b) => (b.exact % 1) - (a.exact % 1) || a.index - b.index,
+    )) {
+      result[share.index].target =
+        result[share.index].minimum +
+        Math.floor(share.exact) +
+        (remainder-- > 0 ? 1 : 0);
     }
   }
   return result;

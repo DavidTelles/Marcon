@@ -3,7 +3,7 @@ import ts from "typescript";
 
 // Existing Express ports are generated from these domain services. Never copy
 // the Next proxy workspace-actions.ts or the backend-specific DB adapter.
-const files = ["routing", "stock-ledger", "transfer-actions", "inventory-actions", "request-actions", "request-policy", "delivery-planning", "permissions"];
+const files = ["routing", "stock-ledger", "transfer-actions", "inventory-actions", "request-actions", "request-policy", "delivery-planning", "permissions", "forecast", "distribution-location", "parts-consumption"];
 let outdated = false;
 for (const file of files) {
   const source = await fs.readFile(`lib/${file}.ts`, "utf8");

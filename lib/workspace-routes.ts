@@ -11,7 +11,9 @@ export type Page =
   | "compra"
   | "recomendacoes"
   | "nova"
-  | "materiais";
+  | "materiais"
+  | "pecas"
+  | "por-peca";
 export const roleLanding: Record<Role, string> = {
   admin: "/admin/dashboard",
   lider: "/department-head/dashboard",
@@ -20,6 +22,8 @@ export const roleLanding: Record<Role, string> = {
 };
 export const pagePaths: Record<Role, Partial<Record<Page, string>>> = {
   admin: {
+    pecas: "/admin/dashboard/parts",
+    "por-peca": "/admin/dashboard/by-part",
     compra: "/admin/purchases",
     recomendacoes: "/admin/recommendations",
     mapa: "/admin/map",
@@ -35,6 +39,8 @@ export const pagePaths: Record<Role, Partial<Record<Page, string>>> = {
     historico: "/department-head/history",
   },
   almoxarifado: {
+    pecas: "/warehouse/dashboard/parts",
+    "por-peca": "/warehouse/dashboard/by-part",
     dashboard: "/warehouse/dashboard",
     requisicoes: "/warehouse/requests",
     estoque: "/warehouse/stock/all/all",

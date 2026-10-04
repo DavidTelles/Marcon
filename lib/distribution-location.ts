@@ -1,4 +1,9 @@
-import { deliveryTargets, shortestPath, type FacilityGraph, type RouteOptions } from "./routing";
+import {
+  deliveryTargets,
+  shortestPath,
+  type FacilityGraph,
+  type RouteOptions,
+} from "./routing";
 
 // Cost follows the existing graph metric and its blocked edges, never straight lines.
 export function warehouseDistance(
@@ -9,10 +14,26 @@ export function warehouseDistance(
 ) {
   return warehouseRoute(graph, source, destination, options)?.cost ?? Infinity;
 }
-export function warehouseRoute(graph: FacilityGraph, source: number, destination: number, options: RouteOptions = {}, bindings: { source?: string; destination?: string } = {}) {
-  const from = graph.nodes.filter((n) => n.warehouseId === source && (!bindings.source || n.id === bindings.source));
-  const to = graph.nodes.filter((n) => n.warehouseId === destination && (!bindings.destination || n.id === bindings.destination));
-  const paths = from.flatMap((a) => to.map((b) => shortestPath(graph, a.id, b.id, options))).filter((p) => p !== null);
+export function warehouseRoute(
+  graph: FacilityGraph,
+  source: number,
+  destination: number,
+  options: RouteOptions = {},
+  bindings: { source?: string; destination?: string } = {},
+) {
+  const from = graph.nodes.filter(
+    (n) =>
+      n.warehouseId === source &&
+      (!bindings.source || n.id === bindings.source),
+  );
+  const to = graph.nodes.filter(
+    (n) =>
+      n.warehouseId === destination &&
+      (!bindings.destination || n.id === bindings.destination),
+  );
+  const paths = from
+    .flatMap((a) => to.map((b) => shortestPath(graph, a.id, b.id, options)))
+    .filter((p) => p !== null);
   return paths.sort((a, b) => a.cost - b.cost)[0] ?? null;
 }
 export function nearestWarehouseForBlock(
@@ -37,7 +58,11 @@ export function accessibleWarehousesForBlock(
       cost: Math.min(
         Infinity,
         ...graph.nodes
-          .filter((n) => n.warehouseId === id && (!bindings.get(id) || n.id === bindings.get(id)))
+          .filter(
+            (n) =>
+              n.warehouseId === id &&
+              (!bindings.get(id) || n.id === bindings.get(id)),
+          )
           .flatMap((n) =>
             targets.map(
               (t) => shortestPath(graph, n.id, t.id)?.cost ?? Infinity,

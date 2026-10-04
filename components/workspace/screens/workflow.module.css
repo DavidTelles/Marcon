@@ -60,6 +60,35 @@
   min-width: 0;
   overflow-wrap: anywhere;
 }
+.priorityGroup {
+  grid-column: 1 / -1;
+  margin: 8px 0 0;
+  font-size: 18px;
+}
+.priority {
+  display: inline-flex;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+}
+.priorityUrgente {
+  color: #b42318 !important;
+  background: color-mix(in srgb, #f04438 12%, var(--surface, white)) !important;
+}
+.priorityModerado {
+  color: #996500 !important;
+  background: color-mix(in srgb, #f5b224 12%, var(--surface, white)) !important;
+}
+.priorityLeve {
+  color: var(--text, #155b86);
+  background: color-mix(in srgb, #1592b3 8%, var(--surface, white));
+}
+.card[data-priority="Urgente"] {
+  border-left: 4px solid #f04438;
+}
+.card[data-priority="Moderado"] {
+  border-left: 4px solid #f5b224;
+}
 .card h2 {
   font-size: 18px;
   margin: 16px 0 8px;
@@ -124,6 +153,83 @@
   display: flex;
   gap: 18px;
   padding: 0 20px 20px;
+}
+.bindingGrid,
+.shareGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 18px;
+}
+.mappingBindings {
+  margin: 16px 0;
+  padding: 18px;
+  border: 1px solid var(--border, #dce2e8);
+  border-radius: 12px;
+}
+.mappingBindings summary {
+  font-weight: 700;
+  cursor: pointer;
+}
+.bindingGrid section {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+.bindingGrid button {
+  padding: 10px;
+  text-align: left;
+  border: 1px solid var(--border, #dce2e8);
+  border-radius: 8px;
+  background: var(--surface, white);
+  color: inherit;
+  cursor: pointer;
+}
+.reportTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 16px 0;
+}
+.reportTabs a {
+  padding: 12px 18px;
+  border: 1px solid var(--border, #dce2e8);
+  border-radius: 10px;
+}
+.reportTabs a[aria-current="page"] {
+  background: var(--blue, #08668e);
+  color: white;
+}
+.previous {
+  background: #7791c9;
+}
+.tableScroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+.tableScroll small,
+.chartRow small {
+  display: block;
+  margin-top: 5px;
+  opacity: 0.7;
+}
+.shareRow {
+  margin: 20px 0;
+}
+.shareRow > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.shareTrack {
+  background: color-mix(in srgb, #279f8a 12%, transparent);
+  border-radius: 5px;
+}
+.methodology {
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 20px 0;
 }
 @media (max-width: 600px) {
   .cards,

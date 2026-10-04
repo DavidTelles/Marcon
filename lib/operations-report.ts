@@ -3,7 +3,14 @@ import { workspaceSnapshot } from "./workspace-db";
 import { getPool } from "./db";
 import type { RowDataPacket } from "./db-types";
 import { ActionError, permitted } from "./permissions";
-import { coverageTarget, netConsumption, predict, suggestTransfers, type Forecast } from "./forecast";
+import {
+  coverageTarget,
+  netConsumption,
+  predict,
+  proportionalCoverage,
+  suggestTransfers,
+  type Forecast,
+} from "./forecast";
 import { createHash } from "node:crypto";
 import { graphProblems, type FacilityGraph } from "./routing";
 import { integrationStatus } from "./integrations/corporate";
@@ -57,6 +64,7 @@ export type ReportRow = {
     pendingOutgoing: number;
     pendingIncoming: number;
     matchesFilters: boolean;
+    idealTarget?: number;
   };
 };
 export async function operationsReport(user: Account, filters: ReportFilter) {
@@ -66,14 +74,26 @@ export async function operationsReport(user: Account, filters: ReportFilter) {
       filters.from ||
       new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10),
     to = filters.to || today;
-  const horizon = filters.horizon ?? 7, margin = filters.margin ?? 0.2;
-  if (!Number.isInteger(horizon) || horizon < 1 || horizon > 365 || !Number.isFinite(margin) || margin < 0 || margin > 2)
+  const horizon = filters.horizon ?? 7,
+    margin = filters.margin ?? 0.2;
+  if (
+    !Number.isInteger(horizon) ||
+    horizon < 1 ||
+    horizon > 365 ||
+    !Number.isFinite(margin) ||
+    margin < 0 ||
+    margin > 2
+  )
     throw new ActionError("Cobertura (1–365 dias) ou margem (0–2) inválida.");
   if (
     ![from, to].every(
-      (v) => /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v)) && new Date(v).toISOString().slice(0, 10) === v,
+      (v) =>
+        /^\d{4}-\d{2}-\d{2}$/.test(v) &&
+        !Number.isNaN(Date.parse(v)) &&
+        new Date(v).toISOString().slice(0, 10) === v,
     ) ||
-    from > to || to > today ||
+    from > to ||
+    to > today ||
     (Date.parse(to) - Date.parse(from)) / 86400000 > 366
   )
     throw new ActionError("Período inválido (máximo 366 dias).");
@@ -118,13 +138,23 @@ export async function operationsReport(user: Account, filters: ReportFilter) {
   if (graph) graph.scaleCalibrated = graph.scaleCalibrated === true;
   function mappedRoute(code: string, from: string, to: string) {
     if (!graph) return null;
-      const a = warehouses.find((w) => w.name === from),
-        b = warehouses.find((w) => w.name === to);
-      const locations = snapshot.stock.find((p) => p.code === code)?.locations;
-      return a && b ? warehouseRoute(graph, Number(a.id), Number(b.id), {}, {
-        source: locations?.find((l) => l.warehouseId === Number(a.id))?.nodeId,
-        destination: locations?.find((l) => l.warehouseId === Number(b.id))?.nodeId,
-      }) : null;
+    const a = warehouses.find((w) => w.name === from),
+      b = warehouses.find((w) => w.name === to);
+    const locations = snapshot.stock.find((p) => p.code === code)?.locations;
+    return a && b
+      ? warehouseRoute(
+          graph,
+          Number(a.id),
+          Number(b.id),
+          {},
+          {
+            source: locations?.find((l) => l.warehouseId === Number(a.id))
+              ?.nodeId,
+            destination: locations?.find((l) => l.warehouseId === Number(b.id))
+              ?.nodeId,
+          },
+        )
+      : null;
   }
   const [pendingTransfers] = permitted(user, "planning")
     ? await pool.query<RowDataPacket[]>(
@@ -171,7 +201,20 @@ export async function operationsReport(user: Account, filters: ReportFilter) {
     );
     const relevant = observations.filter((m) => Number(m.part_id) === p.id);
     // Filters used for presentation must not remove other sectors' needs from source coverage.
-    const history = netConsumption<RowDataPacket & { kind: string; quantity: number }>(movements.filter((m) => Number(m.part_id) === p.id && m.date >= from && m.date <= endDay).map((m) => ({ ...m, kind: String(m.kind), quantity: Number(m.quantity) })));
+    const history = netConsumption<
+      RowDataPacket & { kind: string; quantity: number }
+    >(
+      movements
+        .filter(
+          (m) =>
+            Number(m.part_id) === p.id && m.date >= from && m.date <= endDay,
+        )
+        .map((m) => ({
+          ...m,
+          kind: String(m.kind),
+          quantity: Number(m.quantity),
+        })),
+    );
     const locationIds = (p.locations ?? [])
       .filter(
         (l) =>
@@ -181,22 +224,43 @@ export async function operationsReport(user: Account, filters: ReportFilter) {
       )
       .map((l) => l.warehouseId);
     const allocated: typeof history = [];
-    const remainingCapacity = new Map((p.locations ?? []).map((l) => [l.warehouseId,
-      l.capacity == null ? Infinity : Math.max(0, l.capacity - l.reserved) * days / ((p.leadDays + horizon) * (1 + margin))]));
+    const remainingCapacity = new Map(
+      (p.locations ?? []).map((l) => [
+        l.warehouseId,
+        l.capacity == null
+          ? Infinity
+          : (Math.max(0, l.capacity - l.reserved) * days) /
+            ((p.leadDays + horizon) * (1 + margin)),
+      ]),
+    );
     if (filters.purpose === "purchase") allocated.push(...history);
-    else for (const m of history) {
-      const ranked = accessibleWarehousesForBlock(graph, m.block_id ? Number(m.block_id) : null, locationIds, new Map(p.locations?.map((l) => [l.warehouseId, l.nodeId])), String(m.request_sector ?? ""));
-      let remaining = m.quantity;
-      for (const candidate of ranked) {
-        const quantity = Math.min(remaining, remainingCapacity.get(candidate.id) ?? 0);
-        if (quantity > 0) {
-          allocated.push({ ...m, quantity, warehouse_id: candidate.id });
-          remainingCapacity.set(candidate.id, remainingCapacity.get(candidate.id)! - quantity);
-          remaining -= quantity;
+    else
+      for (const m of history) {
+        const ranked = accessibleWarehousesForBlock(
+          graph,
+          m.block_id ? Number(m.block_id) : null,
+          locationIds,
+          new Map(p.locations?.map((l) => [l.warehouseId, l.nodeId])),
+          String(m.request_sector ?? ""),
+        );
+        let remaining = m.quantity;
+        for (const candidate of ranked) {
+          const quantity = Math.min(
+            remaining,
+            remainingCapacity.get(candidate.id) ?? 0,
+          );
+          if (quantity > 0) {
+            allocated.push({ ...m, quantity, warehouse_id: candidate.id });
+            remainingCapacity.set(
+              candidate.id,
+              remainingCapacity.get(candidate.id)! - quantity,
+            );
+            remaining -= quantity;
+          }
         }
+        if (remaining > 0)
+          allocated.push({ ...m, quantity: remaining, warehouse_id: null });
       }
-      if (remaining > 0) allocated.push({ ...m, quantity: remaining, warehouse_id: null });
-    }
     for (const location of p.locations ?? []) {
       const minimumGap = Math.max(
         0,
@@ -225,9 +289,16 @@ export async function operationsReport(user: Account, filters: ReportFilter) {
           )
           .reduce((s, m) => s + Number(m.quantity), 0);
       });
-      const forecast = filters.purpose === "purchase"
-        ? predict(daily, p.leadDays, forecastMinimum, p.criticality)
-        : coverageTarget(daily, p.leadDays, forecastMinimum, horizon, margin),
+      const forecast =
+          filters.purpose === "purchase"
+            ? predict(daily, p.leadDays, forecastMinimum, p.criticality)
+            : coverageTarget(
+                daily,
+                p.leadDays,
+                forecastMinimum,
+                horizon,
+                margin,
+              ),
         target = Math.max(
           0,
           Math.min(
@@ -259,15 +330,27 @@ export async function operationsReport(user: Account, filters: ReportFilter) {
         .reduce((s, r) => s + Number(r.quantity), 0);
       reportRows.push({
         distribution: {
-          matchesFilters: ![filters.block, filters.sector, filters.requester].some(Boolean) || allocated.some((m) => Number(m.warehouse_id) === location.warehouseId && m.quantity > 0 && (!filters.block || m.block === filters.block) && (!filters.sector || String(m.request_sector).toLowerCase() === filters.sector.toLowerCase()) && (!filters.requester || m.requester === filters.requester)),
+          matchesFilters:
+            ![filters.block, filters.sector, filters.requester].some(Boolean) ||
+            allocated.some(
+              (m) =>
+                Number(m.warehouse_id) === location.warehouseId &&
+                m.quantity > 0 &&
+                (!filters.block || m.block === filters.block) &&
+                (!filters.sector ||
+                  String(m.request_sector).toLowerCase() ===
+                    filters.sector.toLowerCase()) &&
+                (!filters.requester || m.requester === filters.requester),
+            ),
           verified:
             !!graph &&
-            allocated.some((m) => Number(m.warehouse_id) === location.warehouseId && m.quantity > 0),
-          unmappedConsumption: allocated
-            .filter(
+            allocated.some(
               (m) =>
-                m.warehouse_id === null,
-            )
+                Number(m.warehouse_id) === location.warehouseId &&
+                m.quantity > 0,
+            ),
+          unmappedConsumption: allocated
+            .filter((m) => m.warehouse_id === null)
             .reduce((s, m) => s + Number(m.quantity), 0),
           consumption: [
             ...new Set(
@@ -342,14 +425,39 @@ export async function operationsReport(user: Account, filters: ReportFilter) {
       });
     }
   }
-  const projected = new Map(reportRows.map((r) => [`${r.code}:${r.warehouse}`, r.available]));
+  if (filters.purpose === "distribution" && graph) {
+    const balanced = proportionalCoverage(
+      reportRows.map((row) => ({
+        ...row,
+        incoming: row.incoming + (row.distribution?.pendingIncoming ?? 0),
+        target: row.distribution?.unmappedConsumption
+          ? Math.max(row.target, row.available)
+          : row.target,
+      })),
+      (a, b) => !!mappedRoute(a.code, a.warehouse, b.warehouse),
+    );
+    for (const row of reportRows) {
+      const next = balanced.find(
+        (value) => value.code === row.code && value.warehouse === row.warehouse,
+      )!;
+      if (row.distribution) row.distribution.idealTarget = row.target;
+      if (!row.distribution?.unmappedConsumption) row.target = next.target;
+    }
+  }
+  const projected = new Map(
+    reportRows.map((r) => [`${r.code}:${r.warehouse}`, r.available]),
+  );
   const transfers = permitted(user, "planning")
     ? suggestTransfers(
         reportRows.map((r) => ({
           code: r.code,
           warehouse: r.warehouse,
           available: Math.max(0, r.available),
-          target: filters.purpose !== "purchase" && r.distribution?.unmappedConsumption ? Math.max(r.target, r.available) : r.target,
+          target:
+            filters.purpose !== "purchase" &&
+            r.distribution?.unmappedConsumption
+              ? Math.max(r.target, r.available)
+              : r.target,
           minimum: r.minimum,
           incoming: r.incoming + (r.distribution?.pendingIncoming ?? 0),
           capacity: r.capacity,
@@ -359,7 +467,9 @@ export async function operationsReport(user: Account, filters: ReportFilter) {
           step: 1, // Official stock flows permit loose base units; packSize converts boxes.
           daily: r.analysis.daily,
         })),
-        (source, dest) => mappedRoute(source.code, source.warehouse, dest.warehouse)?.cost ?? Infinity,
+        (source, dest) =>
+          mappedRoute(source.code, source.warehouse, dest.warehouse)?.cost ??
+          Infinity,
         (dest) =>
           filters.purpose === "purchase" ||
           !!reportRows.find(
@@ -372,12 +482,28 @@ export async function operationsReport(user: Account, filters: ReportFilter) {
         const dest = reportRows.find(
           (r) => r.code === t.code && r.warehouse === t.to,
         )!;
-        const sourceBefore = projected.get(`${t.code}:${t.from}`)!, destinationBefore = projected.get(`${t.code}:${t.to}`)!;
+        const sourceBefore = projected.get(`${t.code}:${t.from}`)!,
+          destinationBefore = projected.get(`${t.code}:${t.to}`)!;
         projected.set(`${t.code}:${t.from}`, sourceBefore - t.quantity);
         projected.set(`${t.code}:${t.to}`, destinationBefore + t.quantity);
         return {
           ...t,
-          key: createHash("sha256").update(JSON.stringify([t, from, to, horizon, margin, published[0]?.id ?? null, source.available, source.target, dest.available, dest.target])).digest("hex"),
+          key: createHash("sha256")
+            .update(
+              JSON.stringify([
+                t,
+                from,
+                to,
+                horizon,
+                margin,
+                published[0]?.id ?? null,
+                source.available,
+                source.target,
+                dest.available,
+                dest.target,
+              ]),
+            )
+            .digest("hex"),
           reason:
             filters.purpose === "purchase"
               ? t.reason
@@ -399,23 +525,45 @@ export async function operationsReport(user: Account, filters: ReportFilter) {
             forecast: dest.forecast,
             leadDays: snapshot.stock.find((p) => p.code === t.code)?.leadDays,
             incoming: dest.incoming,
-            horizon, margin,
+            horizon,
+            margin,
             route: mappedRoute(t.code, t.from, t.to),
-            sourceCoverageBefore: source.analysis.daily > 0 ? sourceBefore / source.analysis.daily : null,
-            sourceCoverageAfter: source.analysis.daily > 0 ? (sourceBefore - t.quantity) / source.analysis.daily : null,
-            destinationCoverageBefore: dest.analysis.daily > 0 ? destinationBefore / dest.analysis.daily : null,
-            destinationCoverageAfter: dest.analysis.daily > 0 ? (destinationBefore + t.quantity) / dest.analysis.daily : null,
+            sourceCoverageBefore:
+              source.analysis.daily > 0
+                ? sourceBefore / source.analysis.daily
+                : null,
+            sourceCoverageAfter:
+              source.analysis.daily > 0
+                ? (sourceBefore - t.quantity) / source.analysis.daily
+                : null,
+            destinationCoverageBefore:
+              dest.analysis.daily > 0
+                ? destinationBefore / dest.analysis.daily
+                : null,
+            destinationCoverageAfter:
+              dest.analysis.daily > 0
+                ? (destinationBefore + t.quantity) / dest.analysis.daily
+                : null,
             capacityKnown: dest.capacity !== null,
-            packSize: snapshot.stock.find((p) => p.code === t.code)?.packSize ?? 1,
+            packSize:
+              snapshot.stock.find((p) => p.code === t.code)?.packSize ?? 1,
             ...dest.distribution,
           },
         };
       })
     : [];
-  const [rejected] = permitted(user, "planning") ? await pool.query<RowDataPacket[]>(
-    "SELECT details FROM audit_log WHERE entity_type='recommendation' AND action='reject' ORDER BY id DESC LIMIT 10000",
-  ) : [[]];
-  const rejectedKeys = new Set(rejected.map((r) => (typeof r.details === "string" ? JSON.parse(r.details) : r.details)?.key));
+  const [rejected] = permitted(user, "planning")
+    ? await pool.query<RowDataPacket[]>(
+        "SELECT details FROM audit_log WHERE entity_type='recommendation' AND action='reject' ORDER BY id DESC LIMIT 10000",
+      )
+    : [[]];
+  const rejectedKeys = new Set(
+    rejected.map(
+      (r) =>
+        (typeof r.details === "string" ? JSON.parse(r.details) : r.details)
+          ?.key,
+    ),
+  );
   const visibleTransfers = transfers.filter((t) => !rejectedKeys.has(t.key));
   for (const r of reportRows) {
     r.transfer = visibleTransfers
