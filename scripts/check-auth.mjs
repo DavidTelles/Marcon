@@ -27,13 +27,5 @@ for (const [identity, role] of [["ana@marcon.demo", "funcionario"], ["1002", "li
 }
 assert.equal((await request("/inicio/admin", { headers: { Cookie: "marcon_session=1004:9999999999999:forged" } })).headers.get("location"), "/login");
 assert.equal((await request("/api/login", { method: "POST", headers: { Origin: "https://invalid.example", "Content-Type": "application/json" }, body: "{}" })).status, 403);
-const rfid = await request("/api/login/rfid", {
-  method: "POST",
-  headers: { Origin: base, "Content-Type": "application/json" },
-  body: JSON.stringify({ identity: "1004", role: "admin" }),
-});
-assert.equal(rfid.status, 200);
-assert.equal((await rfid.json()).destination, "/inicio/funcionario");
-assert.match(rfid.headers.get("set-cookie"), /HttpOnly/i);
-assert.equal((await request("/api/login/rfid", { method: "POST", headers: { Origin: "https://invalid.example" } })).status, 403);
-console.log("PASS: credential passwords, demo-only passwordless RFID, fixed RFID profile, protected routes, sessions, logout and origin validation.");
+for(const path of ["/api/login/rfid","/api/passkey"])assert.equal((await request(path,{method:"POST",headers:{Origin:base}})).status,404);
+console.log("PASS: credential login, protected routes, logout, origin validation and retired authentication endpoints absent.");

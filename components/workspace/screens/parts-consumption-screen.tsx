@@ -43,6 +43,7 @@ const filterKeys = [
   "limit",
   "threshold",
   "page",
+  "dashboard",
 ];
 
 export function PartsConsumptionScreen({
@@ -55,6 +56,7 @@ export function PartsConsumptionScreen({
   initialCode?: string;
 }) {
   const search = useSearchParams();
+  const leader = role === "lider";
   const [filters, setFilters] = useState<Record<string, string>>(() => {
     const initial = Object.fromEntries(
       filterKeys.filter((k) => search.has(k)).map((k) => [k, search.get(k)!]),
@@ -78,7 +80,7 @@ export function PartsConsumptionScreen({
   );
   const originHeading = useRef<HTMLHeadingElement>(null);
   const mainHeading = useRef<HTMLDivElement>(null);
-  const prefix = role === "admin" ? "/admin/dashboard" : "/warehouse/dashboard";
+  const prefix = role === "admin" ? "/admin/dashboard" : leader ? "/department-head/dashboard" : "/warehouse/dashboard";
   const selected = filters.code || "";
   let selectedBlocks: string[] = [];
   try {
@@ -90,6 +92,7 @@ export function PartsConsumptionScreen({
   }
   const effectiveFilters = {
     ...filters,
+    ...(leader ? { dashboard: "bloco" } : {}),
     ...(series.length ? { series: series.join("|") } : {}),
     ...(report
       ? {
@@ -137,6 +140,7 @@ export function PartsConsumptionScreen({
       try {
         const query = new URLSearchParams({
           ...filters,
+          ...(leader ? { dashboard: "bloco" } : {}),
           ...(series.length ? { series: series.join("|") } : {}),
         });
         const response = await fetch("/api/parts-consumption?" + query, {
@@ -161,7 +165,7 @@ export function PartsConsumptionScreen({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [filters, revision, series]);
+  }, [filters, revision, series, leader]);
   useEffect(() => {
     if (!origin || !report) return;
     const controller = new AbortController();
@@ -257,13 +261,13 @@ export function PartsConsumptionScreen({
       <div ref={mainHeading} tabIndex={-1}>
         {heading(
           "MATERIAIS · ENTREGAS CONFIRMADAS",
-          mode === "comparison" ? "Peça" : "Por Peça",
-          mode === "comparison"
+          leader ? "Fluxo do bloco" : mode === "comparison" ? "Peça" : "Por Peça",
+          leader ? "Solicitações, entregas e devoluções do bloco autorizado. Entrega e transferência não comprovam consumo efetivo." : mode === "comparison"
             ? "Compare materiais na mesma unidade, com acesso às entregas que compõem cada resultado."
             : "Selecione um material e compare as entregas entre blocos.",
         )}
       </div>
-      <nav className={styles.tabs} aria-label="Painéis de peças">
+      {!leader && <nav className={styles.tabs} aria-label="Painéis de peças">
         <Link
           href={link(`${prefix}/parts`)}
           aria-current={mode === "comparison" ? "page" : undefined}
@@ -276,7 +280,7 @@ export function PartsConsumptionScreen({
         >
           Por Peça · blocos
         </Link>
-      </nav>
+      </nav>}
       <section className="panel" aria-label="Filtros de entregas">
         <div className={styles.filters}>
           <label>
@@ -426,6 +430,7 @@ export function PartsConsumptionScreen({
         report && (
           <>
             <p className={styles.context}>
+              {leader && <>{report.scope}<br /></>}
               {report.period.from} a {report.period.to} · UTC · {unit} ·
               anterior: {report.comparison.from} a {report.comparison.to}
               <br />
@@ -581,7 +586,7 @@ export function PartsConsumptionScreen({
                               >
                                 <td>
                                   <Link
-                                    href={link(`${prefix}/by-part`, {
+                                    href={link(leader ? prefix : `${prefix}/by-part`, {
                                       code: p.code,
                                       unit: p.unit,
                                       page: "1",
@@ -870,7 +875,7 @@ export function PartsConsumptionScreen({
                     </>
                   )}
                 </details>
-                {mode === "share" && (
+                {(mode === "share" || leader) && (
                   <details className={`panel ops-panel ${styles.details}`}>
                     <summary>
                       Pedidos solicitados, entregues e pendentes
@@ -917,6 +922,13 @@ export function PartsConsumptionScreen({
                     </div>
                   </details>
                 )}
+                {leader && <details className={`panel ops-panel ${styles.details}`}>
+                  <summary>Transferências registradas · movimentos de origem</summary>
+                  <p>Até 50 movimentações no período UTC, no bloco autorizado. Saída e entrada são etapas distintas; não compõem a quantidade entregue nem comprovam consumo. A exportação inclui todas as linhas filtradas, até 10.000.</p>
+                  <div className={styles.scroll}><table><caption>Eventos de transferência dentro dos mesmos filtros</caption><thead><tr><th>Data UTC</th><th>Material</th><th>Quantidade</th><th>Etapa</th><th>Origem</th><th>Destino</th><th>Responsável</th></tr></thead><tbody>
+                    {report.transferEvents.map((event) => <tr key={event.id}><td>{event.date}</td><td>{event.code} · {event.name}</td><td>{number(event.quantity)} {event.unit}</td><td>{event.kind}</td><td>{event.origin}</td><td>{event.destination}</td><td>{event.actor}</td></tr>)}
+                  </tbody></table></div>{!report.transferEvents.length && <p>Nenhuma transferência registrada neste recorte.</p>}
+                </details>}
                 <details className={`panel ops-panel ${styles.details}`}>
                   <summary>Devoluções, danos e distribuição</summary>
                   <p>
@@ -1041,7 +1053,7 @@ export function PartsConsumptionScreen({
                       materiais e almoxarifados deste recorte.
                     </p>
                   )}
-                  {planningOpen && selected && (
+                  {!leader && planningOpen && selected && (
                     <PartsPlanning
                       code={selected}
                       from={report.period.from}
@@ -1050,11 +1062,11 @@ export function PartsConsumptionScreen({
                       revision={revision}
                     />
                   )}
-                  <Link
+                  {!leader && <Link
                     href={`${role === "admin" ? "/admin" : "/warehouse"}/recommendations?${new URLSearchParams({ from: report.period.from, to: report.period.to, ...(selected ? { code: selected } : {}) })}`}
                   >
                     Consultar sugestões no planejamento existente
-                  </Link>
+                  </Link>}
                   <p>
                     Proximidade depende de locais mapeados e rotas válidas.
                     Nenhuma movimentação é criada por este painel.

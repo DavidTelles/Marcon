@@ -1,6 +1,6 @@
 export function wakeCommand(transcript: string): string | null {
   const match = transcript.match(
-    /\b(?:james|jhames|jeimes|djeimes|jaimes|djaimes)\b[\s,:.!?-]*/i,
+    /\bmarco\b[\s,:.!?-]*/i,
   );
   if (!match) return null;
   const after = transcript.slice(match.index! + match[0].length).trim();

@@ -1,4 +1,5 @@
 @import "tailwindcss";
+.workspace-back-top { display: flex; justify-content: center; margin-top: 24px; padding: 16px 0 100px; border-top: 1px solid var(--line); }
 .decision-totals { display: grid; grid-template-columns: 1fr; gap: 12px; margin: 16px 0; }
 .decision-totals button { display: grid; gap: 8px; text-align: left; border: 1px solid var(--line); border-radius: 16px; padding: 18px; background: var(--canvas); color: var(--ink); cursor: pointer; }
 .decision-totals strong { color: var(--blue); font-size: 2rem; }

@@ -12,7 +12,7 @@ const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30, standardHead
 
 router.post('/register', authenticate, authorize(ROLES.ADMIN, PERMISSIONS.USERS_MANAGE), validate(schemas.registerBody), authController.register);
 router.post('/login', loginLimiter, validate(schemas.loginBody), authController.login);
-router.post('/login/rfid', loginLimiter, validate(schemas.rfidLoginBody), authController.loginRfid);
+router.post('/login/face', loginLimiter, authController.loginFace);
 router.post('/forgot/password', authController.forgotPassword);
 router.post('/forgot/password/reset', authController.resetPassword);
 router.post('/forgot/email', authController.forgotEmail);

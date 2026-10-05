@@ -8,7 +8,6 @@ import styles from "./profile.module.css";
 import { BrandLogo } from "@/app/components/brand-logo";
 import { roleLanding } from "@/lib/workspace-routes";
 import { FaceRegister } from "./face-register";
-import { PasskeyRegister } from "./passkey-register";
 import { ThemeToggle } from "@/components/workspace/theme-toggle";
 import { MobileBrandMenu } from "@/components/workspace/mobile-brand-menu";
 
@@ -84,7 +83,6 @@ export default function ProfileForm({ name: initialName, email: initialEmail, ro
         <div className={styles.actions}><button className={styles.button} type="submit" disabled={!persistent || busy}>{busy ? "Salvando…" : "Salvar perfil"}</button></div>
       </form>
       {persistent && <FaceRegister />}
-      {persistent && <PasskeyRegister />}
     </div>
   </main>;
 }

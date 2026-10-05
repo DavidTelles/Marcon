@@ -1,0 +1,6 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 1, "column": 0}, "map": {"version":3,"sources":["turbopack:///[project]/app/components/brand-logo.module.css"],"sourcesContent":[".logo,\r\n.compact {\r\n  position: relative;\r\n  display: inline-block;\r\n  flex-shrink: 0;\r\n  overflow: hidden;\r\n  width: clamp(72px, 7vw, 96px);\r\n  aspect-ratio: 945 / 500;\r\n  vertical-align: middle;\r\n}\r\n\r\n.compact {\r\n  width: 44px;\r\n}\r\n\r\n/* Frame the mark without modifying the original PNG or its transparent margins. */\r\n.image {\r\n  position: absolute;\r\n  top: 50%;\r\n  left: 0;\r\n  width: 100%;\r\n  height: auto;\r\n  transform: translateY(-52.4%);\r\n}\r\n"],"names":[],"mappings":"AAAA;;;;;;;;;;AAWA;;;;AAKA"}}]
+}

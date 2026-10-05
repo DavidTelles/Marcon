@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
       return json({ error: "Origem invalida." }, 403);
     if (!databaseEnabled())
       throw new ActionError(
-        "James precisa do banco local para consultar dados reais.",
+        "Marco precisa do banco local para consultar dados reais.",
         503,
       );
     if (active.has(user.id))
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
     return json(
       {
         error: timeout
-          ? "James demorou para responder. Seu carrinho foi preservado."
+          ? "Marco demorou para responder. Seu carrinho foi preservado."
           : "Nao foi possivel consultar o modelo ou os dados. Seu carrinho foi preservado.",
       },
       timeout ? 504 : 503,

@@ -28,6 +28,7 @@ export const inventoryActions = new Set([
   "stockEntry",
   "replenishStock",
   "adjustStock",
+  "reconcileImportBalance",
   "registerReturn",
   "inspectReturn",
   "confirmInbound",
@@ -42,7 +43,7 @@ export async function executeInventoryAction(
   const work = async (c: PoolConnection) => {
     const actor = await first(
       c,
-      "SELECT id,block_id,sector FROM users WHERE employee_no=? AND active=TRUE",
+      "SELECT id,block_id,sector,sector_id,workplace_id FROM users WHERE employee_no=? AND active=TRUE",
       [user.id],
     );
     if (!actor) throw new ActionError("Sessão inválida.", 401);
@@ -50,6 +51,34 @@ export async function executeInventoryAction(
     if (requestActions.has(String(a.type)))
       return executeRequestAction(c, user, actor, a);
     demand(user, "stock");
+    if (a.type === "reconcileImportBalance") {
+      if (a.confirmed !== true) throw new ActionError("Confirme a abertura ou a contagem física atual.",422);
+      const ref = await first(c,"SELECT material_id FROM reported_balances WHERE id=?",[integer(a.id)]);
+      if (!ref?.material_id) throw new ActionError("Resolva o conflito do material importado antes de conciliar.",409);
+      const p = await partLock(c,null,ref.material_id);
+      const reported = await first(c,"SELECT rb.*,l.code,br.code AS branch_code FROM reported_balances rb JOIN material_import_lines l ON l.id=rb.source_line_id JOIN branches br ON br.id=rb.branch_id WHERE rb.id=? FOR UPDATE",[a.id]);
+      if (reported.reconciliation_movement_id) throw new ActionError("Saldo de origem já conciliado; registro preservado.",409);
+      const w = await place(c,a.warehouse);
+      if (Number(w.branch_id) !== Number(reported.branch_id)) throw new ActionError("Almoxarifado não vinculado à filial do relatório.",409);
+      if (String(reported.unit) !== String(p.unit)) throw new ActionError("Unidade do relatório diverge do cadastro.",409);
+      const opening = a.mode === "opening";
+      if (!opening && a.mode !== "count") throw new ActionError("Selecione abertura ou contagem física atual.");
+      const quantity = integer(opening ? Number(reported.quantity) : a.countedQuantity,0);
+      if (opening && (reported.quantity === null || quantity === 0)) throw new ActionError("Saldo sem quantidade positiva não gera movimentação de abertura.",409);
+      if (opening) {
+        const old = await first(c,"SELECT quantity FROM inventory WHERE part_id=? AND warehouse_id=?",[p.id,w.id]);
+        const events = await first(c,"SELECT id FROM stock_movements WHERE part_id=? AND warehouse_id=? LIMIT 1",[p.id,w.id]);
+        const reservations = await first(c,"SELECT request_id FROM request_reservations WHERE part_id=? AND warehouse_id=? LIMIT 1",[p.id,w.id]);
+        if (Number(old?.quantity??0) || events || reservations) throw new ActionError("Local já possui operação. Registre uma contagem física atual no fluxo de ajuste; o relatório não sobrescreve o saldo.",409);
+      }
+      const note = `${reason(a.reason).slice(0,800)}; origem: linha ${reported.source_line_id}, filial ${reported.branch_code}`;
+      await executeInventoryAction(user,{type:opening?"stockEntry":"adjustStock",code:p.code,warehouse:w.name,quantity,reason:note},c);
+      const event = await first(c,"SELECT id FROM stock_movements WHERE part_id=? AND warehouse_id=? AND actor_id=? AND reason=? ORDER BY id DESC LIMIT 1",[p.id,w.id,actorId,note]);
+      if (!event) throw new ActionError("A contagem não alterou o saldo; relatório preservado sem criar evento artificial.",409);
+      await c.execute("UPDATE reported_balances SET warehouse_id=?,reconciliation_movement_id=? WHERE id=?",[w.id,event.id,a.id]);
+      await audit(c,actorId,"reported_balance",Number(a.id),"reconcile",{mode:a.mode,reported:reported.quantity,counted:quantity,movementId:event.id});
+      return {id:Number(a.id),movementId:Number(event.id)};
+    }
     if (
       [
         "transfer",
@@ -65,7 +94,7 @@ export async function executeInventoryAction(
         throw new ActionError("Dados inválidos.");
       const code = text(d.code, 64).toUpperCase(),
         name = text(d.name, 160),
-        qr = text(d.qrCode, 128).toUpperCase();
+        qr = typeof d.qrCode === "string" && d.qrCode.length <= 128 && !d.qrCode.includes("\0") ? d.qrCode : "";
       if (!code || !name || !qr || !text(d.location, 80))
         throw new ActionError("Preencha código, nome, QR e localização.");
       const cost = Number(d.estimatedCost);
@@ -96,6 +125,7 @@ export async function executeInventoryAction(
           ? d.image
           : null;
       let pId = id;
+      if (image && (!text(d.imageSource,1000) || !text(d.imageUsage,1000) || d.imageConfirmed !== true)) throw new ActionError("Confirme a peça fotografada, a origem e as condições de uso da fotografia.",422);
       if (id) {
         const old = await partLock(c, null, id);
         if (unit !== old.unit) {
@@ -153,6 +183,8 @@ export async function executeInventoryAction(
         );
         pId = r.insertId;
       }
+      await c.execute("UPDATE parts SET pack_verified=TRUE WHERE id=?",[pId]);
+      if (image) await c.execute("UPDATE parts SET image_source=?,image_usage=?,image_verified_at=UTC_TIMESTAMP(3),image_verified_by=? WHERE id=?",[text(d.imageSource,1000),text(d.imageUsage,1000),actorId,pId]);
       await c.execute(
         "INSERT IGNORE INTO inventory(part_id,warehouse_id) VALUES(?,?)",
         [pId, w.id],

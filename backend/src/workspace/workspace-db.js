@@ -23,6 +23,7 @@ __export(workspace_db_exports, {
 module.exports = __toCommonJS(workspace_db_exports);
 var import_db = require("./db");
 const { requestPattern } = require('./request-policy');
+const { ActionError } = require('./permissions');
 const roles = {
   admin: "Administrador",
   lider: "L\xEDder de bloco",
@@ -31,11 +32,13 @@ const roles = {
 };
 async function workspaceSnapshot(user, catalogOnly = false) {
   return (0, import_db.transaction)(async (c) => {
-    const scope = user.role === "funcionario" ? "u.employee_no=?" : user.role === "lider" ? "b.name=?" : "1=1";
-    const params = user.role === "funcionario" ? [user.id] : user.role === "lider" ? [user.block ?? ""] : [];
-    const requestScope = `(${scope} OR r.status='Entregue')`;
     const [actors] = await c.execute("SELECT block_id,sector FROM users WHERE employee_no=?", [user.id]);
     const actor = actors[0];
+    if (user.role === "lider" && (!actor || !Number.isSafeInteger(Number(actor.block_id)) || Number(actor.block_id) < 1))
+      throw new ActionError("Configure o vínculo do líder com um bloco antes de consultar o painel.", 403);
+    const scope = user.role === "funcionario" ? "u.employee_no=?" : user.role === "lider" ? "b.id=?" : "1=1";
+    const params = user.role === "funcionario" ? [user.id] : user.role === "lider" ? [Number(actor.block_id)] : [];
+    const requestScope = scope;
     const [patterns] = actor ? await c.execute("SELECT part_id,block_id,sector,quantity FROM requests WHERE (block_id=? OR sector=?) AND approved_at IS NOT NULL AND status NOT IN ('Cancelada','Rejeitada') AND created_at>=DATE_SUB(NOW(),INTERVAL 90 DAY)", [actor.block_id, actor.sector]) : [[]];
     const [rr] = await c.execute(
       `SELECT r.*,COALESCE((SELECT SUM(m.quantity) FROM stock_movements m WHERE m.request_id=r.id AND m.kind='saida'),0) AS delivered_quantity,p.name AS material,p.code,p.unit,fu.employee_no AS fulfilled_no,u.employee_no,u.name AS person,b.name AS block,DATE_FORMAT(r.created_at,'%d/%m/%Y') AS date FROM requests r JOIN parts p ON p.id=r.part_id JOIN users u ON u.id=r.requester_id JOIN blocks b ON b.id=r.block_id LEFT JOIN users fu ON fu.id=r.fulfilled_by WHERE ${requestScope} ${catalogOnly ? "AND FALSE" : ""} ORDER BY r.created_at DESC,r.id DESC`,
@@ -162,7 +165,7 @@ async function workspaceSnapshot(user, catalogOnly = false) {
         estimatedCost: ["admin", "almoxarifado"].includes(user.role) ? Number(p.reference_unit_price) : 0,
         location: String(p.location),
         warehouse: loc.find((l) => l.quantity > 0)?.warehouse ?? "Central",
-        image: p.image_url ? String(p.image_url) : void 0,
+        image: p.image_url && p.image_verified_at && p.image_source && p.image_usage ? String(p.image_url) : void 0,
         consumed30: withdrawals.filter((m) => m.date >= cutoff).reduce((s, m) => s + m.quantity, 0),
         previous30: withdrawals.filter((m) => m.date >= previous && m.date < cutoff).reduce((s, m) => s + m.quantity, 0),
         locations: loc.map((l) => ({

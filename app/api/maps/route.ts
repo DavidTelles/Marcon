@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { syncPublishedPoints } from "@/lib/industrial-links";
 import sharp from "sharp";
 import { randomUUID } from "node:crypto";
 import { currentUser } from "@/lib/auth";
@@ -62,10 +63,10 @@ export async function GET(request: NextRequest) {
       "SELECT id,name FROM blocks",
     );
     const [sectors] = await getPool().query<RowDataPacket[]>(
-      "SELECT u.block_id AS block_id,b.name AS block,u.sector,COUNT(*) AS employees FROM users u JOIN blocks b ON b.id=u.block_id WHERE u.active=TRUE GROUP BY u.block_id,b.name,u.sector ORDER BY b.name,u.sector",
+      "SELECT s.id,s.block_id,b.name AS block,s.name AS sector,COUNT(u.id) AS employees FROM sectors s JOIN blocks b ON b.id=s.block_id LEFT JOIN users u ON u.sector_id=s.id AND u.active=TRUE GROUP BY s.id,s.block_id,b.name,s.name ORDER BY b.name,s.name",
     );
     return json({ maps, warehouses, blocks, sectors: sectors.map((sector) => ({
-      blockId: Number(sector.block_id), block: String(sector.block),
+      id: Number(sector.id), blockId: Number(sector.block_id), block: String(sector.block),
       sector: String(sector.sector), employees: Number(sector.employees),
     })) });
   } catch (e) {
@@ -333,6 +334,7 @@ export async function POST(request: NextRequest) {
             errors[0] ??
               "Teste os caminhos e confirme a conferência física antes de publicar.",
           );
+        await syncPublishedPoints(c,graph,id);
         await c.query(
           "UPDATE map_versions SET status='Arquivada' WHERE status='Publicada'",
         );

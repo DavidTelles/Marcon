@@ -15,6 +15,7 @@
   warehouseId?: number;
   blockId?: number;
   sector?: string;
+  sectorId?: number;
 };
 export type MapEdge = {
   from: string;
@@ -89,7 +90,8 @@ export const mapKinds = {
 export function deliveryTargets(
   graph: FacilityGraph,
   blockId: number,
-  sector?: string,
+  sectorId?: number,
+  pointId?: string,
 ) {
   const points = graph.nodes.filter(
     (node) =>
@@ -102,13 +104,9 @@ export function deliveryTargets(
         "replenishment",
       ].includes(node.kind),
   );
-  const normalize = (value: string) => value.trim().toLocaleLowerCase("pt-BR");
-  const specific = sector
-    ? points.filter(
-        (node) => node.sector && normalize(node.sector) === normalize(sector),
-      )
-    : [];
-  return specific.length ? specific : points.filter((node) => !node.sector);
+  if (pointId) return points.filter(node=>node.id===pointId);
+  if (sectorId) return points.filter(node=>node.sectorId===sectorId);
+  return points.filter((node) => !node.sectorId && !node.sector);
 }
 export function nextPointLabel(g: FacilityGraph, kind: keyof typeof mapKinds) {
   let number = 1;
@@ -246,6 +244,7 @@ export function graphProblems(g: FacilityGraph): string[] {
         (v) => v !== undefined && typeof v !== "boolean",
       ) ||
       !validTransport(n.allowedTransport) ||
+      (n.sectorId !== undefined && (!Number.isSafeInteger(n.sectorId) || n.sectorId < 1 || !n.blockId)) ||
       (n.sector !== undefined &&
         (typeof n.sector !== "string" ||
           !n.sector.trim() ||
@@ -277,6 +276,7 @@ export function graphProblems(g: FacilityGraph): string[] {
       !a ||
       !b ||
       a === b ||
+      (edge.distance !== undefined && edge.distanceUnit === undefined) ||
       [edge.seconds, edge.distance].some(
         (v) => v !== undefined && (!Number.isFinite(v) || v < 0 || v > 1e9),
       ) ||

@@ -6,7 +6,6 @@ const endpoints = [
   '/api-docs',
   '/register',
   '/login',
-  '/login/rfid',
   '/forgot/password',
   '/forgot/password/reset',
   '/forgot/email',
@@ -19,7 +18,6 @@ const endpoints = [
   '/api/stock',
   '/api/stock/movements',
   '/api/requests',
-  '/api/rfid',
   '/api/workspace/snapshot',
   '/api/workspace/transfers',
   '/api/workspace/actions',
@@ -30,7 +28,6 @@ const endpoints = [
 
 const payloads = [
   ['login', { login: 'matrícula ou e-mail', password: 'senha' }],
-  ['login/rfid', { rfid_id: 'AABBCCDDEE' }],
   [
     'createEmployee',
     { id: 'matrícula', password: 'senha', name: 'nome', block: 'Bloco A', sector: 'Usinagem', role: 'funcionario' }

@@ -97,6 +97,8 @@ export async function operationsReport(user: Account, filters: ReportFilter) {
     (Date.parse(to) - Date.parse(from)) / 86400000 > 366
   )
     throw new ActionError("Período inválido (máximo 366 dias).");
+  if (user.role === "lider" && (!Number.isSafeInteger(user.blockId) || !user.blockId))
+    throw new ActionError("Configure o vínculo do líder com um bloco.", 403);
   if (user.role === "lider" && filters.block && filters.block !== user.block)
     throw new ActionError("Bloco fora do seu escopo.", 403);
   if (
@@ -111,16 +113,16 @@ export async function operationsReport(user: Account, filters: ReportFilter) {
       user.role === "funcionario"
         ? "u.employee_no=?"
         : user.role === "lider"
-          ? "b.name=?"
+          ? "b.id=?"
           : "1=1",
     params =
       user.role === "funcionario"
         ? [user.id]
         : user.role === "lider"
-          ? [user.block ?? ""]
+          ? [user.blockId!]
           : [];
   const [movements] = await pool.execute<RowDataPacket[]>(
-    `SELECT r.sector AS request_sector,r.status AS request_status,r.priority AS request_priority,m.request_id,m.id,m.part_id,m.warehouse_id,m.kind,m.quantity,m.reason,au.name AS actor,p.code,DATE_FORMAT(m.created_at,'%Y-%m-%d') AS date,b.id AS block_id,b.name AS block,u.employee_no AS requester FROM stock_movements m JOIN users au ON au.id=m.actor_id JOIN parts p ON p.id=m.part_id LEFT JOIN requests r ON r.id=m.request_id LEFT JOIN users u ON u.id=r.requester_id LEFT JOIN blocks b ON b.id=m.block_id WHERE ${scope} AND m.created_at>=? AND m.created_at<DATE_ADD(?,INTERVAL 1 DAY) ORDER BY m.created_at,m.id`,
+    `SELECT r.sector AS request_sector,r.sector_id AS request_sector_id,r.status AS request_status,r.priority AS request_priority,m.request_id,m.id,m.part_id,m.warehouse_id,m.kind,m.quantity,m.reason,au.name AS actor,p.code,DATE_FORMAT(m.created_at,'%Y-%m-%d') AS date,b.id AS block_id,b.name AS block,u.employee_no AS requester FROM stock_movements m JOIN users au ON au.id=m.actor_id JOIN parts p ON p.id=m.part_id LEFT JOIN requests r ON r.id=m.request_id LEFT JOIN users u ON u.id=r.requester_id LEFT JOIN blocks b ON b.id=m.block_id WHERE ${scope} AND m.created_at>=? AND m.created_at<DATE_ADD(?,INTERVAL 1 DAY) ORDER BY m.created_at,m.id`,
     [...params, from, to],
   );
   const [warehouses] = await pool.query<RowDataPacket[]>(
@@ -241,7 +243,7 @@ export async function operationsReport(user: Account, filters: ReportFilter) {
           m.block_id ? Number(m.block_id) : null,
           locationIds,
           new Map(p.locations?.map((l) => [l.warehouseId, l.nodeId])),
-          String(m.request_sector ?? ""),
+          m.request_sector_id ? Number(m.request_sector_id) : undefined,
         );
         let remaining = m.quantity;
         for (const candidate of ranked) {

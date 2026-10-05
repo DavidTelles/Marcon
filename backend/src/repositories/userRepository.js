@@ -14,9 +14,7 @@ function publicUser(row) {
     sector: row.sector,
     block_id: row.block_id,
     block: row.block_name || null,
-    rfid_tag: row.rfid_tag || null,
     is_active: Boolean(row.active),
-    rfid_access_enabled: row.rfid_access_enabled === undefined ? true : Boolean(row.rfid_access_enabled),
     created_at: row.created_at
   };
 }
@@ -42,10 +40,6 @@ async function findByEmployeeCode(code) {
   return rows[0] || null;
 }
 
-async function findByRfid(rfid) {
-  const rows = await query(`${BASE_SELECT} WHERE u.rfid_tag = ?`, [rfid]);
-  return rows[0] || null;
-}
 
 async function list(filters = {}) {
   const where = [];
@@ -69,8 +63,8 @@ function ROLE_ENUM_FROM_CODE(role) {
 
 async function create(data) {
   const result = await query(
-    `INSERT INTO users (employee_no, name, email, password_hash, role, sector, block_id, rfid_tag, active, rfid_access_enabled)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO users (employee_no, name, email, password_hash, role, sector, block_id, active)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       data.employee_code,
       data.name,
@@ -79,9 +73,7 @@ async function create(data) {
       data.role_enum,
       data.sector || 'Geral',
       data.block_id || null,
-      data.rfid_tag || null,
-      data.is_active ?? 1,
-      data.rfid_access_enabled ?? 1
+      data.is_active ?? 1
     ]
   );
   return findById(result.insertId);
@@ -97,9 +89,7 @@ async function update(id, data) {
     role_enum: 'role',
     sector: 'sector',
     block_id: 'block_id',
-    rfid_tag: 'rfid_tag',
-    is_active: 'active',
-    rfid_access_enabled: 'rfid_access_enabled'
+    is_active: 'active'
   };
   for (const [key, column] of Object.entries(map)) {
     if (data[key] !== undefined) {
@@ -149,7 +139,6 @@ module.exports = {
   findById,
   findByEmail,
   findByEmployeeCode,
-  findByRfid,
   list,
   create,
   update,

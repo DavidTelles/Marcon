@@ -26,19 +26,21 @@ export function useJamesPet(userId: string, path: string, open: boolean) {
     const timer = setTimeout(() => {
       try {
         const value = JSON.parse(
-          localStorage.getItem("james-pet:" + userId) || "null",
+          localStorage.getItem("marco-pet:" + userId) || localStorage.getItem("james-pet:" + userId) || "null",
         );
         if (
           value &&
           typeof value.still === "boolean" &&
           typeof value.quiet === "boolean" &&
           ["right", "left", "inline"].includes(value.dock)
-        )
+        ) {
           setPreferences({
             ...defaults,
             ...value,
             voice: typeof value.voice === "boolean" ? value.voice : true,
           });
+          localStorage.setItem("marco-pet:" + userId, JSON.stringify(value));
+        }
       } catch {
         /* Ignore invalid preferences. */
       }
@@ -49,7 +51,7 @@ export function useJamesPet(userId: string, path: string, open: boolean) {
     const next = { ...preferences, ...patch };
     setPreferences(next);
     try {
-      localStorage.setItem("james-pet:" + userId, JSON.stringify(next));
+      localStorage.setItem("marco-pet:" + userId, JSON.stringify(next));
     } catch {
       /* Preferences remain usable in memory. */
     }
@@ -286,7 +288,7 @@ export function useJamesPet(userId: string, path: string, open: boolean) {
     highlight.current = target;
     highlightTimer.current = setTimeout(clearHighlight, 6000);
     setTip(
-      "O controle destacado é o próximo passo. James não clica nem preenche por você.",
+      "O controle destacado é o próximo passo. Marco não clica nem preenche por você.",
     );
   };
   return {

@@ -26,7 +26,7 @@ export function variation(quantity: number, previousQuantity: number) {
 }
 
 export async function partsConsumption(user: Account, query: URLSearchParams) {
-  authorizePartsUser(user);
+  authorizePartsUser(user, query);
   return transaction(async (db) => {
     await db.execute(
       "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY",
@@ -35,7 +35,11 @@ export async function partsConsumption(user: Account, query: URLSearchParams) {
   });
 }
 
-function authorizePartsUser(user: Account) {
+function authorizePartsUser(user: Account, query: URLSearchParams) {
+  if (user.role === "lider" && query.get("dashboard") === "bloco") {
+    demand(user, "history");
+    return;
+  }
   if (!["admin", "almoxarifado"].includes(user.role))
     throw new ActionError(
       "Painel disponível para administração e almoxarifado.",
@@ -50,7 +54,12 @@ export async function buildPartsReport(
   query: URLSearchParams,
   db: QueryExecutor,
 ) {
-  authorizePartsUser(user); // These profiles have the existing company-wide stock scope.
+  authorizePartsUser(user, query);
+  const leader = user.role === "lider";
+  const [scopeRows] = leader ? await db.execute<RowDataPacket[]>("SELECT b.id,b.name FROM users u JOIN blocks b ON b.id=u.block_id WHERE u.employee_no=? AND u.active=1", [user.id]) : [[]];
+  if (leader && !scopeRows.length) throw new ActionError("Configure o vínculo do líder com um bloco antes de consultar o painel.", 403);
+  const scopeBlock = leader ? Number(scopeRows[0].id) : null;
+  const scopeName = leader ? String(scopeRows[0].name) : "";
   const today = date(Date.now());
   const from = query.get("from") || date(Date.now() - 29 * DAY),
     to = query.get("to") || today;
@@ -125,6 +134,13 @@ export async function buildPartsReport(
     throw new ActionError("Unidade não cadastrada.");
   const clauses = ["p.unit=?"],
     args: unknown[] = [filters.unit];
+  if (leader) {
+    if ((filters.block && filters.block !== scopeName) || selectedBlocks.some((name) => name !== scopeName))
+      throw new ActionError("Bloco fora do seu escopo.", 403);
+    clauses.push("b.id=?");
+    args.push(scopeBlock);
+    filters.dashboard = "bloco";
+  }
   for (const [key, col] of [
     ["code", "p.code"],
     ["group", "p.category"],
@@ -283,7 +299,7 @@ export async function buildPartsReport(
   const requestOrigin = filters.warehouse
     ? " AND (EXISTS(SELECT 1 FROM request_reservations rr JOIN warehouses rw ON rw.id=rr.warehouse_id WHERE rr.request_id=r.id AND rw.name=?) OR EXISTS(SELECT 1 FROM stock_movements om JOIN warehouses ow ON ow.id=om.warehouse_id WHERE om.request_id=r.id AND om.kind='saida' AND om.transfer_id IS NULL AND ow.name=?))"
     : "";
-  const [cohortRows] = filters.code
+  const [cohortRows] = filters.code || leader
     ? await db.execute<RowDataPacket[]>(
         `SELECT COALESCE(b.name,'${UNKNOWN_BLOCK}') AS block,SUM(r.quantity) AS requested,
     SUM(COALESCE(d.quantity,0)) AS delivered,SUM(GREATEST(0,r.quantity-COALESCE(d.quantity,0))) AS pending,
@@ -306,8 +322,8 @@ export async function buildPartsReport(
     GREATEST(0,i.quantity-COALESCE(rr.quantity,0)-COALESCE(t.quantity,0)) AS available FROM inventory i JOIN parts p ON p.id=i.part_id JOIN warehouses w ON w.id=i.warehouse_id
     LEFT JOIN (SELECT part_id,warehouse_id,SUM(quantity) AS quantity FROM request_reservations GROUP BY part_id,warehouse_id) rr ON rr.part_id=i.part_id AND rr.warehouse_id=i.warehouse_id
     LEFT JOIN (SELECT part_id,source_warehouse_id,SUM(quantity) AS quantity FROM stock_transfers WHERE status='Solicitada' GROUP BY part_id,source_warehouse_id) t ON t.part_id=i.part_id AND t.source_warehouse_id=i.warehouse_id
-    WHERE w.active=TRUE AND p.code IN (${codes.map(() => "?").join(",")})${origin} ORDER BY p.code,w.name`,
-        [...codes, ...originArgs],
+    WHERE w.active=TRUE AND p.code IN (${codes.map(() => "?").join(",")})${origin}${leader ? " AND w.block_id=?" : ""} ORDER BY p.code,w.name`,
+        [...codes, ...originArgs, ...(leader ? [scopeBlock] : [])],
       )
     : [[]];
   const stocks = stockRows.map((r) => ({
@@ -317,6 +333,18 @@ export async function buildPartsReport(
     minimum: num(r.minimum),
     available: num(r.available),
   }));
+  const [transferRows] = leader ? await db.execute<RowDataPacket[]>(
+    `SELECT m.id,p.code,p.name,p.unit,m.quantity,m.kind,TO_CHAR(m.created_at,'YYYY-MM-DD HH24:MI:SS.MS') AS date,ws.name AS origin,wd.name AS destination,au.name AS actor
+     FROM stock_movements m JOIN parts p ON p.id=m.part_id JOIN stock_transfers t ON t.id=m.transfer_id
+     JOIN warehouses ws ON ws.id=t.source_warehouse_id JOIN warehouses wd ON wd.id=t.destination_warehouse_id
+     JOIN warehouses mw ON mw.id=m.warehouse_id JOIN users au ON au.id=m.actor_id
+     WHERE mw.block_id=? AND m.created_at>=? AND m.created_at<DATE_ADD(?,INTERVAL 1 DAY) AND p.unit=?
+     ${filters.code ? "AND p.code=?" : ""} ${filters.group ? "AND p.category=?" : ""} ${filters.warehouse ? "AND ws.name=?" : ""}
+     ORDER BY m.created_at DESC,m.id DESC LIMIT ${all ? 10001 : 50}`,
+    [scopeBlock, from, to, filters.unit, ...(filters.code ? [filters.code] : []), ...(filters.group ? [filters.group] : []), ...originArgs],
+  ) : [[]];
+  if (transferRows.length > 10000) throw new ActionError("Reduza o período para exportar até 10.000 movimentações de transferência.");
+  const transferEvents = transferRows.map((row) => ({ id: num(row.id), code: String(row.code), name: String(row.name), unit: String(row.unit), quantity: num(row.quantity), kind: String(row.kind), date: String(row.date), origin: String(row.origin), destination: String(row.destination), actor: String(row.actor) }));
   const detailKind = query.get("detailKind") || "delivery",
     detailPage = Number(query.get("detailPage") || 1);
   if (
@@ -433,7 +461,7 @@ export async function buildPartsReport(
     period: { from, to, days, timezone: "UTC" },
     comparison: { from: compareFrom, to: compareTo },
     filters,
-    scope: "Todos os blocos autorizados pelo perfil de estoque",
+    scope: leader ? `Bloco autorizado: ${scopeName} (ID ${scopeBlock})` : "Todos os blocos autorizados pelo perfil de estoque",
     items,
     ranking,
     totalItems: itemsAll.length,
@@ -480,6 +508,7 @@ export async function buildPartsReport(
     cohortMethod:
       "Pedidos não cancelados/rejeitados criados no período, na unidade do cadastro. Entregue = movimentações desses pedidos confirmados até a atualização; pendente = solicitado menos entregue confirmado, incluindo separação/em entrega. Se houver pedido marcado Entregue sem baixa vinculada, entregue e pendente daquele bloco ficam indisponíveis, pois ausência de dado não é zero. Não são os mesmos eventos das entregas por data do gráfico. Origem selecionada identifica pedidos atendidos/reservados nesse almoxarifado; as quantidades desta coorte abrangem o pedido inteiro.",
     stocks,
+    transferEvents,
     details,
     threshold,
     generatedAt: new Date().toISOString(),
@@ -512,10 +541,10 @@ export async function buildPartsReport(
       units,
       groups: [...new Set(catalog.map((p) => String(p.category)))].sort(),
       blocks: (
-        await db.query<RowDataPacket[]>("SELECT name FROM blocks ORDER BY name")
+        await db.execute<RowDataPacket[]>(`SELECT name FROM blocks ${leader ? "WHERE id=?" : ""} ORDER BY name`, leader ? [scopeBlock] : [])
       )[0]
         .map((r) => String(r.name))
-        .concat(UNKNOWN_BLOCK),
+        .concat(leader ? [] : [UNKNOWN_BLOCK]),
       warehouses: (
         await db.query<RowDataPacket[]>(
           "SELECT name FROM warehouses ORDER BY name",

@@ -6,6 +6,7 @@ dist/
 .env.local
 *.log
 __pycache__/
+face/.venv/
 .DS_Store
 .next-james-test/
 test-results/

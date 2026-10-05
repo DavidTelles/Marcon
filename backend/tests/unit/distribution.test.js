@@ -8,8 +8,8 @@ const graph = {
   nodes: [
     { id: 'stock2', kind: 'warehouse', warehouseId: 2, label: 'Almoxarifado 2', x: .1, y: .1 },
     { id: 'stock5', kind: 'local_stock', warehouseId: 5, label: 'Almoxarifado 5', x: .8, y: .1 },
-    { id: 'sectorA', kind: 'sector', blockId: 1, sector: 'Usinagem', label: 'Usinagem A', x: .9, y: .1 },
-    { id: 'sectorB', kind: 'sector', blockId: 1, sector: 'Montagem', label: 'Montagem A', x: .2, y: .1 },
+    { id: 'sectorA', kind: 'sector', blockId: 1, sectorId: 11, sector: 'Usinagem', label: 'Usinagem A', x: .9, y: .1 },
+    { id: 'sectorB', kind: 'sector', blockId: 1, sectorId: 12, sector: 'Montagem', label: 'Montagem A', x: .2, y: .1 },
   ],
   edges: [
     { from: 'stock2', to: 'stock5', blocked: false },
@@ -23,10 +23,10 @@ const targets = () => [
 ];
 test('local_stock é um almoxarifado roteável e cada setor usa seu destino', () => {
   expect(graphProblems(graph)).toEqual([]);
-  expect(deliveryTargets(graph, 1, 'Usinagem').map(node => node.id)).toEqual(['sectorA']);
-  expect(accessibleWarehousesForBlock(graph, 1, [2, 5], new Map(), 'Usinagem')[0].id).toBe(5);
-  expect(accessibleWarehousesForBlock(graph, 1, [2, 5], new Map(), 'Montagem')[0].id).toBe(2);
-  expect(deliveryTargets(graph, 1, 'Setor desconhecido')).toEqual([]);
+  expect(deliveryTargets(graph, 1, 11).map(node => node.id)).toEqual(['sectorA']);
+  expect(accessibleWarehousesForBlock(graph, 1, [2, 5], new Map(), 11)[0].id).toBe(5);
+  expect(accessibleWarehousesForBlock(graph, 1, [2, 5], new Map(), 12)[0].id).toBe(2);
+  expect(deliveryTargets(graph, 1, 99)).toEqual([]);
 });
 test('saldo escasso é repartido proporcionalmente sem tirar a cobertura do segundo consumidor', () => {
   const balanced = proportionalCoverage(targets(), () => true);

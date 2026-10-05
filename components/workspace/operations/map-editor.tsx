@@ -14,6 +14,7 @@ import {
   type RouteOptions,
 } from "@/lib/routing";
 import { RouteSummary } from "./route-summary";
+import { IndustrialLinks } from "./industrial-links";
 import styles from "../screens/workflow.module.css";
 type Version = {
   id: number;
@@ -33,7 +34,7 @@ const empty: FacilityGraph = {
 };
 export function MapEditor() {
   const [sectors, setSectors] = useState<
-    { blockId: number; block: string; sector: string; employees: number }[]
+    { id: number; blockId: number; block: string; sector: string; employees: number }[]
   >([]);
   const [placing, setPlacing] = useState<Partial<MapNode> | null>(null);
   const [warehouseName, setWarehouseName] = useState("");
@@ -333,6 +334,7 @@ export function MapEditor() {
   }
   return (
     <section className="panel ops-panel">
+      <IndustrialLinks />
       <div className={styles.summary} aria-label="Etapas do mapeamento">
         <div>
           <strong>1</strong>
@@ -410,6 +412,7 @@ export function MapEditor() {
                     kind: "sector",
                     blockId: sector.blockId,
                     sector: sector.sector,
+                    sectorId: sector.id,
                   })
                 }
               >
@@ -850,6 +853,7 @@ export function MapEditor() {
                 patchNode({
                   blockId: Number(e.target.value) || undefined,
                   sector: undefined,
+                  sectorId: undefined,
                 })
               }
             >
@@ -865,16 +869,16 @@ export function MapEditor() {
             <label>
               Setor atendido
               <select
-                value={node.sector ?? ""}
+                value={node.sectorId ?? ""}
                 onChange={(event) =>
-                  patchNode({ sector: event.target.value || undefined })
+                  patchNode({ sectorId: Number(event.target.value) || undefined, sector: sectors.find(s=>s.id===Number(event.target.value))?.sector })
                 }
               >
                 <option value="">Todo o bloco / entrega geral</option>
                 {sectors
                   .filter((sector) => sector.blockId === node.blockId)
                   .map((sector) => (
-                    <option key={sector.sector}>{sector.sector}</option>
+                    <option key={sector.id} value={sector.id}>{sector.sector}</option>
                   ))}
               </select>
             </label>

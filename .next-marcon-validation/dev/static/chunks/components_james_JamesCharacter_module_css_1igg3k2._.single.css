@@ -1,0 +1,310 @@
+/* [project]/components/james/JamesCharacter.module.css [app-client] (css) */
+.JamesCharacter-module__W3GB5q__scene {
+  perspective: 420px;
+  pointer-events: none;
+  --signal: #689dff;
+  width: 80px;
+  height: 92px;
+  position: relative;
+}
+
+.JamesCharacter-module__W3GB5q__robot {
+  transform-style: preserve-3d;
+  transition: transform .38s cubic-bezier(.2, .7, .2, 1);
+  position: absolute;
+  inset: 0;
+  transform: rotateY(-8deg);
+}
+
+.JamesCharacter-module__W3GB5q__head {
+  filter: drop-shadow(0 3px 2px #081c4650);
+  place-items: center;
+  width: 56px;
+  height: 33px;
+  transition: transform .35s;
+  display: grid;
+  position: absolute;
+  top: 1px;
+  left: 12px;
+  transform: translateZ(12px);
+}
+
+.JamesCharacter-module__W3GB5q__head > span {
+  width: 56px;
+  height: 33px;
+}
+
+.JamesCharacter-module__W3GB5q__neck {
+  background: linear-gradient(90deg, #101e38, #7194c0, #203756);
+  border-radius: 3px;
+  width: 12px;
+  height: 8px;
+  position: absolute;
+  top: 32px;
+  left: 34px;
+  transform: translateZ(2px);
+}
+
+.JamesCharacter-module__W3GB5q__torso {
+  width: 44px;
+  height: 32px;
+  transform-style: preserve-3d;
+  background: linear-gradient(130deg, #5277a5 0%, #1e385d 30%, #101f3b 70%, #314c78);
+  border: 1px solid #5e7fa8;
+  border-radius: 11px 11px 16px 16px;
+  position: absolute;
+  top: 38px;
+  left: 18px;
+  box-shadow: inset 0 1px 2px #bed9ff90, 2px 3px #0b1830, 0 4px 9px #09234855;
+}
+
+.JamesCharacter-module__W3GB5q__side {
+  background: #112744;
+  border-radius: 4px;
+  width: 7px;
+  height: 21px;
+  position: absolute;
+  top: 5px;
+  right: -4px;
+  transform: rotateY(65deg)translateZ(-3px);
+}
+
+.JamesCharacter-module__W3GB5q__plate {
+  background: linear-gradient(155deg, #53739a88, #12264366);
+  border-top: 1px solid #a9caff66;
+  border-radius: 5px;
+  position: absolute;
+  inset: 4px 5px 12px;
+  transform: translateZ(2px);
+}
+
+.JamesCharacter-module__W3GB5q__core {
+  background: var(--signal);
+  width: 14px;
+  height: 4px;
+  box-shadow: 0 0 6px var(--signal);
+  border-radius: 4px;
+  transition: background .2s, box-shadow .2s;
+  position: absolute;
+  top: 10px;
+  left: 14px;
+  transform: translateZ(4px);
+}
+
+.JamesCharacter-module__W3GB5q__seam {
+  border-top: 1px solid #96c2ff80;
+  width: 16px;
+  position: absolute;
+  bottom: 6px;
+  left: 13px;
+}
+
+.JamesCharacter-module__W3GB5q__arm {
+  transform-origin: 50% 4px;
+  width: 11px;
+  height: 18px;
+  transform-style: preserve-3d;
+  background: linear-gradient(90deg, #0e213d, #6080a8 50%, #203959);
+  border: 1px solid #6a8cb4;
+  border-radius: 6px;
+  transition: transform .4s cubic-bezier(.2, .7, .2, 1);
+  position: absolute;
+  top: 40px;
+}
+
+.JamesCharacter-module__W3GB5q__left {
+  left: 7px;
+  transform: rotate(12deg);
+}
+
+.JamesCharacter-module__W3GB5q__right {
+  right: 7px;
+  transform: rotate(-12deg);
+}
+
+.JamesCharacter-module__W3GB5q__joint {
+  background: #142740;
+  border: 1px solid #aec7e3;
+  border-radius: 50%;
+  width: 5px;
+  height: 5px;
+  position: absolute;
+  top: 2px;
+  left: 2px;
+}
+
+.JamesCharacter-module__W3GB5q__forearm {
+  transform-origin: 50% 2px;
+  background: linear-gradient(100deg, #6184af, #172d50 70%);
+  border: 1px solid #6684aa;
+  border-radius: 3px 3px 6px 6px;
+  width: 10px;
+  height: 16px;
+  transition: transform .4s;
+  position: absolute;
+  top: 13px;
+  left: 0;
+  transform: rotateX(-12deg);
+}
+
+.JamesCharacter-module__W3GB5q__forearm i {
+  background: var(--signal);
+  border-radius: 2px;
+  width: 5px;
+  height: 2px;
+  position: absolute;
+  bottom: 2px;
+  left: 2px;
+}
+
+.JamesCharacter-module__W3GB5q__thruster {
+  background: linear-gradient(#06172d, #5a87bd);
+  border-radius: 40%;
+  width: 27px;
+  height: 5px;
+  position: absolute;
+  top: 71px;
+  left: 27px;
+  transform: translateZ(-3px);
+}
+
+.JamesCharacter-module__W3GB5q__thruster span {
+  background: linear-gradient(#aacdffbb, #417af830, #0000);
+  border-radius: 0 0 50% 50%;
+  width: 17px;
+  height: 10px;
+  transition: height .3s;
+  position: absolute;
+  top: 4px;
+  left: 5px;
+}
+
+.JamesCharacter-module__W3GB5q__thruster i {
+  filter: blur(1px);
+  opacity: .65;
+  background: #cae2ff;
+  border-radius: 50%;
+  width: 7px;
+  height: 5px;
+  position: absolute;
+  top: 7px;
+  left: 10px;
+}
+
+.JamesCharacter-module__W3GB5q__shadow {
+  filter: blur(2px);
+  background: #10295730;
+  border-radius: 50%;
+  width: 46px;
+  height: 5px;
+  position: absolute;
+  bottom: 0;
+  left: 17px;
+}
+
+.JamesCharacter-module__W3GB5q__scene[data-character-state="waking"] .JamesCharacter-module__W3GB5q__robot {
+  transform: rotateY(0)translateY(-3px);
+}
+
+.JamesCharacter-module__W3GB5q__scene[data-character-state="listening"] .JamesCharacter-module__W3GB5q__head {
+  transform: translateZ(12px)rotate(-7deg);
+}
+
+.JamesCharacter-module__W3GB5q__scene[data-character-state="listening"] .JamesCharacter-module__W3GB5q__right {
+  transform: rotate(-55deg);
+}
+
+.JamesCharacter-module__W3GB5q__scene[data-character-state="processing"] .JamesCharacter-module__W3GB5q__head {
+  transform: translateZ(12px)rotateX(10deg);
+}
+
+.JamesCharacter-module__W3GB5q__scene[data-character-state="processing"] .JamesCharacter-module__W3GB5q__core {
+  animation: 1.4s ease-in-out 3 JamesCharacter-module__W3GB5q__think;
+}
+
+.JamesCharacter-module__W3GB5q__scene[data-character-state="speaking"] .JamesCharacter-module__W3GB5q__right {
+  transform: rotate(-34deg);
+}
+
+.JamesCharacter-module__W3GB5q__scene[data-character-state="pointing"] .JamesCharacter-module__W3GB5q__right {
+  transform: rotate(-100deg);
+}
+
+.JamesCharacter-module__W3GB5q__scene[data-options] .JamesCharacter-module__W3GB5q__left {
+  transform: rotate(60deg);
+}
+
+.JamesCharacter-module__W3GB5q__scene[data-options] .JamesCharacter-module__W3GB5q__right {
+  transform: rotate(-60deg);
+}
+
+.JamesCharacter-module__W3GB5q__scene[data-character-state="confirming"] {
+  --signal: #f2c96c;
+}
+
+.JamesCharacter-module__W3GB5q__scene[data-character-state="confirming"] .JamesCharacter-module__W3GB5q__left {
+  transform: rotate(40deg);
+}
+
+.JamesCharacter-module__W3GB5q__scene[data-character-state="confirming"] .JamesCharacter-module__W3GB5q__right {
+  transform: rotate(-40deg);
+}
+
+.JamesCharacter-module__W3GB5q__scene[data-character-state="confirming"] .JamesCharacter-module__W3GB5q__forearm {
+  transform: rotateX(-55deg);
+}
+
+.JamesCharacter-module__W3GB5q__scene[data-character-state="success"] {
+  --signal: #71dab0;
+}
+
+.JamesCharacter-module__W3GB5q__scene[data-character-state="success"] .JamesCharacter-module__W3GB5q__right {
+  transform: rotate(-135deg);
+}
+
+.JamesCharacter-module__W3GB5q__scene[data-character-state="error"] {
+  --signal: #f19b82;
+}
+
+.JamesCharacter-module__W3GB5q__scene[data-character-state="error"] .JamesCharacter-module__W3GB5q__head {
+  transform: translateZ(12px)rotateX(15deg);
+}
+
+.JamesCharacter-module__W3GB5q__scene[data-character-state="error"] .JamesCharacter-module__W3GB5q__core {
+  animation: .4s ease-in-out 2 JamesCharacter-module__W3GB5q__think;
+}
+
+.JamesCharacter-module__W3GB5q__scene[data-compact] {
+  width: 30px;
+  height: 34.5px;
+}
+
+.JamesCharacter-module__W3GB5q__scene[data-compact] .JamesCharacter-module__W3GB5q__robot {
+  transform-origin: 0 0;
+  width: 80px;
+  height: 92px;
+  transform: scale(.375);
+}
+
+.JamesCharacter-module__W3GB5q__scene[data-compact] .JamesCharacter-module__W3GB5q__shadow {
+  display: none;
+}
+
+@keyframes JamesCharacter-module__W3GB5q__think {
+  50% {
+    opacity: .35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce), (update: slow) {
+  .JamesCharacter-module__W3GB5q__robot, .JamesCharacter-module__W3GB5q__head, .JamesCharacter-module__W3GB5q__arm, .JamesCharacter-module__W3GB5q__forearm, .JamesCharacter-module__W3GB5q__core, .JamesCharacter-module__W3GB5q__thruster span {
+    transition: none;
+    animation: none !important;
+  }
+
+  .JamesCharacter-module__W3GB5q__shadow {
+    filter: none;
+  }
+}
+
+/*# sourceMappingURL=components_james_JamesCharacter_module_css_1igg3k2._.single.css.map*/

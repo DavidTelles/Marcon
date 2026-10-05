@@ -38,11 +38,11 @@ beforeEach(() => {
 });
 
 describe('Requisições via camada de workspace', () => {
-  test('histórico é geral e permite somente entregas, sem liberar alterações fora do escopo', async () => {
+  test('historico proprio bloqueia entregas de terceiros', async () => {
     await requestService.history(employee, { requester_id: 99, status: 'Pendente', statuses: ['Pendente'] });
-    expect(requestRepository.list).toHaveBeenCalledWith({ requester_id: undefined, status: 'Entregue', statuses: undefined });
+    expect(requestRepository.list).toHaveBeenCalledWith({ requester_id: 1, status: 'Entregue', statuses: undefined });
     requestRepository.findById.mockResolvedValue({ ...request, status: 'Entregue', requester_code: '9999', block_name: 'Bloco C' });
-    await expect(requestService.getById(employee, 10)).resolves.toMatchObject({ status: 'Entregue' });
+    await expect(requestService.getById(employee, 10)).rejects.toMatchObject({ statusCode: 403 });
   });
   test('criar converte product_id em código da peça e delega', async () => {
     await requestService.createRequest(employee, { product_id: 5, quantity: 2, urgency: 'Moderado' });
@@ -83,4 +83,20 @@ describe('Requisições via camada de workspace', () => {
     await requestService.transition(employee, 10, REQUEST_STATUS.CANCELLED);
     expect(executeWorkspaceAction).toHaveBeenCalledWith(employee, { type: 'deleteRequest', id: 10 });
   });
+});
+
+test('almoxarife nao exclui pedido de terceiro',async()=>{
+ await expect(requestService.remove(keeper,10)).rejects.toMatchObject({statusCode:403});
+ expect(executeWorkspaceAction).not.toHaveBeenCalled();
+});
+test('lider sem vinculo recebe configuracao pendente',async()=>{
+ await expect(requestService.list({...employee,role:'lider',blockId:null},{})).rejects.toMatchObject({statusCode:403});
+});
+test('lider filtra por ID; nome igual nao autoriza outro bloco',async()=>{
+ const leader={...employee,role:'lider',blockId:7};
+ await expect(requestService.list(leader,{block:'Outro nome'})).rejects.toMatchObject({statusCode:403});
+ await requestService.list(leader,{block:'Bloco A'});
+ expect(requestRepository.list).toHaveBeenCalledWith({block_id:7});
+ requestRepository.findById.mockResolvedValue({...request,block_id:8,block_name:'Bloco A',status:'Entregue'});
+ await expect(requestService.getById(leader,10)).rejects.toMatchObject({statusCode:403});
 });

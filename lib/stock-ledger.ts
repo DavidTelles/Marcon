@@ -15,6 +15,10 @@ export const first = async (
   sql: string,
   args: unknown[] = [],
 ) => (await rows(c, sql, args))[0];
+export async function insert(c: PoolConnection, sql: string, args: unknown[]) {
+  const [result] = await c.execute<import("./db-types").ResultSetHeader>(sql, args as (string | number | null)[]);
+  return { id: result.insertId };
+}
 export async function audit(
   c: PoolConnection,
   actor: number,
@@ -85,7 +89,7 @@ export async function partLock(c: PoolConnection, code: unknown, id?: unknown) {
   const p = await first(
     c,
     `SELECT * FROM parts WHERE ${id ? "id" : "code"}=? AND active=TRUE FOR UPDATE`,
-    [id ?? text(code, 64).toUpperCase()],
+    [id ?? text(code, 64)],
   );
   if (!p) throw new ActionError("Peça não encontrada.", 404);
   return p;
@@ -102,7 +106,7 @@ export async function place(c: PoolConnection, value: unknown) {
 export function scan(p: Row, code: unknown) {
   if (
     ![p.code, p.qr_code].some(
-      (v) => String(v).toUpperCase() === text(code, 128).toUpperCase(),
+      (v) => typeof code === "string" && String(v) === code,
     )
   )
     throw new ActionError("Código lido não corresponde à peça.", 422);

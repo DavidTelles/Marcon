@@ -3,7 +3,7 @@ const AppError = require('../utils/AppError');
 const { hashPassword, comparePassword } = require('../utils/password');
 const { signToken } = require('../utils/token');
 const userRepository = require('../repositories/userRepository');
-const { query } = require('../config/db');
+const { query, withTransaction } = require('../config/db');
 const { ROLES, ROLE_CODES } = require('../config/constants');
 
 function sanitize(user) {
@@ -15,6 +15,21 @@ function issueToken(user) {
     sub: Number(user.id),
     eno: user.employee_no,
     role: user.role
+  });
+}
+
+async function loginFace({ grant }) {
+  if (typeof grant !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(grant)) throw new AppError(400, 'Autorização facial inválida');
+  return withTransaction(async (c) => {
+    const tokenHash = crypto.createHash('sha256').update(grant).digest();
+    const [grants] = await c.execute('SELECT * FROM face_login_grants WHERE token_hash=? AND expires_at>UTC_TIMESTAMP(3) FOR UPDATE', [tokenHash]);
+    if (!grants[0]) throw new AppError(401, 'Autorização facial expirada ou já utilizada');
+    const [users] = await c.execute('SELECT u.*,f.embeddings FROM users u JOIN face_credentials f ON f.user_id=u.id WHERE u.id=? FOR UPDATE', [grants[0].user_id]);
+    const user = users[0];
+    if (!user || !user.active || user.password_hash !== grants[0].password_hash || crypto.createHash('sha256').update(user.embeddings).digest('hex') !== grants[0].credential_hash)
+      throw new AppError(401, 'Conta ou cadastro facial alterado; entre com senha');
+    await c.execute('DELETE FROM face_login_grants WHERE token_hash=?', [tokenHash]);
+    return { token: issueToken(user), user: sanitize(user) };
   });
 }
 
@@ -67,9 +82,7 @@ async function register(payload, actor) {
     role_enum: roleEnum,
     sector: payload.sector || 'Geral',
     block_id: blockId,
-    rfid_tag: payload.rfid_id ? String(payload.rfid_id).toUpperCase() : null,
-    is_active: 1,
-    rfid_access_enabled: payload.rfid_access_enabled === false ? 0 : 1
+    is_active: 1
   });
 
   const permissions = await userRepository.getPermissionsForUser(user.id);
@@ -84,21 +97,6 @@ async function login({ login, password }) {
     throw new AppError(401, 'Credenciais inválidas');
   }
   if (!user.active) throw new AppError(403, 'Usuário inativo');
-  const permissions = await userRepository.getPermissionsForUser(user.id);
-  return { token: issueToken(user), user: sanitize(user), permissions };
-}
-
-const RFID_PATTERN = /^[0-9A-Fa-f]{8,20}$/;
-
-async function loginRfid({ rfid_id }) {
-  const tag = String(rfid_id || '').trim();
-  if (!RFID_PATTERN.test(tag)) throw new AppError(400, 'rfid_id inválido');
-  const user = await userRepository.findByRfid(tag.toUpperCase());
-  if (!user) throw new AppError(401, 'Crachá não reconhecido');
-  if (!user.active) throw new AppError(403, 'Usuário inativo');
-  if (user.rfid_access_enabled === 0 || user.rfid_access_enabled === false) {
-    throw new AppError(403, 'Acesso por RFID desabilitado para este usuário');
-  }
   const permissions = await userRepository.getPermissionsForUser(user.id);
   return { token: issueToken(user), user: sanitize(user), permissions };
 }
@@ -145,4 +143,4 @@ async function forgotEmail({ employee_code, id }) {
   return { email_hint: hint };
 }
 
-module.exports = { register, login, loginRfid, forgotPassword, resetPassword, forgotEmail, sanitize };
+module.exports = { register, login, loginFace, forgotPassword, resetPassword, forgotEmail, sanitize };

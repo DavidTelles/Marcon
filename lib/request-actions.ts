@@ -100,6 +100,7 @@ export async function executeRequestAction(
       String(x.code).localeCompare(String(y.code)),
     )) {
       const p = await partLock(c, e.code);
+      if (e.requestedUnit === "box" && Number(p.pack_verified) === 0) throw new ActionError("Configure e confirme a embalagem oficial antes de solicitar caixas.", 409);
       let q: number;
       try {
         q = requestedUnits(
@@ -129,7 +130,7 @@ export async function executeRequestAction(
       )
         throw new ActionError("Saldo disponível insuficiente.", 409);
       const [r] = await c.execute<ResultSetHeader>(
-        "INSERT INTO requests(requester_id,block_id,part_id,quantity,priority,justification,batch_id,sector,requested_unit,requested_amount,pack_size_at_request,anomaly) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO requests(requester_id,block_id,part_id,quantity,priority,justification,batch_id,sector,requested_unit,requested_amount,pack_size_at_request,anomaly,sector_id,workplace_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         [
           actorId,
           actor.block_id,
@@ -143,6 +144,8 @@ export async function executeRequestAction(
           e.quantity,
           p.pack_size,
           JSON.stringify(anomaly),
+          actor.sector_id ?? null,
+          actor.workplace_id ?? null,
         ],
       );
       ids.push(r.insertId);
@@ -366,8 +369,9 @@ export async function executeRequestAction(
             ? JSON.parse(published.graph)
             : published.graph) as FacilityGraph)
         : null;
+      const workplace = r.workplace_id ? await first(c,"SELECT point_id FROM workplaces WHERE id=?",[r.workplace_id]) : null;
       const destinations = graph
-        ? deliveryTargets(graph, Number(r.block_id), String(r.sector))
+        ? deliveryTargets(graph, Number(r.block_id), r.sector_id ? Number(r.sector_id) : undefined, workplace?.point_id ? String(workplace.point_id) : undefined)
         : [];
       const ranked = locations
         .map((l) => {

@@ -164,6 +164,11 @@ export async function exportPartsReport(
       ]),
     },
     {
+      title: "Transferências",
+      headers: ["ID do movimento", "Data UTC", "Código", "Descrição", "Unidade", "Quantidade", "Etapa", "Origem", "Destino", "Responsável"],
+      rows: r.transferEvents.map((event) => [event.id,event.date,event.code,event.name,event.unit,event.quantity,event.kind,event.origin,event.destination,event.actor]),
+    },
+    {
       title: "Alertas",
       headers: [
         "Código",

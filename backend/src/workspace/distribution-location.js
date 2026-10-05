@@ -23,10 +23,10 @@ function warehouseRoute(graph, source, destination, options = {}, bindings = {})
 function nearestWarehouseForBlock(graph, blockId, warehouseIds) {
     return accessibleWarehousesForBlock(graph, blockId, warehouseIds)[0] ?? null;
 }
-function accessibleWarehousesForBlock(graph, blockId, warehouseIds, bindings = new Map(), sector) {
+function accessibleWarehousesForBlock(graph, blockId, warehouseIds, bindings = new Map(), sectorId) {
     if (!graph || blockId === null)
         return [];
-    const targets = (0, routing_1.deliveryTargets)(graph, blockId, sector);
+    const targets = (0, routing_1.deliveryTargets)(graph, blockId, sectorId);
     const ranked = warehouseIds
         .map((id) => ({
         id,

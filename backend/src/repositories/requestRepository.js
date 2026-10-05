@@ -40,6 +40,10 @@ async function list(filters = {}) {
     where.push('b.name = ?');
     params.push(filters.block);
   }
+  if (filters.block_id) {
+    where.push('r.block_id = ?');
+    params.push(filters.block_id);
+  }
   if (filters.status) {
     where.push('r.status = ?');
     params.push(filters.status);

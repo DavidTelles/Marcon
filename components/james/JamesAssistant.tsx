@@ -530,11 +530,25 @@ export default function JamesAssistant({ userId }: { userId: string }) {
     document.addEventListener("visibilitychange", hidden);
     window.addEventListener("focus", verify);
     const timer = setInterval(verify, 30000);
+    const logout = (event: Event) => {
+      if (!(event.target instanceof HTMLFormElement) || new URL(event.target.action, location.href).pathname !== "/api/logout") return;
+      c.abort();
+      stopVoice();
+      stopSpeech();
+      pending.current?.abort();
+      setAuthorized(false);
+      setOpen(false);
+      setMessages([]);
+      setReview(null);
+      dialog.current?.close();
+    };
+    document.addEventListener("submit", logout, true);
     return () => {
       c.abort();
       clearInterval(timer);
       window.removeEventListener("focus", verify);
       document.removeEventListener("visibilitychange", hidden);
+      document.removeEventListener("submit", logout, true);
     };
   }, [pathname, stopVoice, stopSpeech, userId]);
   useEffect(
@@ -629,7 +643,7 @@ export default function JamesAssistant({ userId }: { userId: string }) {
         className={styles.launcher}
         ref={launcher}
         onClick={show}
-        aria-label="Abrir James"
+        aria-label="Abrir Marco"
         aria-haspopup="dialog"
       >
         <JamesCharacter
@@ -638,10 +652,10 @@ export default function JamesAssistant({ userId }: { userId: string }) {
         />
         <span>
           {voice.capturing
-            ? "James · escuta local ativa"
+            ? "Marco · escuta local ativa"
             : voice.listening
-              ? "James · escuta em espera"
-              : "James"}
+              ? "Marco · escuta em espera"
+              : "Marco"}
         </span>
       </button>
       {voice.listening && !open && (
@@ -688,10 +702,10 @@ export default function JamesAssistant({ userId }: { userId: string }) {
             >
               <header>
                 <div>
-                  <h2 id="james-title">James</h2>
+                  <h2 id="james-title">Marco</h2>
                   <small>Seu assistente MARCON</small>
                 </div>
-                <button onClick={close} aria-label="Fechar James">
+                <button onClick={close} aria-label="Fechar Marco">
                   {voice.listening ? "Recolher" : "Fechar"}
                 </button>
               </header>
@@ -700,12 +714,12 @@ export default function JamesAssistant({ userId }: { userId: string }) {
                 className={styles.messages}
                 role="log"
                 aria-live="polite"
-                aria-label="Conversa com James"
+                aria-label="Conversa com Marco"
               >
                 {!messages.length && (
                   <>
                     <p>
-                      Ative a escuta e diga “James” ou “Jhames”. Depois, fale
+                      Ative a escuta e diga “Marco” ou “Marco”. Depois, fale
                       normalmente. Também pode digitar.
                     </p>
                     <div className={styles.suggestions}>
@@ -894,7 +908,7 @@ export default function JamesAssistant({ userId }: { userId: string }) {
                       : voice.hearing
                         ? "Ouvindo sua fala…"
                       : voice.capturing
-                        ? `Ouvindo ${voice.mode === "browser" ? "pelo navegador" : "pelo servidor"}. Diga James ou continue a conversa.`
+                        ? `Ouvindo ${voice.mode === "browser" ? "pelo navegador" : "pelo servidor"}. Diga Marco ou continue a conversa.`
                         : voice.listening
                           ? voice.hidden
                             ? "Escuta em espera. Retoma ao voltar para esta aba."
@@ -1018,7 +1032,7 @@ export default function JamesAssistant({ userId }: { userId: string }) {
                   )}
                 </div>
                 <details className={styles.settings}>
-                  <summary>Preferências do James</summary>
+                  <summary>Preferências do Marco</summary>
                   <label>
                     <input
                       type="checkbox"
@@ -1042,7 +1056,7 @@ export default function JamesAssistant({ userId }: { userId: string }) {
                   <label>
                     Posição preferida
                     <select
-                      aria-label="Posição do James"
+                      aria-label="Posição do Marco"
                       value={preferences.dock}
                       onChange={(e) =>
                         updatePreferences({ dock: e.target.value as Dock })
@@ -1065,7 +1079,7 @@ export default function JamesAssistant({ userId }: { userId: string }) {
                           : pause()
                       }
                     />
-                    Manter James pronto enquanto uso o site
+                    Manter Marco pronto enquanto uso o site
                   </label>
                   <button
                     type="button"
@@ -1099,7 +1113,7 @@ export default function JamesAssistant({ userId }: { userId: string }) {
                     Seu comando em texto e os itens do carrinho são processados
                     pela OpenAI. Após ativar o microfone, trechos de fala são transcritos no servidor MARCON;
                     áudio bruto não é guardado após o processamento.{" "}
-                    Após ativar, a escuta continua ao recolher James e navegar.
+                    Após ativar, a escuta continua ao recolher Marco e navegar.
                     Pausa na aba oculta e retoma ao voltar. Para encerrar, use
                     Desligar escuta ou saia da conta.
                     O reconhecimento do navegador é opcional quando a transcrição local está indisponível; conforme o navegador, o áudio pode ser processado pelo serviço dele. Ele só inicia após clicar em “Usar reconhecimento do navegador”.

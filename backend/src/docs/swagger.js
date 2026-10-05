@@ -6,7 +6,7 @@ const spec = {
     title: 'MARCON Backend API',
     version: '2.0.0',
     description:
-      'API REST integrada MARCON: almoxarifado, requisições, usuários, RFID e a camada de workspace consumida pelo frontend (banco unificado).'
+      'API REST integrada MARCON: almoxarifado, requisições, usuários e a camada de workspace consumida pelo frontend (banco unificado).'
   },
   servers: [{ url: '/', description: 'Servidor atual' }],
   components: {
@@ -42,16 +42,6 @@ const spec = {
           email: { type: 'string' },
           block_id: { type: 'integer' },
           sector_id: { type: 'integer' },
-          rfid_id: { type: 'string', example: 'A1B2C3D4' }
-        }
-      },
-      RfidIngest: {
-        type: 'object',
-        properties: {
-          rfid_id: { type: 'string', example: 'AABBCCDDEE', description: 'UID hexadecimal 8-20 caracteres' },
-          location: { type: 'string' },
-          device: { type: 'string' },
-          query_external: { type: 'boolean' }
         }
       },
       RequestCreate: {
@@ -92,7 +82,6 @@ const spec = {
   tags: [
     { name: 'Health' },
     { name: 'Auth' },
-    { name: 'RFID' },
     { name: 'Usuários' },
     { name: 'Catálogo' },
     { name: 'Estoque' },
@@ -100,16 +89,6 @@ const spec = {
     { name: 'Dashboards' }
   ],
   paths: {
-    '/login/rfid': {
-      post: {
-        tags: ['Auth'],
-        summary: 'Login por crachá RFID',
-        requestBody: {
-          content: { 'application/json': { schema: { type: 'object', properties: { rfid_id: { type: 'string', example: 'AABBCCDDEE' } } } } }
-        },
-        responses: { '200': { description: 'Token JWT e usuário' }, '401': { description: 'Crachá não reconhecido' } }
-      }
-    },
     '/api/workspace/snapshot': {
       get: {
         tags: ['Workspace'],
@@ -217,28 +196,6 @@ const spec = {
         security: [{ bearerAuth: [] }],
         summary: 'Usuário autenticado',
         responses: { 200: { description: 'Perfil' }, 401: { description: 'Não autenticado' } }
-      }
-    },
-    '/api/rfid': {
-      post: {
-        tags: ['RFID'],
-        summary: 'Sensor RFID envia UID do crachá para decisão de acesso',
-        description:
-          'Fluxo: crachá → sensor → /api/rfid → identificação do funcionário → verificação de ativo/permissão → registro do evento.',
-        requestBody: { content: { 'application/json': { schema: { $ref: '#/components/schemas/RfidIngest' } } } },
-        responses: {
-          201: { description: 'Acesso permitido' },
-          200: { description: 'Acesso negado (evento registrado)' },
-          400: { description: 'RFID inválido' },
-          502: { description: 'API RFID indisponível' },
-          504: { description: 'Timeout da API RFID' }
-        }
-      },
-      get: {
-        tags: ['RFID'],
-        security: [{ bearerAuth: [] }],
-        summary: 'Histórico de eventos de acesso RFID',
-        responses: { 200: { description: 'Lista de leituras/eventos' }, 401: { description: 'Não autenticado' }, 403: { description: 'Sem permissão' } }
       }
     },
     '/api/users': {

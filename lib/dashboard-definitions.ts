@@ -140,6 +140,8 @@ export function dashboardFilters(
   q: URLSearchParams,
 ): DashboardFilter {
   const view = q.get("dashboard") || "geral";
+  if (user.role === "lider" && (!Number.isSafeInteger(user.blockId) || !user.blockId))
+    throw new ActionError("Configure o vínculo do líder com um bloco antes de consultar o painel.", 403);
   if (!dashboardViews.includes(view as DashboardView))
     throw new ActionError("Dashboard inválida.");
   if (user.role === "funcionario" && !["requisicoes"].includes(view))
@@ -238,8 +240,10 @@ export function requestWhere(user: Account, f: DashboardFilter, period = true) {
     params.push(user.id);
   }
   if (user.role === "lider") {
-    clauses.push("b.name=?");
-    params.push(user.block ?? "");
+    if (!Number.isSafeInteger(user.blockId) || !user.blockId)
+      throw new ActionError("Configure o vínculo do líder com um bloco.", 403);
+    clauses.push("r.block_id=?");
+    params.push(user.blockId);
   }
   for (const [value, col] of [
     [f.block, "b.name"],

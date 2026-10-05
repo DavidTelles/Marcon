@@ -8,7 +8,6 @@ const { ROLES } = require('./config/constants');
 const { setupSwagger } = require('./docs/swagger');
 const healthRouter = require('./routes/health');
 const authRoutes = require('./routes/auth.routes');
-const rfidRoutes = require('./routes/rfid.routes');
 const catalogRoutes = require('./routes/catalog.routes');
 const stockRoutes = require('./routes/stock.routes');
 const requestRoutes = require('./routes/request.routes');
@@ -24,7 +23,6 @@ function createApp() {
   setupSwagger(app);
   app.use('/health', healthRouter);
   app.use(authRoutes);
-  app.use(rfidRoutes);
   app.use(catalogRoutes);
   app.use(stockRoutes);
   app.use(requestRoutes);

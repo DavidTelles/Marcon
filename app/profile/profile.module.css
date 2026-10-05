@@ -55,7 +55,6 @@
 .error { color: var(--danger); }
 .success { color: var(--success); }
 .notice { margin: 0; padding: 14px 16px; border: 1px solid var(--line); border-radius: 9px; background: var(--white); color: var(--subtle); line-height: 1.5; }
-.passkeyFields { max-width: 440px; }
 .unavailable { max-width: 680px; padding: 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--white); color: var(--subtle); line-height: 1.5; }
 .unavailable p { margin: 6px 0 0; }
 .secondaryButton { min-height: 40px; margin-top: 14px; padding: 8px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--white); color: var(--blue); font: inherit; font-weight: 700; cursor: pointer; }

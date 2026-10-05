@@ -1,0 +1,115 @@
+/* [project]/app/components/face/face.module.css [app-client] (css) */
+﻿.face-module__mX68PG__card {
+  border: 1px solid var(--line);
+  background: var(--white);
+  color: var(--ink);
+  border-radius: 18px;
+  padding: 2rem;
+}
+
+.face-module__mX68PG__card h2 {
+  margin: 0 0 .6rem;
+  font-size: 1.2rem;
+}
+
+.face-module__mX68PG__card p {
+  line-height: 1.5;
+}
+
+.face-module__mX68PG__field {
+  gap: .5rem;
+  margin: 1rem 0;
+  display: grid;
+}
+
+.face-module__mX68PG__field input {
+  border: 1px solid var(--line);
+  width: 100%;
+  max-width: 440px;
+  color: var(--ink);
+  background: var(--white);
+  border-radius: 8px;
+  padding: .7rem;
+}
+
+.face-module__mX68PG__consent {
+  align-items: flex-start;
+  gap: .6rem;
+  margin: 1rem 0;
+  line-height: 1.5;
+  display: flex;
+}
+
+.face-module__mX68PG__consent input {
+  flex: none;
+  margin-top: .3rem;
+}
+
+.face-module__mX68PG__actions {
+  flex-wrap: wrap;
+  gap: .7rem;
+  margin: 1rem 0;
+  display: flex;
+}
+
+.face-module__mX68PG__actions button {
+  background: var(--button-bg);
+  color: var(--button-text);
+  border: 1px solid var(--line);
+  cursor: pointer;
+  border-radius: 9px;
+  padding: .8rem 1rem;
+}
+
+.face-module__mX68PG__actions button:disabled {
+  opacity: .55;
+  cursor: default;
+}
+
+.face-module__mX68PG__actions button:focus-visible {
+  outline: 3px solid var(--line);
+  outline-offset: 3px;
+}
+
+.face-module__mX68PG__error {
+  color: var(--danger);
+}
+
+.face-module__mX68PG__success {
+  color: var(--success);
+}
+
+.face-module__mX68PG__capture {
+  gap: .6rem;
+  min-width: 0;
+  margin-top: 1rem;
+  display: grid;
+}
+
+.face-module__mX68PG__video {
+  aspect-ratio: 4 / 3;
+  object-fit: contain;
+  background: var(--brand-bg);
+  border-radius: 12px;
+  width: 100%;
+  max-height: 360px;
+  transform: scaleX(-1);
+}
+
+.face-module__mX68PG__capture progress {
+  width: 100%;
+  accent-color: var(--blue);
+}
+
+.face-module__mX68PG__capture small {
+  color: var(--subtle);
+  line-height: 1.5;
+}
+
+@media (max-width: 480px) {
+  .face-module__mX68PG__card {
+    padding: 1rem;
+  }
+}
+
+/*# sourceMappingURL=app_components_face_face_module_css_1igg3k2._.single.css.map*/

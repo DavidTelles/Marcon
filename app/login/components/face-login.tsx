@@ -3,21 +3,24 @@ import { FaceCapture } from "@/app/components/face/face-capture";
 import styles from "../login.module.css";
 export function FaceLogin({
   identity,
+  password,
   onCancel,
 }: {
   identity: string;
+  password: string;
   onCancel: () => void;
 }) {
   return (
     <section className={styles.faceTest} aria-labelledby="local-face-title">
       <h2 id="local-face-title">Entrar com reconhecimento facial</h2>
       <p>
-        Use o rosto cadastrado no perfil. Mantenha o rosto visível durante as
-        cinco fotos, com boa iluminação e apenas você na câmera.
+        Use o rosto cadastrado e siga as posições pedidas. A senha é exigida
+        como confirmação adicional: a proteção contra foto e vídeo ainda não foi validada.
       </p>
       <FaceCapture
         purpose="login"
         identity={identity}
+        password={password}
         onCancel={onCancel}
         onDone={() => undefined}
       />

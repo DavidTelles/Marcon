@@ -256,7 +256,7 @@ export async function converseJames(
     });
   const simple = quantityWords(normalize(message).replace(/[.!?]/g, ""));
   const casual = simple
-    .replace(/\b(?:james|jhames)\b/g, "")
+    .replace(/\bmarco\b/g, "")
     .replace(/[,;:]/g, "")
     .replace(/\s+/g, " ")
     .trim();
@@ -982,8 +982,9 @@ export async function converseJames(
           : user.role === "lider"
             ? "bloco"
             : "geral");
-      if (["pecas", "por-peca"].includes(view)) {
+      if (["pecas", "por-peca"].includes(view) || (user.role === "lider" && view === "bloco")) {
         const query = new URLSearchParams(step.filters);
+        if (user.role === "lider") query.set("dashboard", "bloco");
         const report = await backendFetch<unknown>(
           "/api/parts/consumption?" + query,
           { token: await apiToken() },
@@ -995,6 +996,7 @@ export async function converseJames(
           action: "dashboard",
           filters: {
             ...step.filters,
+            ...(user.role === "lider" ? { dashboard: "bloco" } : {}),
             from: report.period.from,
             to: report.period.to,
             unit: report.filters.unit,
@@ -1040,7 +1042,7 @@ export async function converseJames(
           );
         const prefix =
           user.role === "admin" ? "/admin/dashboard" : "/warehouse/dashboard";
-        href = `${prefix}/${view === "pecas" ? "parts" : "by-part"}?${new URLSearchParams(reportState.filters)}`;
+        href = `${user.role === "lider" ? "/department-head/dashboard" : `${prefix}/${view === "pecas" ? "parts" : "by-part"}`}?${new URLSearchParams(reportState.filters)}`;
         hrefLabel = "Abrir " + (view === "pecas" ? "Peça" : "Por Peça");
         if (step.action === "export") {
           if (!step.format)

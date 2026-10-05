@@ -10,14 +10,11 @@ import {
   ScanFace,
   LoaderCircle,
   LockKeyhole,
-  Radio,
   ShieldCheck,
   UserRound,
 } from "lucide-react";
 import { useLogin } from "./use-login";
-import { RfidAccess } from "./components/rfid-access";
 import { FaceLogin } from "./components/face-login";
-import { PasskeyLogin } from "./components/passkey-login";
 import styles from "./login.module.css";
 
 export default function LoginForm({ children, demoMode = false }: { children?: ReactNode; demoMode?: boolean }) {
@@ -32,8 +29,6 @@ export default function LoginForm({ children, demoMode = false }: { children?: R
     submit,
   } = useLogin();
   const [showPassword, setShowPassword] = useState(false);
-  const [rfidActive, setRfidActive] = useState(false);
-  const [faceActive, setFaceActive] = useState(false);
   const [cameraActive, setCameraActive] = useState(false);
   const identityRef = useRef<HTMLInputElement>(null);
   const returnFocus = useRef(false);
@@ -45,25 +40,10 @@ export default function LoginForm({ children, demoMode = false }: { children?: R
         ? "Validando acesso…"
         : "Entrar";
 
-  function startRfid() {
-    setPassword("");
-    setShowPassword(false);
-    setRfidActive(true);
-  }
-
-  function cancelRfid() {
-    returnFocus.current = true;
-    setRfidActive(false);
-  }
-
   return (
     <>
-      {rfidActive ? (
-        <RfidAccess onCancel={cancelRfid} />
-      ) : cameraActive ? (
-        <FaceLogin identity={identity} onCancel={() => setCameraActive(false)} />
-      ) : faceActive ? (
-        <PasskeyLogin identity={identity} onCancel={() => setFaceActive(false)} />
+      {cameraActive ? (
+        <FaceLogin identity={identity} password={password} onCancel={() => setCameraActive(false)} />
       ) : (
         <>
           <form className={styles.form} onSubmit={submit} aria-busy={isBusy}>
@@ -158,38 +138,16 @@ export default function LoginForm({ children, demoMode = false }: { children?: R
               outras formas de acesso
               <span />
             </div>
-            <button className={styles.rfidButton} type="button" disabled={demoMode || isBusy || !identity.trim()} onClick={() => { setPassword(""); setCameraActive(true); }} aria-describedby="camera-access-note">
+            <button className={styles.alternativeButton} type="button" disabled={demoMode || isBusy || !identity.trim() || !password} onClick={() => { setCameraActive(true); }} aria-describedby="camera-access-note">
               <ScanFace size={20} aria-hidden="true" /><span>Entrar com reconhecimento facial</span>
             </button>
-            <p id="camera-access-note" className={styles.rfidNote}>{demoMode ? "Acesso facial disponível com Neon configurado." : "Informe e-mail ou matrícula. Cadastre seu rosto no perfil após entrar com senha."}</p>
-            <button className={styles.rfidButton} type="button" disabled={demoMode || isBusy || !identity.trim()}
-              onClick={() => setFaceActive(true)} aria-describedby="face-access-note">
-              <ScanFace size={20} aria-hidden="true" />
-              <span>Entrar com passkey</span>
-            </button>
-            <p id="face-access-note" className={styles.rfidNote}>
-              {demoMode ? "Disponível com Neon configurado." : "Informe seu e-mail ou matrícula. Cadastre sua passkey no perfil após entrar com senha."}
-            </p>
-            {demoMode && <>
-              <button
-                className={styles.rfidButton}
-                type="button"
-                disabled={isBusy}
-                onClick={startRfid}
-              >
-                <Radio size={20} aria-hidden="true" />
-                <span>Ativar leitor RFID</span>
-                <span className={styles.simulationTag}>Simulação</span>
-              </button>
-              <p className={styles.rfidNote}>
-                Leitura simulada do cartão, sem confirmação por senha.
-              </p>
-            </>}
+            <p id="camera-access-note" className={styles.accessNote}>{demoMode ? "Acesso facial disponível com Neon configurado." : "Informe e-mail ou matrícula. Cadastre seu rosto no perfil após entrar com senha."}</p>
+
           </div>
         </>
       )}
       <p className={styles.securityNote}>
-        <ShieldCheck size={15} aria-hidden="true" /> {demoMode ? "Acesso por credenciais ou cartão RFID." : "Acesso por credenciais protegidas."}
+        <ShieldCheck size={15} aria-hidden="true" /> {demoMode ? "Acesso por credenciais protegidas." : "Acesso por credenciais protegidas."}
       </p>
       {children}
     </>

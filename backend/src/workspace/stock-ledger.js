@@ -3,6 +3,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.available = exports.first = void 0;
 exports.rows = rows;
+exports.insert = insert;
 exports.audit = audit;
 exports.movement = movement;
 exports.stock = stock;
@@ -17,6 +18,10 @@ async function rows(c, sql, args = []) {
 }
 const first = async (c, sql, args = []) => (await rows(c, sql, args))[0];
 exports.first = first;
+async function insert(c, sql, args) {
+    const [result] = await c.execute(sql, args);
+    return { id: result.insertId };
+}
 async function audit(c, actor, entity, id, event, data) {
     await c.execute("INSERT INTO audit_log(actor_id,entity_type,entity_id,action,details) VALUES(?,?,?,?,?)", [actor, entity, id, event, JSON.stringify(data)]);
 }
@@ -51,7 +56,7 @@ async function stock(c, part) {
 const available = (r) => Number(r.quantity) - Number(r.reserved) - Number(r.pending_outgoing ?? 0);
 exports.available = available;
 async function partLock(c, code, id) {
-    const p = await (0, exports.first)(c, `SELECT * FROM parts WHERE ${id ? "id" : "code"}=? AND active=TRUE FOR UPDATE`, [id ?? (0, permissions_1.text)(code, 64).toUpperCase()]);
+    const p = await (0, exports.first)(c, `SELECT * FROM parts WHERE ${id ? "id" : "code"}=? AND active=TRUE FOR UPDATE`, [id ?? (0, permissions_1.text)(code, 64)]);
     if (!p)
         throw new permissions_1.ActionError("Peça não encontrada.", 404);
     return p;
@@ -63,7 +68,7 @@ async function place(c, value) {
     return w;
 }
 function scan(p, code) {
-    if (![p.code, p.qr_code].some((v) => String(v).toUpperCase() === (0, permissions_1.text)(code, 128).toUpperCase()))
+    if (![p.code, p.qr_code].some((v) => typeof code === "string" && String(v) === code))
         throw new permissions_1.ActionError("Código lido não corresponde à peça.", 422);
 }
 function capacity(row, quantity) {

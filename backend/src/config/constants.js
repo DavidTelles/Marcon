@@ -45,12 +45,6 @@ const MOVEMENT_TYPE = {
   ADJUST_OUT: 'ajuste_saida'
 };
 
-const RFID_REASONS = {
-  ALLOWED: 'RFID válido + funcionário ativo',
-  TAG_NOT_FOUND: 'RFID inexistente',
-  USER_INACTIVE: 'RFID cadastrado + usuário inativo',
-  NO_PERMISSION: 'RFID cadastrado + usuário sem permissão'
-};
 
 const PERMISSIONS = {
   USERS_MANAGE: 'users.manage',
@@ -66,7 +60,6 @@ const PERMISSIONS = {
   REQUESTS_DELIVER: 'requests.deliver',
   REQUESTS_RECEIVE: 'requests.receive',
   STOCK_MANAGE: 'stock.manage',
-  RFID_ACCESS: 'rfid.access',
   DASHBOARDS_ADMIN: 'dashboards.admin',
   REPORTS_EXPORT: 'reports.export'
 };
@@ -79,7 +72,6 @@ const ROLE_PERMISSIONS = {
     PERMISSIONS.REQUESTS_APPROVE,
     PERMISSIONS.REQUESTS_CREATE,
     PERMISSIONS.REQUESTS_RECEIVE,
-    PERMISSIONS.RFID_ACCESS
   ],
   [ROLES.WAREHOUSE_KEEPER]: [
     PERMISSIONS.PRODUCTS_MANAGE,
@@ -88,12 +80,10 @@ const ROLE_PERMISSIONS = {
     PERMISSIONS.REQUESTS_SEPARATE,
     PERMISSIONS.REQUESTS_DELIVER,
     PERMISSIONS.STOCK_MANAGE,
-    PERMISSIONS.RFID_ACCESS
   ],
   [ROLES.EMPLOYEE]: [
     PERMISSIONS.REQUESTS_CREATE,
     PERMISSIONS.REQUESTS_RECEIVE,
-    PERMISSIONS.RFID_ACCESS
   ]
 };
 
@@ -104,7 +94,6 @@ module.exports = {
   REQUEST_STATUS,
   URGENCY,
   MOVEMENT_TYPE,
-  RFID_REASONS,
   PERMISSIONS,
   ROLE_PERMISSIONS
 };

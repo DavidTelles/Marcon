@@ -54,6 +54,7 @@ function isPartsConsumptionReport(value) {
             "returns",
             "cohort",
             "stocks",
+            "transferEvents",
         ].every((key) => Array.isArray(value[key])) &&
         strings(value.series) &&
         ["totalItems", "page", "pages", "threshold"].every((key) => finite(value[key])) &&

@@ -59,6 +59,8 @@ test("catalog identity is exact and an ambiguous spoken dimension stays ambiguou
     "PAR-M6-30",
   ]);
   expect(choiceIndex("o segundo")).toBe(1);
-  expect(wakeCommand("Jhames, quero parafusos")).toBe("quero parafusos");
+  expect(wakeCommand("Marco, quero parafusos")).toBe("quero parafusos");
+  expect(wakeCommand("James, quero parafusos")).toBeNull();
+  expect(wakeCommand("Jhames, quero parafusos")).toBeNull();
   expect(speechText("Parafuso M8 × 30, código PAR-M8-30, 3 un")).toBe("Parafuso M oito por trinta milímetros, código PAR-M8-30, 3 unidades");
 });

@@ -12,11 +12,6 @@ const env = {
     secret: process.env.JWT_SECRET || '',
     expiresIn: process.env.JWT_EXPIRES_IN || '8h'
   },
-  rfid: {
-    apiUrl: process.env.RFID_API_URL || '',
-    apiKey: process.env.RFID_API_KEY || '',
-    timeoutMs: Number(process.env.RFID_TIMEOUT_MS || 4000)
-  },
   corsOrigin: process.env.CORS_ORIGIN || '*'
 };
 

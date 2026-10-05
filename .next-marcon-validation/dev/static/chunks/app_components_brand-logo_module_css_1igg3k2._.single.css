@@ -1,0 +1,25 @@
+/* [project]/app/components/brand-logo.module.css [app-client] (css) */
+.brand-logo-module__PVtMua__logo, .brand-logo-module__PVtMua__compact {
+  aspect-ratio: 945 / 500;
+  vertical-align: middle;
+  flex-shrink: 0;
+  width: clamp(72px, 7vw, 96px);
+  display: inline-block;
+  position: relative;
+  overflow: hidden;
+}
+
+.brand-logo-module__PVtMua__compact {
+  width: 44px;
+}
+
+.brand-logo-module__PVtMua__image {
+  width: 100%;
+  height: auto;
+  position: absolute;
+  top: 50%;
+  left: 0;
+  transform: translateY(-52.4%);
+}
+
+/*# sourceMappingURL=app_components_brand-logo_module_css_1igg3k2._.single.css.map*/

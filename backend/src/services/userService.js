@@ -36,7 +36,6 @@ async function updateUser(id, payload) {
   if (roleEnum) data.role_enum = roleEnum;
   delete data.role;
   if (payload.block_id !== undefined) data.block_id = payload.block_id || null;
-  if (payload.rfid_id) data.rfid_tag = String(payload.rfid_id).toUpperCase();
   const updated = await userRepository.update(id, data);
   return sanitize(updated);
 }

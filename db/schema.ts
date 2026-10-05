@@ -1,7 +1,7 @@
 import {
   bigint, char, customType, date, decimal, index, integer, jsonb, pgEnum,
   pgTable, primaryKey, smallint, text, timestamp, uniqueIndex,
-  varchar,
+  varchar, foreignKey, check, type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
@@ -29,13 +29,22 @@ export const schemaMigrations = pgTable("schema_migrations", {
   appliedAt: timestamp("applied_at", { mode: "string", precision: 3 }).notNull().defaultNow(),
 });
 
+export const branches = pgTable("branches", {
+  id: id(), code: varchar("code", { length: 64 }).notNull().unique(), name: varchar("name", { length: 160 }),
+});
 export const blocks = pgTable("blocks", {
   id: id(), code: varchar("code", { length: 20 }).notNull().unique(),
+  branchId: bigint("branch_id", { mode: "number" }).references(() => branches.id),
   name: varchar("name", { length: 80 }).notNull().unique(),
 });
 
+export const sectors = pgTable("sectors", {
+  id: id(), code: varchar("code", { length: 64 }).notNull(), name: varchar("name", { length: 160 }).notNull(),
+  branchId: ref("branch_id", () => branches), blockId: ref("block_id", () => blocks),
+}, (t) => [uniqueIndex("sectors_branch_block_code").on(t.branchId,t.blockId,t.code), uniqueIndex("sectors_id_branch_block").on(t.id,t.branchId,t.blockId)]);
 export const warehouses = pgTable("warehouses", {
   id: id(), code: varchar("code", { length: 30 }).notNull().unique(),
+  branchId: bigint("branch_id", { mode: "number" }).references(() => branches.id),
   name: varchar("name", { length: 80 }).notNull().unique(),
   blockId: bigint("block_id", { mode: "number" }).references(() => blocks.id),
   isCentral: smallint("is_central").notNull().default(0),
@@ -50,19 +59,27 @@ export const users = pgTable("users", {
   passwordHash: varchar("password_hash", { length: 190 }).notNull(), role: userRole("role").notNull(),
   sector: varchar("sector", { length: 80 }).notNull(),
   blockId: bigint("block_id", { mode: "number" }).references(() => blocks.id),
+  branchId: bigint("branch_id", { mode: "number" }).references(() => branches.id),
+  sectorId: bigint("sector_id", { mode: "number" }).references(() => sectors.id),
+  workplaceId: bigint("workplace_id", { mode: "number" }),
   active: smallint("active").notNull().default(1), rfidTag: varchar("rfid_tag", { length: 32 }).unique(),
   rfidAccessEnabled: smallint("rfid_access_enabled").notNull().default(1),
   createdAt: createdAt(), updatedAt: updatedAt(),
-});
+}, (t) => [
+  foreignKey({ name: "fk_user_workplace", columns: [t.workplaceId,t.branchId,t.blockId,t.sectorId], foreignColumns: [workplaces.id,workplaces.branchId,workplaces.blockId,workplaces.sectorId] }),
+  check("ck_user_workplace",sql`${t.workplaceId} IS NULL OR (${t.branchId} IS NOT NULL AND ${t.blockId} IS NOT NULL AND ${t.sectorId} IS NOT NULL)`),
+]);
 
 export const parts = pgTable("parts", {
+  packVerified: smallint("pack_verified").notNull().default(1),
   id: id(), code: varchar("code", { length: 64 }).notNull().unique(),
   qrCode: varchar("qr_code", { length: 128 }).notNull().unique(),
   name: varchar("name", { length: 160 }).notNull(), imageUrl: text("image_url"),
+  imageSource: text("image_source"), imageUsage: text("image_usage"), imageVerifiedAt: timestamp("image_verified_at", { mode: "string", precision: 3 }), imageVerifiedBy: bigint("image_verified_by", { mode: "number" }).references(() => users.id),
   location: varchar("location", { length: 80 }).notNull(),
   packSize: integer("pack_size").notNull().default(1), minimumTotal: integer("minimum_total").notNull().default(1),
   consumed30: integer("consumed_30").notNull().default(0), previous30: integer("previous_30").notNull().default(0),
-  leadDays: integer("lead_days").notNull().default(7), referenceUnitPrice: decimal("reference_unit_price", { precision: 12, scale: 2, mode: "number" }).notNull().default(0),
+  leadDays: integer("lead_days").notNull().default(7), referenceUnitPrice: decimal("reference_unit_price", { precision: 12, scale: 2, mode: "number" }),
   active: smallint("active").notNull().default(1), unit: varchar("unit", { length: 24 }).notNull().default("un"),
   category: varchar("category", { length: 80 }).notNull().default("Peças"), criticality: smallint("criticality").notNull().default(1),
   description: text("description"), purpose: varchar("purpose", { length: 500 }), material: varchar("material", { length: 120 }),
@@ -74,10 +91,12 @@ export const inventory = pgTable("inventory", {
   partId: ref("part_id", () => parts), warehouseId: ref("warehouse_id", () => warehouses), quantity: integer("quantity").notNull().default(0),
   minimumQuantity: integer("minimum_quantity").notNull().default(0), updatedAt: updatedAt(),
   aisle: varchar("aisle", { length: 80 }).notNull().default(""), shelf: varchar("shelf", { length: 80 }).notNull().default(""),
-  capacity: integer("capacity"), mapNodeId: varchar("map_node_id", { length: 64 }),
+  capacity: integer("capacity"), mapNodeId: varchar("map_node_id", { length: 64 }).references((): AnyPgColumn => plantPoints.id),
 }, (t) => [primaryKey({ columns: [t.partId, t.warehouseId] })]);
 
 export const requests = pgTable("requests", {
+  sectorId: bigint("sector_id", { mode: "number" }).references(() => sectors.id),
+  workplaceId: bigint("workplace_id", { mode: "number" }).references((): AnyPgColumn => workplaces.id),
   requestedUnit: varchar("requested_unit", { length: 12 }).notNull().default("piece"),
   requestedAmount: integer("requested_amount"), packSizeAtRequest: integer("pack_size_at_request"),
   anomaly: jsonb("anomaly"), pickedAt: timestamp("picked_at", { mode: "string", precision: 3 }),
@@ -150,6 +169,12 @@ export const faceCredentials = pgTable("face_credentials", {
   embeddings: bytea("embeddings").notNull(), modelVersion: varchar("model_version", { length: 64 }).notNull(),
   consentVersion: varchar("consent_version", { length: 40 }).notNull(), createdAt: createdAt(),
 });
+export const faceLoginGrants = pgTable("face_login_grants", {
+  tokenHash: bytea("token_hash").primaryKey(), userId: ref("user_id", () => users),
+  passwordHash: varchar("password_hash", { length: 190 }).notNull(),
+  credentialHash: varchar("credential_hash", { length: 64 }).notNull(),
+  expiresAt: timestamp("expires_at", { mode: "string", precision: 3 }).notNull(), createdAt: createdAt(),
+}, (t) => [index("idx_face_login_grants_expiry").on(t.expiresAt)]);
 export const faceChallenges = pgTable("face_challenges", {
   tokenHash: bytea("token_hash").primaryKey(), userId: ref("user_id", () => users), purpose: challengePurpose("purpose").notNull(),
   poses: jsonb("poses").notNull(), sessionHash: bytea("session_hash"), passwordHash: varchar("password_hash", { length: 190 }).notNull(),
@@ -197,3 +222,26 @@ export const userPermissionOverrides = pgTable("user_permission_overrides", {
   userId: bigint("user_id", { mode: "number" }).notNull().references(() => users.id, { onDelete: "cascade" }),
   permission: varchar("permission", { length: 80 }).notNull(), allowed: smallint("allowed").notNull().default(1),
 }, (t) => [primaryKey({ columns: [t.userId, t.permission] })]);
+
+export const plantPoints = pgTable("plant_points", {
+  id: varchar("id", { length: 64 }).primaryKey(), label: varchar("label", { length: 120 }).notNull(), kind: varchar("kind", { length: 40 }).notNull(),
+  warehouseId: bigint("warehouse_id", { mode: "number" }).references(() => warehouses.id), blockId: bigint("block_id", { mode: "number" }).references(() => blocks.id), sectorId: bigint("sector_id", { mode: "number" }).references(() => sectors.id),
+  publishedVersionId: bigint("published_version_id", { mode: "number" }).references((): AnyPgColumn => mapVersions.id), active: smallint("active").notNull().default(0),
+});
+export const workplaces = pgTable("workplaces", {
+  id: id(), code: varchar("code", { length: 64 }).notNull().unique(), name: varchar("name", { length: 160 }).notNull(),
+  branchId: ref("branch_id", () => branches), blockId: ref("block_id", () => blocks), sectorId: bigint("sector_id", { mode: "number" }).notNull(), pointId: varchar("point_id", { length: 64 }).references(() => plantPoints.id),
+}, (t) => [foreignKey({ columns: [t.sectorId,t.branchId,t.blockId], foreignColumns: [sectors.id,sectors.branchId,sectors.blockId] }), uniqueIndex("workplaces_id_scope").on(t.id,t.branchId,t.blockId,t.sectorId)]);
+export const materialImportRuns = pgTable("material_import_runs", {
+  id: id(), fileName: varchar("file_name", { length: 190 }).notNull(), fileHash: char("file_hash", { length: 64 }).notNull().unique(), mapping: jsonb("mapping").notNull(), actorId: ref("actor_id", () => users), createdAt: createdAt(),
+});
+export const materialImportLines = pgTable("material_import_lines", {
+  id: id(), runId: ref("run_id", () => materialImportRuns), sheet: varchar("sheet", { length: 120 }).notNull(), rowNumber: integer("row_number").notNull(), code: varchar("code", { length: 64 }).notNull(), branchCode: varchar("branch_code", { length: 64 }).notNull(), materialId: bigint("material_id", { mode: "number" }).references(() => parts.id),
+  rawCells: jsonb("raw_cells").notNull(), parameters: jsonb("parameters").notNull(), consumption: jsonb("consumption").notNull(), conflicts: jsonb("conflicts").notNull(),
+}, (t) => [uniqueIndex("import_run_line").on(t.runId,t.sheet,t.rowNumber)]);
+export const reportedBalances = pgTable("reported_balances", {
+  id: id(), sourceLineId: bigint("source_line_id", { mode: "number" }).notNull().unique().references(() => materialImportLines.id), materialId: bigint("material_id", { mode: "number" }).references(() => parts.id), branchId: ref("branch_id", () => branches), warehouseId: bigint("warehouse_id", { mode: "number" }).references(() => warehouses.id), quantity: decimal("quantity", { precision: 20, scale: 6, mode: "number" }), unit: varchar("unit", { length: 32 }).notNull(), reconciliationMovementId: bigint("reconciliation_movement_id", { mode: "number" }).references(() => stockMovements.id),
+});
+export const reportedPurchases = pgTable("reported_purchases", {
+  id: id(), sourceLineId: bigint("source_line_id", { mode: "number" }).notNull().unique().references(() => materialImportLines.id), materialId: bigint("material_id", { mode: "number" }).references(() => parts.id), branchId: ref("branch_id", () => branches), directive: text("directive"), orderQuantity: decimal("order_quantity", { precision: 20, scale: 6, mode: "number" }), parcelTotal: decimal("parcel_total", { precision: 20, scale: 6, mode: "number" }), programme: jsonb("programme").notNull(),
+});

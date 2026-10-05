@@ -10,7 +10,7 @@ test("layout remains usable from 320px to 1920px", async ({ page }) => {
     await expect(
       page.getByRole("button", { name: "Entrar", exact: true }),
     ).toBeVisible();
-    await expect(page.getByRole("button", { name: "Entrar com passkey" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Entrar com passkey" })).toHaveCount(0);
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= window.innerWidth,
@@ -38,12 +38,10 @@ test("layout remains usable from 320px to 1920px", async ({ page }) => {
   });
 });
 
-test("passkey exige banco configurado", async ({ page }) => {
-  await page.goto("/login");
-  await expect(page.getByRole("button", { name: "Entrar com passkey" })).toBeDisabled();
-  await expect(page.getByText("Disponível com Neon configurado.", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Entrar com reconhecimento facial", exact: true })).toBeDisabled();
-  await expect(page).toHaveURL("/login");
+test("retired authentication flows are absent", async ({page}) => {
+ await page.goto("/login");
+ await expect(page.getByRole("button",{name:/passkey|RFID/i})).toHaveCount(0);
+ for(const path of ["/api/passkey","/api/login/rfid"]){const response=await page.request.post(path,{data:{}});expect(response.status()).toBe(404);}
 });
 
 test("credentials, errors, password visibility and logout", async ({
@@ -66,62 +64,6 @@ test("credentials, errors, password visibility and logout", async ({
   await expect(page).toHaveURL("/login");
   await page.goto("/inicio/admin");
   await expect(page).toHaveURL("/login");
-});
-
-test("RFID waits five seconds and signs in without a password", async ({
-  page,
-}) => {
-  await page.goto("/login");
-  await page.clock.install();
-  await page.getByRole("button", { name: "Ativar leitor RFID" }).click();
-  await expect(
-    page.getByRole("heading", { name: "Aproxime o cartão do leitor" }),
-  ).toBeFocused();
-  await expect(page.getByLabel("Senha", { exact: true })).toHaveCount(0);
-  await expect(page.getByRole("status")).toContainText("5 s");
-  await page.clock.runFor(4000);
-  await expect(page).toHaveURL("/login");
-  await expect(page.getByRole("status")).toContainText("1 s");
-  await page.clock.runFor(1000);
-  await expect(page).toHaveURL("/employee/request");
-});
-
-test("canceling RFID stops the pending read and restores credentials", async ({
-  page,
-}) => {
-  let reads = 0;
-  page.on("request", (request) => {
-    if (request.url().endsWith("/api/login/rfid")) reads++;
-  });
-  await page.goto("/login");
-  await page.clock.install();
-  await page.getByLabel("Senha", { exact: true }).fill("previous-password");
-  await page.getByRole("button", { name: "Ativar leitor RFID" }).click();
-  await page.clock.runFor(2000);
-  await page
-    .getByRole("button", { name: "Cancelar e usar credenciais" })
-    .click();
-  await expect(page.getByLabel("E-mail ou matrícula")).toBeFocused();
-  await expect(page.getByLabel("Senha", { exact: true })).toBeEmpty();
-  await page.clock.runFor(6000);
-  expect(reads).toBe(0);
-  await expect(page).toHaveURL("/login");
-});
-
-test("RFID failure allows another timed attempt", async ({ page }) => {
-  await page.goto("/login");
-  await page.clock.install();
-  await page.route("**/api/login/rfid", (route) => route.abort());
-  await page.getByRole("button", { name: "Ativar leitor RFID" }).click();
-  await page.clock.runFor(5000);
-  await expect(
-    page.getByRole("alert").filter({ hasText: "Não foi possível concluir" }),
-  ).toBeVisible();
-  await page.unroute("**/api/login/rfid");
-  await page.getByRole("button", { name: "Tentar leitura novamente" }).click();
-  await expect(page.getByRole("status")).toContainText("5 s");
-  await page.clock.runFor(5000);
-  await expect(page).toHaveURL("/employee/request");
 });
 
 test("reduced motion disables animation and tilt; keyboard reaches form", async ({

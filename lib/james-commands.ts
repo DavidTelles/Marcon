@@ -56,7 +56,7 @@ export function commandText(value: string) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
-    .replace(/^\s*(?:james|jhames)[\s,:]+/, "")
+    .replace(/^\s*marco[\s,:]+/, "")
     .trim()
     .replace(/[.!?]+$/, "");
 }

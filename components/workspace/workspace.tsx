@@ -15,6 +15,7 @@ import { MapEditor } from "./operations/map-editor";
 import { PurchaseScreen } from "./screens/purchase-screen";
 import { RecommendationScreen } from "./screens/recommendation-screen";
 import { StockMovementHistory } from "./screens/stock-movement-history";
+import { BackToTop } from "./back-to-top";
 import { balanceOf, warehouseForBlock } from "@/lib/inventory";
 import { EmployeeRequestScreen } from "./screens/employee-request-screen";
 import { StaffScreen } from "./screens/staff-screen";
@@ -809,7 +810,8 @@ export default function Workspace({
           {page === "materiais" && role === "lider" && <MaterialsScreen />}
           {persistent && ["requisicoes", "solicitacoes", "historico"].includes(page) && <RequestWorkflowScreen role={role} history={page === "historico"} />}
           {["pecas", "por-peca"].includes(page) && <PartsConsumptionScreen key={`${page}:${searchParams.toString()}`} role={role} mode={page === "pecas" ? "comparison" : "share"} initialCode={searchParams.get("code") ?? undefined} />}
-          {persistent &&
+          {persistent && role === "lider" && page === "dashboard" && <PartsConsumptionScreen key={searchParams.toString()} role={role} mode="comparison" />}
+          {persistent && role !== "lider" &&
             [
               "dashboard",
               "compra",
@@ -832,6 +834,7 @@ export default function Workspace({
             <PurchaseScreen purchaseItems={purchaseItems} />
           )}
           {!persistent && page === "recomendacoes" && <RecommendationScreen />}
+          <BackToTop />
         </main>
       </div>
       {detail && (

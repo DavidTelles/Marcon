@@ -43,7 +43,7 @@ exports.mapKinds = {
     support: "Área de apoio",
     custom: "Personalizado",
 };
-function deliveryTargets(graph, blockId, sector) {
+function deliveryTargets(graph, blockId, sectorId, pointId) {
     const points = graph.nodes.filter((node) => node.blockId === blockId &&
         [
             "block",
@@ -52,11 +52,11 @@ function deliveryTargets(graph, blockId, sector) {
             "delivery",
             "replenishment",
         ].includes(node.kind));
-    const normalize = (value) => value.trim().toLocaleLowerCase("pt-BR");
-    const specific = sector
-        ? points.filter((node) => node.sector && normalize(node.sector) === normalize(sector))
-        : [];
-    return specific.length ? specific : points.filter((node) => !node.sector);
+    if (pointId)
+        return points.filter(node => node.id === pointId);
+    if (sectorId)
+        return points.filter(node => node.sectorId === sectorId);
+    return points.filter((node) => !node.sectorId && !node.sector);
 }
 function nextPointLabel(g, kind) {
     let number = 1;
@@ -152,6 +152,7 @@ function graphProblems(g) {
                 (typeof n.access !== "string" || n.access.length > 120)) ||
             [n.blocked, n.restricted].some((v) => v !== undefined && typeof v !== "boolean") ||
             !validTransport(n.allowedTransport) ||
+            (n.sectorId !== undefined && (!Number.isSafeInteger(n.sectorId) || n.sectorId < 1 || !n.blockId)) ||
             (n.sector !== undefined &&
                 (typeof n.sector !== "string" ||
                     !n.sector.trim() ||
@@ -174,6 +175,7 @@ function graphProblems(g) {
         if (!a ||
             !b ||
             a === b ||
+            (edge.distance !== undefined && edge.distanceUnit === undefined) ||
             [edge.seconds, edge.distance].some((v) => v !== undefined && (!Number.isFinite(v) || v < 0 || v > 1e9)) ||
             (edge.distanceUnit !== undefined &&
                 !["m", "map"].includes(edge.distanceUnit)) ||

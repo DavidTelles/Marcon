@@ -5,7 +5,7 @@ import type { JamesOperation } from "./james-operations";
 export function explicitOperation(message: string): JamesOperation | null {
   const value = message
     .trim()
-    .replace(/^(?:james|jhames)[, ]+/i, "")
+    .replace(/^marco[, ]+/i, "")
     .replace(/[.!]$/, "");
   const request = "requisi[çc][aã]o\\s+(?:pendente\\s+)?#?(\\d+)";
   for (const [prefix, name] of [

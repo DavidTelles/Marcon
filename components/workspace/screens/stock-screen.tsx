@@ -11,6 +11,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import { StockOperations } from "../operations/stock-operations";
+import { MaterialImport } from "../operations/material-import";
 import { heading, badge } from "../ui";
 import { useDemoStore } from "../demo-store";
 import type { Part } from "@/lib/demo-data";
@@ -190,13 +191,16 @@ export function StockScreen({
                 reject(new Error("Não foi possível ler a foto."));
               reader.readAsDataURL(photo);
             })
-          : editing?.image;
+          : undefined;
         await runAction({
           type: "savePart",
           part: {
             ...part,
             id: editing?.id ?? null,
             image: imageData,
+            imageSource: data.get("imageSource"),
+            imageUsage: data.get("imageUsage"),
+            imageConfirmed: data.get("imageConfirmed") === "on",
             unit: data.get("unit"),
             category: data.get("category"),
             criticality: Number(data.get("criticality") || 1),
@@ -318,6 +322,7 @@ export function StockScreen({
         </button>
       </div>
       {persistent && <StockOperations />}
+      {persistent && <MaterialImport />}
       <div
         className="warehouse-tabs"
         role="tablist"
@@ -568,9 +573,11 @@ export function StockScreen({
                 name="photo"
                 type="file"
                 accept="image/*"
-                required={!editing}
               />
             </label>
+            <label>Origem da fotografia <input name="imageSource" maxLength={1000} placeholder="Arquivo da empresa ou endereço oficial verificado" /></label>
+            <label>Condições de uso <input name="imageUsage" maxLength={1000} placeholder="Autoria, licença ou autorização de uso" /></label>
+            <label><input type="checkbox" name="imageConfirmed" /> Confirmei que a fotografia corresponde ao código e modelo desta peça.</label>
             <label>
               Almoxarifado
               <select name="warehouse" value={warehouse} disabled>
@@ -727,8 +734,9 @@ export function StockScreen({
                     style={{ backgroundImage: "url(" + item.image + ")" }}
                   />
                 ) : (
-                  <div className="part-placeholder" aria-hidden="true">
+                  <div className="part-placeholder">
                     <Package size={28} />
+                    <span>Imagem não disponível</span>
                   </div>
                 )}
                 <div className="stock-result-content">

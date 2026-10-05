@@ -57,6 +57,8 @@ async function executeRequestAction(c, user, actor, a) {
         const batch = (0, node_crypto_1.randomUUID)(), ids = [];
         for (const e of [...entries].sort((x, y) => String(x.code).localeCompare(String(y.code)))) {
             const p = await (0, stock_ledger_1.partLock)(c, e.code);
+            if (e.requestedUnit === "box" && Number(p.pack_verified) === 0)
+                throw new permissions_1.ActionError("Configure e confirme a embalagem oficial antes de solicitar caixas.", 409);
             let q;
             try {
                 q = (0, request_policy_1.requestedUnits)((0, permissions_1.integer)(e.quantity), e.requestedUnit, Number(p.pack_size));
@@ -73,7 +75,7 @@ async function executeRequestAction(c, user, actor, a) {
             if (q >
                 (await (0, stock_ledger_1.stock)(c, Number(p.id))).reduce((sum, r) => sum + (0, stock_ledger_1.available)(r), 0))
                 throw new permissions_1.ActionError("Saldo disponível insuficiente.", 409);
-            const [r] = await c.execute("INSERT INTO requests(requester_id,block_id,part_id,quantity,priority,justification,batch_id,sector,requested_unit,requested_amount,pack_size_at_request,anomaly) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", [
+            const [r] = await c.execute("INSERT INTO requests(requester_id,block_id,part_id,quantity,priority,justification,batch_id,sector,requested_unit,requested_amount,pack_size_at_request,anomaly,sector_id,workplace_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)", [
                 actorId,
                 actor.block_id,
                 p.id,
@@ -86,6 +88,8 @@ async function executeRequestAction(c, user, actor, a) {
                 e.quantity,
                 p.pack_size,
                 JSON.stringify(anomaly),
+                actor.sector_id ?? null,
+                actor.workplace_id ?? null,
             ]);
             ids.push(r.insertId);
             await (0, stock_ledger_1.audit)(c, actorId, "request", r.insertId, "create", {
@@ -225,8 +229,9 @@ async function executeRequestAction(c, user, actor, a) {
                     ? JSON.parse(published.graph)
                     : published.graph)
                 : null;
+            const workplace = r.workplace_id ? await (0, stock_ledger_1.first)(c, "SELECT point_id FROM workplaces WHERE id=?", [r.workplace_id]) : null;
             const destinations = graph
-                ? (0, routing_1.deliveryTargets)(graph, Number(r.block_id), String(r.sector))
+                ? (0, routing_1.deliveryTargets)(graph, Number(r.block_id), r.sector_id ? Number(r.sector_id) : undefined, workplace?.point_id ? String(workplace.point_id) : undefined)
                 : [];
             const ranked = locations
                 .map((l) => {

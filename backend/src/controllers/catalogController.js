@@ -7,6 +7,26 @@ const productRepository = require('../repositories/productRepository');
 const AppError = require('../utils/AppError');
 const { stockService } = require('../services/container');
 const { executeWorkspaceAction } = require('../workspace/workspace-actions');
+const { getPool } = require('../config/db');
+
+const resolveCode = asyncHandler(async (req, res) => {
+  const raw = req.body?.code;
+  if (typeof raw !== 'string' || !raw.length || raw.length > 1024 || raw.includes('\0'))
+    throw new AppError(400, 'Conteúdo do código inválido');
+  // Exact, stored identifiers only. Never fetch a URL or infer a printed number.
+  const [parts] = await getPool().execute('SELECT id,code,name,unit FROM parts WHERE active=TRUE AND (code=? OR qr_code=?) LIMIT 2', [raw, raw]);
+  if (!parts.length) throw new AppError(404, 'Código desconhecido; confirme o vínculo no cadastro');
+  if (parts.length !== 1) throw new AppError(409, 'Código ambíguo; revise os vínculos antes de continuar');
+  const part = parts[0];
+  const global = ['admin', 'almoxarifado'].includes(req.user.role);
+  if (global && req.user.permissionOverrides?.['stock.manage'] === false) throw new AppError(403,'Permissão de estoque bloqueada');
+  if (!global && (!Number.isSafeInteger(Number(req.user.blockId)) || Number(req.user.blockId) < 1))
+    throw new AppError(403, 'Configure o vínculo com um bloco para consultar seu saldo autorizado');
+  const [balances] = await getPool().execute(`SELECT w.id AS warehouseId,w.name AS warehouse,i.quantity AS physical,p.unit,
+    i.quantity-COALESCE((SELECT SUM(r.quantity) FROM request_reservations r WHERE r.part_id=i.part_id AND r.warehouse_id=i.warehouse_id),0)-COALESCE((SELECT SUM(t.quantity) FROM stock_transfers t WHERE t.part_id=i.part_id AND t.source_warehouse_id=i.warehouse_id AND t.status='Solicitada'),0) AS available
+    FROM inventory i JOIN warehouses w ON w.id=i.warehouse_id JOIN parts p ON p.id=i.part_id WHERE i.part_id=? AND w.active=TRUE ${global ? '' : 'AND w.block_id=?'} ORDER BY w.id`, global ? [part.id] : [part.id, Number(req.user.blockId)]);
+  success(res, 200, { rawCode: raw, material: part, balances: balances.map(b=>({warehouseId:Number(b.warehouseid ?? b.warehouseId),warehouse:b.warehouse,physical:Number(b.physical),available:Number(b.available),unit:b.unit})), scope: global ? 'Almoxarifados autorizados pelo perfil de estoque' : 'Almoxarifados vinculados ao bloco autorizado' });
+});
 
 
 const listBlocks = asyncHandler(async (req, res) => success(res, 200, await blockRepository.list()));
@@ -63,6 +83,7 @@ const locateProduct = asyncHandler(async (req, res) => {
 });
 
 module.exports = {
+  resolveCode,
   listBlocks,
   createBlock,
   updateBlock,

@@ -7,6 +7,7 @@ import { verifyPassword } from "@/lib/password";
 import { roleLanding, type Role } from "@/lib/workspace-routes";
 import { decryptFace, encryptFace } from "@/lib/face-crypto";
 import { extractFaces } from "@/lib/face-python";
+import { apiTokenCookie, backendFetch } from "@/lib/backend-client";
 import {
   FACE_CONSENT,
   FACE_COUNT,
@@ -165,6 +166,8 @@ export async function POST(request: NextRequest) {
           "Acesso facial indisponível para esta conta. Entre com senha.",
           401,
         );
+      if (!managing && (typeof body.password !== "string" || !await verifyPassword(body.password, account.password_hash)))
+        return fail("Confirme a senha: a prova de vida facial ainda não foi validada contra foto e vídeo.", 401);
       if (
         managing &&
         !adminTarget &&
@@ -214,7 +217,8 @@ export async function POST(request: NextRequest) {
             401,
           );
       }
-      const poses = Array(FACE_COUNT).fill("center");
+      const turns = randomBytes(1)[0] % 2 ? ["left", "right"] : ["right", "left"];
+      const poses = ["center", turns[0], "center", turns[1], "center"];
       const token = randomBytes(32).toString("base64url");
       await getPool().execute(
         "DELETE FROM face_challenges WHERE expires_at < UTC_TIMESTAMP(3)",
@@ -257,7 +261,7 @@ export async function POST(request: NextRequest) {
       return fail("As cinco fotos precisam ser capturas diferentes.", 422);
     let samples: number[][];
     try {
-      samples = await extractFaces(images);
+      samples = await extractFaces(images, typeof challenge.poses === "string" ? JSON.parse(challenge.poses) : challenge.poses);
     } catch (error) {
       if ((error as NodeJS.ErrnoException)?.code === "ENOENT")
         return fail(
@@ -268,7 +272,7 @@ export async function POST(request: NextRequest) {
         error instanceof Error
           ? error.message
           : "Não foi possível analisar as fotos.",
-        422,
+        typeof (error as { status?: number }).status === "number" ? (error as { status: number }).status : 422,
       );
     }
     if (!coherentCapture(samples))
@@ -278,6 +282,12 @@ export async function POST(request: NextRequest) {
       );
     const sessionUser =
       challenge.purpose === "register" ? await currentUser() : null;
+    const [others] = await getPool().execute<(StoredFace & { user_id: number })[]>(
+      "SELECT f.user_id,f.embeddings,f.model_version FROM face_credentials f JOIN users u ON u.id=f.user_id WHERE u.active=1 AND f.user_id<>? AND f.model_version=? LIMIT 10001", [challenge.user_id, FACE_MODEL]);
+    if (others.length > 10000) return fail("Cadastro facial excedeu o limite de verificação. Entre com senha.", 503);
+    if (others.some((other) => matchesEnrollment(samples, decryptFace(Number(other.user_id), other.embeddings))))
+      return fail("Identidade facial ambígua. Use a senha e solicite revisão dos cadastros.", 409);
+    let loginGrant: string | undefined;
     const response = await transaction(async (c) => {
       const [users] = await c.execute<UserRow[]>(
         "SELECT id, employee_no, password_hash, active, role FROM users WHERE id = ? FOR UPDATE",
@@ -330,6 +340,9 @@ export async function POST(request: NextRequest) {
         );
       // Apenas este resultado calculado no servidor autoriza a sessão. Nunca
       // receber recognized=true, id escolhido pelo cliente, ou escore do cliente.
+      loginGrant = randomBytes(32).toString("base64url");
+      await c.execute("DELETE FROM face_login_grants WHERE expires_at < UTC_TIMESTAMP(3)");
+      await c.execute("INSERT INTO face_login_grants(token_hash,user_id,password_hash,credential_hash,expires_at) VALUES(?,?,?,?,DATE_ADD(UTC_TIMESTAMP(3),INTERVAL 60 SECOND))", [digest(loginGrant), user.id, user.password_hash, createHash("sha256").update(stored[0].embeddings).digest("hex")]);
       const result = json({ destination: roleLanding[user.role as Role] });
       result.cookies.set(
         cookieName,
@@ -344,6 +357,11 @@ export async function POST(request: NextRequest) {
       );
       return result;
     });
+    if (loginGrant) {
+      const session = await backendFetch<{ token: string }>("/login/face", { method: "POST", body: { grant: loginGrant } });
+      if (!session.token) return fail("A API não confirmou a sessão facial. Entre com senha.", 503);
+      response.cookies.set(apiTokenCookie, session.token, { httpOnly: true, secure: request.nextUrl.protocol === "https:", sameSite: "lax", path: "/", maxAge: 8 * 60 * 60 });
+    }
     response.cookies.set(challengeCookie, "", {
       ...cookiesFor(request),
       maxAge: 0,

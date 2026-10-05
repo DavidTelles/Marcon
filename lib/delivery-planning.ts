@@ -199,7 +199,8 @@ export async function recordDeliveryPlan(
           )?.id
         : graph.nodes.find((n) => n.warehouseId === Number(v.warehouse_id))?.id,
     );
-    const ends = deliveryTargets(graph, Number(r.block_id), String(r.sector));
+    const workplace = r.workplace_id ? await first(c,"SELECT point_id FROM workplaces WHERE id=?",[r.workplace_id]) : null;
+    const ends = deliveryTargets(graph, Number(r.block_id), r.sector_id ? Number(r.sector_id) : undefined, workplace?.point_id ? String(workplace.point_id) : undefined);
     if (
       destinations.some(
         (d) => !graph.nodes.some((n) => n.id === d && n.kind === "delivery"),

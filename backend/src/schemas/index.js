@@ -1,13 +1,5 @@
 const { z } = require('zod');
 
-const rfidBody = z.object({
-  body: z.object({
-    rfid_id: z.string().regex(/^[0-9A-Fa-f]{8,20}$/).optional(),
-    location: z.string().max(120).optional(),
-    device: z.string().max(120).optional(),
-    query_external: z.boolean().optional()
-  }).optional().default({})
-});
 
 const registerBody = z.object({
   body: z.object({
@@ -21,17 +13,10 @@ const registerBody = z.object({
     block_id: z.coerce.number().int().positive().optional(),
     sector_id: z.coerce.number().int().positive().optional(),
     role: z.enum(['ADMIN', 'SECTOR_REPRESENTATIVE', 'WAREHOUSE_KEEPER', 'EMPLOYEE', 'admin', 'lider', 'almoxarifado', 'funcionario']).optional(),
-    rfid_id: z.string().regex(/^[0-9A-Fa-f]{8,20}$/).optional(),
     requests: z.any().optional()
   })
 });
 
-const rfidLoginBody = z.object({
-  body: z.object({
-    rfid_id: z.string().regex(/^[0-9A-Fa-f]{8,20}$/).optional(),
-    tag: z.string().regex(/^[0-9A-Fa-f]{8,20}$/).optional()
-  })
-});
 
 const loginBody = z.object({
   body: z.object({
@@ -121,8 +106,6 @@ const preparePickupBody = z.object({ body: z.object(pickupFields) });
 const confirmPickupBody = z.object({ body: z.object({ ...pickupFields, confirmation: z.string().uuid() }) });
 
 module.exports = {
-  rfidBody,
-  rfidLoginBody,
   registerBody,
   loginBody,
   idParam,

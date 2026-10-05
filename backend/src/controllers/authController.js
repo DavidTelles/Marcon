@@ -13,10 +13,6 @@ const login = asyncHandler(async (req, res) => {
   success(res, 200, result);
 });
 
-const loginRfid = asyncHandler(async (req, res) => {
-  const result = await authService.loginRfid({ rfid_id: req.body.rfid_id || req.body.tag });
-  success(res, 200, result);
-});
 
 const forgotPassword = asyncHandler(async (req, res) => {
   const result = await authService.forgotPassword(req.body);
@@ -39,4 +35,5 @@ const me = asyncHandler(async (req, res) => {
   success(res, 200, { user: authService.sanitize(user), permissions: req.user.permissions });
 });
 
-module.exports = { register, login, loginRfid, forgotPassword, resetPassword, forgotEmail, me };
+const loginFace = asyncHandler(async (req, res) => success(res, 200, await authService.loginFace(req.body)));
+module.exports = { register, login, loginFace, forgotPassword, resetPassword, forgotEmail, me };

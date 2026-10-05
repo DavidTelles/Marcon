@@ -76,7 +76,7 @@ export function FaceCapture({
     try {
       if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia)
         throw new Error("A câmera exige localhost ou HTTPS.");
-      const challenge = await faceRequest<{ model: string }>(
+      const challenge = await faceRequest<{ model: string; poses: string[] }>(
         {
           action: "start",
           purpose,
@@ -111,8 +111,10 @@ export function FaceCapture({
       const images: string[] = [];
       for (let i = 0; i < FACE_COUNT; i++) {
         if (signal.aborted) return;
-        setStatus(`Olhe para a câmera. Foto ${i + 1} de ${FACE_COUNT}.`);
-        await new Promise<void>((resolve) => setTimeout(resolve, 1000));
+        const pose = challenge.poses?.[i];
+        if (!["center", "left", "right"].includes(pose)) throw new Error("Desafio facial inválido. Inicie novamente.");
+        setStatus(`${pose === "center" ? "Olhe de frente" : pose === "left" ? "Vire um pouco o rosto para sua direita" : "Vire um pouco o rosto para sua esquerda"}. Foto ${i + 1} de ${FACE_COUNT}.`);
+        await new Promise<void>((resolve) => setTimeout(resolve, 2500));
         if (signal.aborted || !video.current?.videoWidth) return;
         canvas.getContext("2d")!.drawImage(video.current, 0, 0, 640, 480);
         images.push(canvas.toDataURL("image/jpeg", 0.75).split(",")[1]);

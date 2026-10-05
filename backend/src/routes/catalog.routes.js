@@ -23,6 +23,7 @@ router.post('/api/warehouses', ...warehouseAdmin, catalog.createWarehouse);
 router.patch('/api/warehouses/:id', ...warehouseAdmin, catalog.updateWarehouse);
 
 router.get('/api/products', authenticate, catalog.listProducts);
+router.post('/api/products/resolve-code', authenticate, catalog.resolveCode);
 router.get('/api/products/:id', authenticate, catalog.getProduct);
 router.get('/api/products/:id/location', authenticate, catalog.locateProduct);
 router.post('/api/products', ...productWrite, validate(schemas.addItemBody), catalog.createProduct);

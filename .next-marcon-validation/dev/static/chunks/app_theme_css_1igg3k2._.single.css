@@ -1,0 +1,203 @@
+/* [project]/app/theme.css [app-client] (css) */
+:root {
+  --lightningcss-light: initial;
+  --lightningcss-dark: ;
+  color-scheme: light;
+  --palette-1: #005187;
+  --palette-2: #4d82bc;
+  --palette-3: #84b6f4;
+  --palette-4: #c4dafa;
+  --palette-5: #fcffff;
+  --blue: var(--palette-1);
+  --bright: var(--palette-2);
+  --ink: var(--palette-1);
+  --subtle: color-mix(in srgb, var(--palette-1) 85%, var(--palette-2));
+  --muted: var(--subtle);
+  --white: var(--palette-5);
+  --canvas: color-mix(in srgb, var(--palette-4) 24%, var(--palette-5));
+  --tint: color-mix(in srgb, var(--palette-4) 60%, var(--palette-5));
+  --line: color-mix(in srgb, var(--palette-2) 65%, var(--palette-4));
+  --glass-border: var(--line);
+  --brand-bg: var(--palette-1);
+  --brand-end: color-mix(in srgb, var(--palette-1) 85%, var(--palette-2));
+  --on-brand: var(--palette-5);
+  --on-brand-muted: var(--palette-4);
+  --button-bg: var(--palette-1);
+  --button-text: var(--palette-5);
+  --accent: var(--palette-3);
+  --shadow-color: color-mix(in srgb, var(--palette-1) 12%, transparent);
+  --highlight-color: color-mix(in srgb, var(--palette-5) 20%, transparent);
+  --surface-raised: var(--white);
+  --surface-shadow: 0 8px 28px var(--shadow-color);
+  --surface-brand: linear-gradient(130deg, var(--brand-bg), var(--brand-end));
+  --success: #17632e;
+  --success-bg: #e2f5e9;
+  --danger: #a12536;
+  --danger-bg: #ffe8eb;
+  --warning: #815000;
+  --warning-bg: #fff2df;
+  --green: var(--success);
+  --coral: var(--danger);
+  --surface: var(--white);
+  --border: var(--line);
+  --color-marcon-navy: var(--ink);
+  --color-marcon-blue: var(--blue);
+  --color-marcon-subtle: var(--subtle);
+  --color-marcon-line: var(--line);
+  --color-marcon-canvas: var(--canvas);
+  --color-marcon-green: var(--success);
+  --color-marcon-coral: var(--danger);
+  --color-marcon-bright: var(--bright);
+  --color-marcon-muted: var(--muted);
+  --color-marcon-danger: var(--danger);
+  --color-marcon-success: var(--success);
+  --color-marcon-white: var(--white);
+  --chart-1: var(--blue);
+  --chart-2: var(--palette-2);
+  --chart-3: var(--palette-3);
+  --chart-4: color-mix(in srgb, var(--palette-1) 70%, var(--palette-3));
+  --chart-5: color-mix(in srgb, var(--palette-2) 70%, var(--palette-4));
+  --chart-6: color-mix(in srgb, var(--palette-1) 50%, var(--palette-2));
+}
+
+:root[data-theme="dark"] {
+  --lightningcss-light: ;
+  --lightningcss-dark: initial;
+  color-scheme: dark;
+  --palette-1: #192338;
+  --palette-2: #1e2f4f;
+  --palette-3: #31487a;
+  --palette-4: #8fb3e2;
+  --palette-5: #d9e1f1;
+  --blue: var(--palette-4);
+  --bright: var(--palette-4);
+  --ink: var(--palette-5);
+  --subtle: color-mix(in srgb, var(--palette-5) 75%, var(--palette-4));
+  --white: var(--palette-2);
+  --canvas: var(--palette-1);
+  --tint: color-mix(in srgb, var(--palette-3) 55%, var(--palette-2));
+  --line: color-mix(in srgb, var(--palette-4) 55%, var(--palette-3));
+  --brand-bg: var(--palette-2);
+  --brand-end: var(--palette-3);
+  --on-brand: var(--palette-5);
+  --on-brand-muted: var(--subtle);
+  --button-bg: var(--palette-4);
+  --button-text: var(--palette-1);
+  --accent: var(--palette-4);
+  --shadow-color: color-mix(in srgb, var(--palette-1) 45%, transparent);
+  --highlight-color: color-mix(in srgb, var(--palette-5) 12%, transparent);
+  --success: #a1edbd;
+  --success-bg: #1d4439;
+  --danger: #ffc4cc;
+  --danger-bg: #572c3a;
+  --warning: #f5d69a;
+  --warning-bg: #4b3c25;
+  --chart-2: color-mix(in srgb, var(--palette-4) 75%, var(--palette-3));
+  --chart-3: var(--palette-5);
+  --chart-4: color-mix(in srgb, var(--palette-4) 45%, var(--palette-3));
+  --chart-5: color-mix(in srgb, var(--palette-5) 65%, var(--palette-3));
+  --chart-6: color-mix(in srgb, var(--palette-4) 65%, var(--palette-5));
+}
+
+html {
+  background: var(--canvas);
+}
+
+body {
+  background: var(--canvas);
+  color: var(--ink);
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--palette-1);
+}
+
+input, select, textarea {
+  accent-color: var(--blue);
+}
+
+input::placeholder, textarea::placeholder {
+  color: var(--subtle);
+  opacity: 1;
+}
+
+:is(button, a, input, select, textarea, summary):focus-visible {
+  outline: 3px solid var(--bright);
+  outline-offset: 3px;
+}
+
+.theme-toggle {
+  border: 1px solid var(--line);
+  background: var(--tint);
+  min-height: 44px;
+  color: var(--ink);
+  border-radius: 10px;
+  flex-shrink: 0;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  font-weight: 600;
+  display: inline-flex;
+}
+
+.theme-toggle-track {
+  background: var(--brand-bg);
+  width: 50px;
+  height: 26px;
+  color: var(--on-brand);
+  border-radius: 20px;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 5px;
+  display: flex;
+  position: relative;
+}
+
+.theme-toggle-track i {
+  background: var(--on-brand);
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  transition: transform .18s;
+  position: absolute;
+  top: 3px;
+  left: 3px;
+}
+
+.theme-toggle[aria-pressed="true"] .theme-toggle-track i {
+  transform: translateX(24px);
+}
+
+.topbar .theme-toggle {
+  border-color: var(--on-brand-muted);
+  background: var(--brand-end);
+  color: var(--on-brand);
+}
+
+.role-control .theme-toggle-track {
+  display: flex;
+}
+
+.content > .heading :is(p, .kicker) {
+  color: var(--on-brand-muted) !important;
+}
+
+@media (max-width: 600px) {
+  .theme-toggle > span:last-child {
+    display: none;
+  }
+
+  .theme-toggle {
+    padding-inline: 6px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .theme-toggle-track i {
+    transition: none;
+  }
+}
+
+/*# sourceMappingURL=app_theme_css_1igg3k2._.single.css.map*/

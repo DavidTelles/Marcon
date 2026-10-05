@@ -12,10 +12,11 @@ function wrap(error) {
 }
 
 function assertCanView(actor, request) {
-  if (request.status === 'Entregue') return;
   if (actor.role === 'admin' || actor.role === 'almoxarifado') return;
   if (actor.role === 'lider') {
-    if (request.block_name !== actor.block) throw new AppError(403, 'Líder só visualiza requisições do próprio bloco');
+    if (!Number.isSafeInteger(Number(actor.blockId)) || Number(actor.blockId) < 1)
+      throw new AppError(403, 'Configure o vínculo do líder com um bloco antes de consultar requisições');
+    if (Number(request.block_id) !== Number(actor.blockId)) throw new AppError(403, 'Líder só visualiza requisições do bloco autorizado');
     return;
   }
   if (request.requester_code !== actor.employeeNo) throw new AppError(403, 'Operação não permitida');
@@ -59,9 +60,16 @@ async function createRequest(actor, payload) {
 }
 
 async function list(actor, filters = {}) {
-  if (actor.role === 'funcionario') filters.requester_id = actor.dbId;
-  else if (actor.role === 'lider') filters.block = actor.block;
-  return requestRepository.list(filters);
+  const scoped = { ...filters };
+  if (actor.role === 'funcionario') scoped.requester_id = actor.dbId;
+  else if (actor.role === 'lider') {
+    if (!Number.isSafeInteger(Number(actor.blockId)) || Number(actor.blockId) < 1)
+      throw new AppError(403, 'Configure o vínculo do líder com um bloco antes de consultar requisições');
+    if (scoped.block && scoped.block !== actor.block) throw new AppError(403, 'Bloco fora do seu escopo');
+    delete scoped.block;
+    scoped.block_id = Number(actor.blockId);
+  }
+  return requestRepository.list(scoped);
 }
 
 async function edit(actor, id, payload) {
@@ -77,7 +85,9 @@ async function edit(actor, id, payload) {
 }
 
 async function remove(actor, id) {
-  await getById(actor, id);
+  const request = await getById(actor, id);
+  if (actor.role === 'almoxarifado' && request.requester_code !== actor.employeeNo)
+    throw new AppError(403, 'Almoxarife não pode excluir requisições de terceiros');
   try {
     await executeWorkspaceAction(actor, { type: 'deleteRequest', id: Number(id) });
   } catch (error) {
@@ -176,8 +186,7 @@ async function pickup(actor, id, payload, confirm = false) {
   } catch (error) { throw wrap(error); }
 }
 async function history(actor, filters = {}) {
-  void actor;
-  return requestRepository.list({ ...filters, requester_id: undefined, status: 'Entregue', statuses: undefined });
+  return list(actor, { ...filters, status: 'Entregue', statuses: undefined });
 }
 
 module.exports = { createRequest, list, history, getById, edit, remove, transition, returnItems, pickup };

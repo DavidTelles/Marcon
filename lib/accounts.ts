@@ -9,6 +9,7 @@ export type Account = {
   role: AccountRole;
   label: string;
   block?: string;
+  blockId?: number;
   sector?: string;
   permissionOverrides?: Record<string, boolean>;
 };
@@ -19,6 +20,7 @@ type AccountRow = RowDataPacket & {
   role: AccountRole;
   sector: string;
   block: string | null;
+  block_id: number | null;
   password_hash: string;
   active: number;
 };
@@ -36,6 +38,7 @@ function accountFromRow(row: AccountRow): Account {
     role: row.role,
     label: labels[row.role],
     block: row.block ?? undefined,
+    blockId: row.block_id == null ? undefined : Number(row.block_id),
     sector: row.sector,
   };
 }
@@ -53,7 +56,7 @@ async function withOverrides(row: AccountRow): Promise<Account> {
 }
 export async function accountByIdentity(identity: string) {
   const [rows] = await getPool().execute<AccountRow[]>(
-    "SELECT u.employee_no, u.name, u.email, u.role, u.sector, u.password_hash, u.active, b.name AS block FROM users u LEFT JOIN blocks b ON b.id = u.block_id WHERE u.employee_no = ? OR u.email = ? LIMIT 1",
+    "SELECT u.employee_no, u.name, u.email, u.role, u.sector, u.block_id, u.password_hash, u.active, b.name AS block FROM users u LEFT JOIN blocks b ON b.id = u.block_id WHERE u.employee_no = ? OR u.email = ? LIMIT 1",
     [identity, identity],
   );
   const row = rows[0];
@@ -63,7 +66,7 @@ export async function accountByIdentity(identity: string) {
 }
 export async function accountByEmployeeNo(id: string): Promise<Account | null> {
   const [rows] = await getPool().execute<AccountRow[]>(
-    "SELECT u.employee_no, u.name, u.email, u.role, u.sector, u.password_hash, u.active, b.name AS block FROM users u LEFT JOIN blocks b ON b.id = u.block_id WHERE u.employee_no = ? LIMIT 1",
+    "SELECT u.employee_no, u.name, u.email, u.role, u.sector, u.block_id, u.password_hash, u.active, b.name AS block FROM users u LEFT JOIN blocks b ON b.id = u.block_id WHERE u.employee_no = ? LIMIT 1",
     [id],
   );
   return rows[0]?.active ? withOverrides(rows[0]) : null;
