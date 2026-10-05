@@ -808,7 +808,7 @@ export default function Workspace({
           {page === "mapa" && <MapEditor />}
           {page === "materiais" && role === "lider" && <MaterialsScreen />}
           {persistent && ["requisicoes", "solicitacoes", "historico"].includes(page) && <RequestWorkflowScreen role={role} history={page === "historico"} />}
-          {["pecas", "por-peca"].includes(page) && <PartsConsumptionScreen key={`${page}:${searchParams.get("code") ?? ""}`} role={role} mode={page === "pecas" ? "comparison" : "share"} initialCode={searchParams.get("code") ?? undefined} />}
+          {["pecas", "por-peca"].includes(page) && <PartsConsumptionScreen key={`${page}:${searchParams.toString()}`} role={role} mode={page === "pecas" ? "comparison" : "share"} initialCode={searchParams.get("code") ?? undefined} />}
           {persistent &&
             [
               "dashboard",

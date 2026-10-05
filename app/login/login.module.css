@@ -492,10 +492,16 @@
   padding-right: 52px;
 }
 
+.passwordInput::-ms-reveal,
+.passwordInput::-ms-clear {
+  display: none;
+}
+
 .revealButton {
   position: absolute;
-  top: 5px;
+  top: 50%;
   right: 5px;
+  transform: translateY(-50%);
   display: grid;
   place-items: center;
   width: 44px;
@@ -503,7 +509,30 @@
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: var(--muted);
+  color: var(--blue);
+  cursor: pointer;
+  transition: background 160ms ease;
+}
+
+.revealButton:hover {
+  background: color-mix(in srgb, var(--blue) 8%, transparent);
+}
+
+.revealButton:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 1px;
+}
+
+.revealButton > svg {
+  transition: transform 160ms ease;
+}
+
+.revealButton:hover > svg {
+  transform: scale(1.12);
+}
+
+.revealButton:active > svg {
+  transform: scale(0.9);
 }
 
 .primaryButton,
@@ -858,6 +887,10 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
+  .revealButton > svg {
+    animation: password-eye-blink 240ms ease-out;
+  }
+
   .formContainer {
     animation: enter 500ms ease-out both;
   }
@@ -935,5 +968,19 @@
 @keyframes spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@keyframes password-eye-blink {
+  0% {
+    opacity: 0.4;
+    transform: scaleY(0.2);
+  }
+  65% {
+    opacity: 1;
+    transform: scaleY(1.1);
+  }
+  100% {
+    transform: scaleY(1);
   }
 }

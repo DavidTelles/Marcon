@@ -7,6 +7,7 @@ export function InsightChart({
   unit = "registros",
   onSelect,
   className = "",
+  variant = "ring",
 }: {
   title: string;
   description: string;
@@ -14,6 +15,7 @@ export function InsightChart({
   unit?: string;
   onSelect?: (label: string) => void;
   className?: string;
+  variant?: "ring" | "bars";
 }) {
   const safeRows = rows.map((row) => ({
     ...row,
@@ -29,7 +31,7 @@ export function InsightChart({
   const segments = safeRows.map((row, index) => {
     const start = angle;
     angle += total ? (row.value / total) * 360 : 0;
-    return `${row.color ?? `var(--chart-${index % 6 + 1})`} ${start}deg ${angle}deg`;
+    return `${row.color ?? `var(--chart-${(index % 6) + 1})`} ${start}deg ${angle}deg`;
   });
   return (
     <section className={`insight-chart panel ${className}`} aria-label={title}>
@@ -39,23 +41,32 @@ export function InsightChart({
           <p>{description}</p>
         </div>
       </div>
-      <div className="insight-chart-body">
-        <div className="insight-ring-wrap">
-          <div
-            className="insight-ring"
-            style={{
-              background: total
-                ? `conic-gradient(${segments.join(", ")})`
-                : "var(--line)",
-            }}
-            aria-hidden="true"
-          >
-            <div className="insight-ring-center">
-              <strong>{total.toLocaleString("pt-BR")}</strong>
-              <span>{unit}</span>
+      <div
+        className="insight-chart-body"
+        style={
+          variant === "bars"
+            ? { gridTemplateColumns: "minmax(0, 1fr)" }
+            : undefined
+        }
+      >
+        {variant === "ring" && (
+          <div className="insight-ring-wrap">
+            <div
+              className="insight-ring"
+              style={{
+                background: total
+                  ? `conic-gradient(${segments.join(", ")})`
+                  : "var(--line)",
+              }}
+              aria-hidden="true"
+            >
+              <div className="insight-ring-center">
+                <strong>{total.toLocaleString("pt-BR")}</strong>
+                <span>{unit}</span>
+              </div>
             </div>
           </div>
-        </div>
+        )}
         <div className="insight-breakdown" role="list">
           {safeRows.map((row, index) => (
             <div className="insight-row" role="listitem" key={row.label}>
@@ -68,7 +79,10 @@ export function InsightChart({
                   >
                     <span
                       className="insight-dot"
-                      style={{ background: row.color ?? `var(--chart-${index % 6 + 1})` }}
+                      style={{
+                        background:
+                          row.color ?? `var(--chart-${(index % 6) + 1})`,
+                      }}
                       aria-hidden="true"
                     />
                     <span>{row.label}</span>
@@ -81,7 +95,7 @@ export function InsightChart({
                       className="insight-dot"
                       style={{
                         background:
-                          row.color ?? `var(--chart-${index % 6 + 1})`,
+                          row.color ?? `var(--chart-${(index % 6) + 1})`,
                       }}
                     />{" "}
                     <span>{row.label}</span>
@@ -89,21 +103,49 @@ export function InsightChart({
                   </>
                 )}
               </div>
-              <div className="insight-track">
+              <div
+                className="insight-track"
+                role={variant === "bars" && onSelect ? "button" : undefined}
+                tabIndex={variant === "bars" && onSelect ? 0 : undefined}
+                aria-label={
+                  variant === "bars" && onSelect
+                    ? `Ver registros de ${row.label}`
+                    : undefined
+                }
+                onClick={
+                  variant === "bars" && onSelect
+                    ? () => onSelect(row.label)
+                    : undefined
+                }
+                onKeyDown={
+                  variant === "bars" && onSelect
+                    ? (event) => {
+                        if (["Enter", " "].includes(event.key)) {
+                          event.preventDefault();
+                          onSelect(row.label);
+                        }
+                      }
+                    : undefined
+                }
+              >
                 <span
                   style={{
                     width: `${(row.value / max) * 100}%`,
-                    background:
-                      row.color ?? `var(--chart-${index % 6 + 1})`,
+                    ...(variant === "bars"
+                      ? { animation: "none", boxShadow: "none" }
+                      : {}),
+                    background: row.color ?? `var(--chart-${(index % 6) + 1})`,
                   }}
                 />
               </div>
             </div>
           ))}
           <p className="insight-explainer">
-            {total === 0
-              ? "Ainda não há dados para comparar."
-              : `Total: ${total.toLocaleString("pt-BR")} ${unit}. Maior quantidade por grupo: ${leader?.value.toLocaleString("pt-BR")}.`}
+            {variant === "bars"
+              ? `Escala: 0 a ${max.toLocaleString("pt-BR")} ${unit}. Clique em um material ou bloco para ver os registros.`
+              : total === 0
+                ? "Ainda não há dados para comparar."
+                : `Total: ${total.toLocaleString("pt-BR")} ${unit}. Maior quantidade por grupo: ${leader?.value.toLocaleString("pt-BR")}.`}
           </p>
         </div>
       </div>

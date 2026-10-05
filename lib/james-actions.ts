@@ -4,6 +4,11 @@ import { ActionError, can, demand, integer } from "./permissions";
 import { workspaceSnapshot } from "./workspace-db";
 import { executeWorkspaceAction } from "./workspace-actions";
 import { dashboardReport } from "./dashboard-report";
+import { apiToken, backendFetch } from "./backend-client";
+import {
+  isPartsConsumptionReport,
+  PARTS_REPORT_INCOMPATIBLE,
+} from "./parts-consumption-contract";
 import { jamesPlan, type JamesStep } from "./james-model";
 import { explicitCartPlan, quantityWords } from "./james-commands";
 import {
@@ -977,6 +982,82 @@ export async function converseJames(
           : user.role === "lider"
             ? "bloco"
             : "geral");
+      if (["pecas", "por-peca"].includes(view)) {
+        const query = new URLSearchParams(step.filters);
+        const report = await backendFetch<unknown>(
+          "/api/parts/consumption?" + query,
+          { token: await apiToken() },
+        );
+        if (!isPartsConsumptionReport(report))
+          throw new ActionError(PARTS_REPORT_INCOMPATIBLE, 503);
+        reportState = {
+          view,
+          action: "dashboard",
+          filters: {
+            ...step.filters,
+            from: report.period.from,
+            to: report.period.to,
+            unit: report.filters.unit,
+          },
+        };
+        const metrics = [
+          {
+            id: "delivered",
+            label: "Quantidade entregue",
+            value: report.total.quantity,
+            unit: report.filters.unit,
+            definition:
+              "Baixas vinculadas a pedidos com entrega confirmada, pela data UTC da entrega.",
+          },
+          {
+            id: "withdrawals",
+            label: "Retiradas distintas",
+            value: report.total.withdrawals,
+            unit: "pedidos",
+            definition:
+              "Pedidos distintos; várias linhas da mesma retirada contam uma vez.",
+          },
+        ];
+        dashboard = {
+          scope: report.scope,
+          period: `${report.period.from} a ${report.period.to} (UTC)`,
+          metrics,
+          updatedAt: report.generatedAt,
+        };
+        if (view === "por-peca" && !report.filters.code)
+          replies.push(
+            "Selecione um material: diga filtre por código seguido do código da peça.",
+          );
+        else
+          replies.push(
+            `${metrics.map((m) => `${m.label}: ${m.value} ${m.unit}`).join(". ")}. ${report.participation} ${report.items
+              .slice(0, 5)
+              .map(
+                (p) =>
+                  `${p.code}: ${p.quantity} ${p.unit}; diferença ${p.difference}; ${p.change === null ? "sem base percentual" : `${p.change}%`}`,
+              )
+              .join("; ")}. Consumo efetivo não medido.`,
+          );
+        const prefix =
+          user.role === "admin" ? "/admin/dashboard" : "/warehouse/dashboard";
+        href = `${prefix}/${view === "pecas" ? "parts" : "by-part"}?${new URLSearchParams(reportState.filters)}`;
+        hrefLabel = "Abrir " + (view === "pecas" ? "Peça" : "Por Peça");
+        if (step.action === "export") {
+          if (!step.format)
+            throw new ActionError("Escolha PDF ou planilha.", 422);
+          exportHref =
+            "/api/parts-consumption?" +
+            new URLSearchParams({
+              ...reportState.filters,
+              format: step.format,
+              export: "all",
+            });
+          replies.push(
+            "Exportação de todos os resultados agregados filtrados, com as mesmas permissões.",
+          );
+        }
+        continue;
+      }
       if (["compra", "recomendacoes"].includes(view)) demand(user, "planning");
       const reportQuery = new URLSearchParams({
         ...step.filters,

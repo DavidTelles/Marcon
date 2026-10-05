@@ -1,7 +1,7 @@
 const { proportionalCoverage, suggestTransfers } = require('../../src/workspace/forecast');
 const { accessibleWarehousesForBlock } = require('../../src/workspace/distribution-location');
 const { deliveryTargets, graphProblems } = require('../../src/workspace/routing');
-const { consumptionSummary } = require('../../src/workspace/parts-consumption');
+const { variation } = require('../../src/workspace/parts-consumption');
 
 const graph = {
   width: 100, height: 100, metersPerPixel: 1, scaleCalibrated: true, reviewed: true, walls: [],
@@ -43,15 +43,8 @@ test('a sugestão respeita a capacidade física e o saldo protegido', () => {
   const balanced = proportionalCoverage(targets(), () => true); balanced[0].capacity = 20;
   expect(suggestTransfers(balanced, () => 1)[0].quantity).toBe(20);
 });
-test('consumo por bloco e setor desconta devoluções e compara apenas o período selecionado', () => {
-  const common = { code: 'PAR', name: 'Parafuso', unit: 'un', requester: '1001', person: 'Ana', deliveredAt: '2026-10-02', sector: 'Usinagem' };
-  const rows = [
-    { ...common, id: 1, block: 'A', quantity: 100, returned: 20 },
-    { ...common, id: 2, block: 'C', quantity: 20, returned: 0 },
-    { ...common, id: 3, block: 'A', quantity: 999, returned: 0, deliveredAt: '2026-09-01' },
-  ];
-  const report = consumptionSummary(rows, '2026-10-01', '2026-10-04');
-  expect(report.blocks.map(block => [block.label, block.quantity, block.percentage])).toEqual([['A', 80, 80], ['C', 20, 20]]);
-  expect(report.parts[0].quantity).toBe(100);
-  expect(report.requests).toBe(2);
+test('entregas sem período anterior positivo não recebem percentual arbitrário', () => {
+  expect(variation(100, 0)).toEqual({ difference: 100, change: null });
+  expect(variation(0, 0)).toEqual({ difference: 0, change: null });
+  expect(variation(80, 100)).toEqual({ difference: -20, change: -20 });
 });

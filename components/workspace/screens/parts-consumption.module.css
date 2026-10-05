@@ -1,0 +1,207 @@
+.root {
+  min-width: 0;
+}
+.root :global(.insight-row .insight-choice) {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+.root :global(.insight-row .insight-choice) > span:nth-child(2) {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.tabs,
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0;
+}
+.tabs a {
+  padding: 12px 18px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--blue);
+}
+.tabs a[aria-current="page"] {
+  color: var(--button-text);
+  background: var(--button-bg);
+}
+.filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 205px), 1fr));
+  gap: 14px;
+  padding: 20px;
+}
+.filters label,
+.details > label {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+}
+.filters input,
+.filters select,
+.details input[type="number"] {
+  width: 100%;
+  min-height: 42px;
+  padding: 10px;
+  color: var(--ink);
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.root > section > .actions {
+  padding: 0 20px 16px;
+}
+.actions span,
+.context {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.actions a {
+  white-space: nowrap;
+}
+.summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin: 20px 0;
+}
+.summary > div {
+  display: grid;
+  gap: 10px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--white);
+}
+.summary strong {
+  color: var(--blue);
+  font-size: clamp(26px, 4vw, 36px);
+  font-variant-numeric: tabular-nums;
+}
+.summary small {
+  overflow-wrap: anywhere;
+}
+.scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.scroll table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.scroll caption {
+  text-align: left;
+  padding: 12px 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.scroll th,
+.scroll td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.scroll th {
+  color: var(--blue);
+}
+.scroll small {
+  display: block;
+  margin-top: 5px;
+}
+.scroll tbody tr[tabindex] {
+  cursor: pointer;
+}
+.scroll tbody tr[tabindex]:hover {
+  background: var(--tint);
+}
+.textButton {
+  padding: 8px 0;
+  min-height: 40px;
+  background: transparent;
+  color: var(--blue);
+  border: 0;
+  text-decoration: underline;
+  cursor: pointer;
+  text-align: left;
+}
+.details {
+  margin-top: 16px;
+}
+.details summary {
+  cursor: pointer;
+  font-weight: 600;
+  min-height: 32px;
+}
+.details p {
+  line-height: 1.7;
+  font-size: 13px;
+}
+.quality {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+.alert {
+  border-left: 3px solid var(--blue);
+  padding: 12px;
+  background: var(--tint);
+}
+.series {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 16px 0;
+  max-height: 150px;
+  overflow-y: auto;
+}
+.series label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 13px;
+}
+.series input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  min-height: 16px;
+  flex: none;
+}
+.origins {
+  margin: 20px 0;
+  border: 2px solid var(--blue);
+}
+.root :focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 3px;
+}
+@media (max-width: 600px) {
+  .root :global(.panel-head) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .summary {
+    grid-template-columns: 1fr;
+  }
+  .filters {
+    padding: 14px;
+  }
+  .scroll th,
+  .scroll td {
+    padding: 10px;
+  }
+}

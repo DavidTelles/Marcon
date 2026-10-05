@@ -8,6 +8,8 @@ export type JamesReportContext = {
   filters: Record<string, string>;
 };
 const views = [
+  "pecas",
+  "por-peca",
   "geral",
   "bloco",
   "estoque",
@@ -16,9 +18,14 @@ const views = [
   "recomendacoes",
 ];
 const fields = [
+  "unit",
+  "group",
+  "threshold",
+  "limit",
   "from",
   "to",
   "block",
+  "blocks",
   "code",
   "warehouse",
   "status",
@@ -49,6 +56,18 @@ export function explicitReportPlan(
   context?: JamesReportContext,
 ): JamesStep[] | undefined {
   const text = commandText(message);
+  if (
+    /^(?:leia|mostre|consulte|abra|acesse) (?:o |a )?dashboard (?:de )?pecas?$/.test(
+      text,
+    )
+  )
+    return [{ action: "dashboard", view: "pecas" }];
+  if (
+    /^(?:leia|mostre|consulte|abra|acesse) (?:o |a )?dashboard por peca$/.test(
+      text,
+    )
+  )
+    return [{ action: "dashboard", view: "por-peca" }];
   const nav = text.match(
     /^(?:abra|acesse) (?:o |a |as |os )?(catalogo|estoque|requisicoes|transferencias|rotas|recomendacoes|compra|mapa|perfil|historico|funcionarios|devolucoes|dashboard)$/,
   );
@@ -83,7 +102,7 @@ export function explicitReportPlan(
     const filter = message
       .trim()
       .match(
-        /^filtre por (status|bloco|c[oó]digo|almoxarifado|urg[eê]ncia)\s+(.+)$/i,
+        /^filtre por (status|bloco|c[oó]digo|almoxarifado|urg[eê]ncia|unidade|grupo)\s+(.+)$/i,
       );
     const format = text.match(/^(?:exporte|exportar)(?: em)? (pdf|planilha)$/);
     if (format)
@@ -99,6 +118,14 @@ export function explicitReportPlan(
     else if (period)
       filters = { ...filters, from: period[1], to: period[2], page: "1" };
     else if (filter) {
+      if (
+        ["pecas", "por-peca"].includes(context.view) &&
+        ["status", "urgencia"].includes(commandText(filter[1]))
+      )
+        throw new ActionError(
+          "Estas dashboards comparam entregas confirmadas. Use período, código, bloco, unidade, grupo ou almoxarifado.",
+          422,
+        );
       const key = (
         {
           status: "status",
@@ -106,6 +133,8 @@ export function explicitReportPlan(
           codigo: "code",
           almoxarifado: "warehouse",
           urgencia: "priority",
+          unidade: "unit",
+          grupo: "group",
         } as Record<string, string>
       )[commandText(filter[1])];
       const raw = filter[2].replace(/[.!]$/, "");
@@ -120,6 +149,8 @@ export function explicitReportPlan(
         "Urgente",
       ].find((v) => commandText(v) === commandText(raw));
       filters = { ...filters, [key]: canonical || raw, page: "1" };
+      if (["pecas", "por-peca"].includes(context.view) && key === "code")
+        delete filters.unit;
     } else return;
   }
   return [{ action: context.action, view: context.view, filters }];

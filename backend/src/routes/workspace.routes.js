@@ -10,7 +10,7 @@ const asyncHandler = require('../utils/asyncHandler');
 const router = express.Router();
 const actionLimiter = rateLimit({ windowMs: 60 * 1000, max: 240, standardHeaders: true });
 router.get('/api/parts/consumption', authenticate, asyncHandler(async (req, res) => {
-  try { res.json(await partsConsumption(req.user, new URLSearchParams(req.query))); }
+  try { res.set('Cache-Control', 'no-store'); res.json(await partsConsumption(req.user, new URLSearchParams(req.query))); }
   catch (error) { if (error instanceof ActionError) throw new AppError(error.status, error.message); throw error; }
 }));
 
