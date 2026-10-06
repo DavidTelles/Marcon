@@ -8,6 +8,7 @@
 } from "lucide-react";
 import type { Part } from "@/lib/demo-data";
 import styles from "@/app/catalogo/catalog.module.css";
+import { ProductPhoto } from "./product-photo";
 
 const icons: Record<string, LucideIcon> = {
   "ROL-6205-ZZ": Disc3,
@@ -29,14 +30,9 @@ export function PartArt({
   return (
     <div
       className={`${styles.itemArt} ${large ? styles.largeArt : ""} ${artTone}`}
-      aria-label={`Peça ${part.name}`}
-      role="img"
     >
       {part.image ? (
-        <div
-          className={styles.employeePartPhoto}
-          style={{ backgroundImage: `url("${part.image}")` }}
-        />
+        <ProductPhoto src={part.image} name={part.name} />
       ) : (
         <>
           <div className={styles.artGrid} />

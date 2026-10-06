@@ -59,6 +59,8 @@ O cadastro e o login facial hospedados chamam o serviço Python autenticado de `
 
 ## Comandos
 
+O catálogo inclui fotografias de produto locais e oito peças adicionais. Execute `npm run catalog:sync` para importar os cadastros no banco configurado, sem alterar saldos existentes. Consulte [fotos, peças e validação](docs/catalog-photos.md).
+
 - `npm run dev`: inicia Next.js; também inicia Express quando `BACKEND_URL` aponta para o servidor local.
 - `npm run dev:next`: inicia só o Next.js.
 - `npm run dev:api`: inicia só o Express.

@@ -1,5 +1,6 @@
 ﻿"use client";
 import { useEffect, useRef } from "react";
+import { useScrollLock } from "../use-scroll-lock";
 export function DashboardDialog({
   open,
   title,
@@ -14,6 +15,7 @@ export function DashboardDialog({
   compact?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  useScrollLock(open);
   useEffect(() => {
     if (!open) return;
     const viewport = window.visualViewport;

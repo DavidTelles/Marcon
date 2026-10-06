@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { BrandLogo } from "@/app/components/brand-logo";
 import { useDemoStore } from "./demo-store";
+import { useScrollLock } from "./use-scroll-lock";
 import { useEmployeeName, useEmployeeBlock } from "./employee-identity";
 import { badge } from "./ui";
 import { can } from "@/lib/permissions";
@@ -97,7 +98,8 @@ const roles: Record<
     name: "Funcionário",
     pages: [
       { id: "nova", label: "Fazer requisição" },
-      { id: "historico", label: "Histórico geral" },
+      { id: "requisicoes", label: "Meus pedidos" },
+      { id: "historico", label: "Meu histórico" },
     ],
   },
 };
@@ -184,6 +186,7 @@ export default function Workspace({
     runAction,
   } = useDemoStore();
   const [detail, setDetail] = useState<Request | null>(null);
+  useScrollLock(Boolean(detail));
   const [qrCode, setQrCode] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("Todas");

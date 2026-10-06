@@ -986,6 +986,13 @@ try {
     "Catalog initialization persists legacy users, sectors and logical workplaces; preserves physical snapshots and balances; repeat is idempotent",
   );
   if (process.argv.includes("--ui") || process.argv.includes("--marco")) {
+    let catalogFixture;
+    if (process.argv.includes("--catalog")) {
+      const { prepareCatalogFixture } = await import("./catalog-flow-checks.mjs");
+      catalogFixture = await prepareCatalogFixture(domainDb);
+      await mkdir(".validation/catalog", { recursive: true });
+      check("Catalog imports verified photos and new parts with zero stock; repeat is idempotent and preserves custom photos and existing balances");
+    }
     if (process.argv.includes("--face")) facialFixture = await startFacialFixtureService();
     if (!process.argv.includes("--embedded")) {
       apiServer = app.listen(0, "127.0.0.1");
@@ -1051,6 +1058,11 @@ try {
       });
       assert.equal(login.status(), 200, await login.text());
       console.log("UI: signed login OK");
+      if (catalogFixture) {
+        const { checkCatalogWorkflow } = await import("./catalog-flow-checks.mjs");
+        await checkCatalogWorkflow({ browser, origin, password: testPassword, adminRequest: page.request, sql, items: catalogFixture, warehouse: "Test near warehouse", warehouseId: near });
+        check("Catalog browser loads all product photos, filters stock, resolves details and saves a request for a new part after an audited entry; mobile layout fits");
+      }
       if (facialFixture) {
         const { FACE_MODEL, FACE_CONSENT } = require("../lib/face-policy.ts");
         await checkFacialWorkflow({ page, browser, origin, password: testPassword, sql, model: FACE_MODEL, consent: FACE_CONSENT });
@@ -1310,6 +1322,6 @@ await writeFile(
   JSON.stringify(evidence, null, 2),
 );
 await writeFile(
-  `.validation/integrated-logistics/evidence-${process.argv.includes("--face") ? "facial" : "serverless"}.json`,
+  `.validation/integrated-logistics/evidence-${process.argv.includes("--catalog") ? "catalog" : process.argv.includes("--face") ? "facial" : "serverless"}.json`,
   JSON.stringify(evidence, null, 2),
 );

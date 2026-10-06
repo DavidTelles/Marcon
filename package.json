@@ -3,6 +3,7 @@
   "version": "2.0.0",
   "private": true,
   "scripts": {
+    "catalog:sync": "node scripts/sync-parts-catalog.mjs",
     "check:hosting": "node scripts/check-hosting.mjs",
     "check:face": "node scripts/check-face-service.mjs",
     "test:face:http": "node scripts/test-face-http.mjs",

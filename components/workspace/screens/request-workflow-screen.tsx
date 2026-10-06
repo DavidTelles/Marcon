@@ -23,7 +23,10 @@ export function RequestWorkflowScreen({
   const [block, setBlock] = useState("");
   const [warehouse, setWarehouse] = useState("");
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const rows = requests.filter((r) =>
+  const scopedRequests = requests.filter(
+    (r) => role !== "funcionario" || (Boolean(accountId) && r.requesterId === accountId),
+  );
+  const rows = scopedRequests.filter((r) =>
     history
       ? r.status === "Entregue"
       : role === "almoxarifado"
@@ -56,9 +59,11 @@ export function RequestWorkflowScreen({
         : { Urgente: 0, Moderado: 1, Leve: 2 }[a.priority] -
             { Urgente: 0, Moderado: 1, Leve: 2 }[b.priority] || b.id - a.id,
     );
-  const selected = requests.find((r) => r.id === selectedId);
+  const selected = scopedRequests.find((r) => r.id === selectedId);
   const title = history
-    ? "Histórico geral de entregas"
+    ? role === "funcionario"
+      ? "Meu histórico"
+      : "Histórico geral de entregas"
     : role === "lider"
       ? "Solicitações do bloco"
       : role === "funcionario"
@@ -73,9 +78,13 @@ export function RequestWorkflowScreen({
           history ? "ENTREGAS CONCLUÍDAS" : "OPERAÇÃO",
           title,
           history
-            ? "Entregas concluídas de todos os blocos e locais. Use os filtros para consultar o atendimento."
+            ? role === "funcionario"
+              ? "Consulte as entregas concluídas dos seus pedidos."
+              : "Entregas concluídas de todos os blocos e locais. Use os filtros para consultar o atendimento."
             : role === "lider"
               ? "Analise o pedido, o padrão de consumo e a justificativa antes de aprovar ou rejeitar."
+              : role === "funcionario"
+                ? "Acompanhe seus pedidos, consulte os detalhes e confirme o recebimento das peças."
               : "Assuma o atendimento, confira a retirada e confirme a entrega no destino.",
         )
       )}
@@ -138,7 +147,7 @@ export function RequestWorkflowScreen({
             </select>
           </label>
           <span>{shown.length} pedidos</span>
-          {history && (
+          {history && role !== "funcionario" && (
             <>
               <label>
                 Bloco
@@ -277,7 +286,9 @@ export function RequestWorkflowScreen({
         {!shown.length && (
           <p className={styles.empty}>
             {history
-              ? "Nenhuma entrega concluída neste perfil."
+              ? role === "funcionario"
+                ? "Você ainda não tem entregas concluídas."
+                : "Nenhuma entrega concluída neste perfil."
               : "Nenhum pedido nesta situação."}
           </p>
         )}

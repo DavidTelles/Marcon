@@ -37,7 +37,7 @@ test("employee requests a stock part with confirmation, priority and justificati
   await page.getByRole("button", { name: "Confirmar requisição" }).click();
   await expect(page.getByRole("status")).toContainText("Requisição #");
   await page.getByRole("link", { name: "Ver minhas requisições" }).click();
-  await expect(page).toHaveURL("/employee/history");
+  await expect(page).toHaveURL("/employee/requests");
   await expect(page.getByText("Parafuso sextavado M12").first()).toBeVisible();
 });
 
@@ -57,7 +57,7 @@ test("employee adds a part to cart and confirms the request", async ({
   await page.reload();
   await expect(page.getByRole("heading", { name: /Carrinho · 1 item/ })).toBeVisible();
   await page.getByRole("button", { name: "Finalizar requisição" }).click();
-  await expect(page).toHaveURL("/employee/history");
+  await expect(page).toHaveURL("/employee/requests");
   await expect(page.getByText("Rolamento 6205 ZZ").first()).toBeVisible();
 });
 

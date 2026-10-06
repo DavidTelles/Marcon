@@ -49,7 +49,11 @@ export const pagePaths: Record<Role, Partial<Record<Page, string>>> = {
     recomendacoes: "/warehouse/recommendations",
     historico: "/warehouse/history",
   },
-  funcionario: { nova: "/employee/request", historico: "/employee/history" },
+  funcionario: {
+    nova: "/employee/request",
+    requisicoes: "/employee/requests",
+    historico: "/employee/history",
+  },
 };
 export function pathFor(role: Role, page: Page) {
   return pagePaths[role][page] ?? roleLanding[role];

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { currentUser } from "@/lib/auth";
-import { catalogItems } from "@/lib/catalog";
+import { catalogItems, catalogItemFromPart } from "@/lib/catalog";
 import { databaseEnabled } from "@/lib/db";
 import { workspaceSnapshot } from "@/lib/workspace-db";
 import { BackendError } from "@/lib/backend-client";
@@ -14,26 +14,25 @@ export async function GET() {
     );
   }
   try {
-  const items = databaseEnabled()
-    ? (await workspaceSnapshot(user)).stock.map((part) => ({
-        id: part.code,
-        name: part.name,
-        category: part.category,
-        stock: part.available ?? part.quantity,
-        unit: part.unit ?? "un",
-        location:
-          part.locations
-            ?.map((l) => `${l.warehouse} / ${l.aisle} / ${l.shelf}`)
-            .join("; ") ?? part.location,
-        description: part.description || part.name,
-        specification: [part.dimensions, part.material, `QR/ID ${part.qrCode ?? part.code}`].filter(Boolean).join(" · "),
-      }))
-    : catalogItems;
-  return NextResponse.json(
-    { items },
-    { headers: { "Cache-Control": "no-store" } },
-  );
+    const items = databaseEnabled()
+      ? (await workspaceSnapshot(user, true)).stock.map(catalogItemFromPart)
+      : catalogItems;
+    return NextResponse.json(
+      { items },
+      { headers: { "Cache-Control": "no-store" } },
+    );
   } catch (error) {
-    return NextResponse.json({ error: error instanceof BackendError ? error.message : "Catálogo indisponível. Tente atualizar." }, { status: error instanceof BackendError ? error.status : 503, headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json(
+      {
+        error:
+          error instanceof BackendError
+            ? error.message
+            : "Catálogo indisponível. Tente atualizar.",
+      },
+      {
+        status: error instanceof BackendError ? error.status : 503,
+        headers: { "Cache-Control": "no-store" },
+      },
+    );
   }
 }

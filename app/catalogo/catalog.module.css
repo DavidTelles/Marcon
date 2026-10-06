@@ -760,6 +760,27 @@
   color: var(--success);
   box-shadow: inset 0 1px var(--highlight-color), 0 8px 24px var(--shadow-color);
 }
+.requestSpinner {
+  flex-shrink: 0;
+  animation: request-spin 900ms linear infinite;
+}
+.requestProgress {
+  color: var(--subtle);
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 12px 0 0;
+}
+.requestForm button:disabled,
+.employeeCart button:disabled {
+  cursor: wait;
+  opacity: .7;
+}
+@keyframes request-spin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .requestSpinner { animation: none; }
+}
 .successCard strong {
   font-size: 16px;
 }
@@ -913,9 +934,26 @@
 .employeePartPhoto {
   position: absolute;
   inset: 0;
-  background-position: center;
-  background-size: cover;
+  background: #fff;
   border-radius: inherit;
+}
+.productPhoto {
+  object-fit: contain;
+  padding: 12px;
+}
+.photoUnavailable {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  color: #556070;
+  font-size: 13px;
+}
+.photoCredit {
+  display: inline-block;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
 }
 .employeeActions {
   display: flex;
@@ -936,6 +974,10 @@
   cursor: not-allowed;
 }
 .employeeFields {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;

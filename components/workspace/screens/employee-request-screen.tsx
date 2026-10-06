@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   ArrowRight,
   CheckCircle2,
+  LoaderCircle,
   MapPin,
   PackageSearch,
   Search,
@@ -19,10 +20,10 @@ import {
 import type { Part, Request } from "@/lib/demo-data";
 import { boxLabel } from "@/lib/packaging";
 import { requestAnomaly } from "@/lib/request-policy";
-import { RequestWorkflowScreen } from "./request-workflow-screen";
 import { useDemoStore } from "../demo-store";
 import { useEmployeeName, useEmployeeBlock } from "../employee-identity";
 import { PartArt } from "./part-art";
+import { PhotoCredit } from "./product-photo";
 import styles from "@/app/catalogo/catalog.module.css";
 
 type Mode = "request" | "cart" | null;
@@ -84,6 +85,8 @@ export function EmployeeRequestScreen({ routePart }: { routePart?: string }) {
   const [justification, setJustification] = useState("");
   const [error, setError] = useState("");
   const [createdId, setCreatedId] = useState<number | null>(null);
+  const [sending, setSending] = useState(false);
+  const sendingRef = useRef(false);
 
   const selectedPart =
     routePart && routePart !== "all"
@@ -140,7 +143,7 @@ export function EmployeeRequestScreen({ routePart }: { routePart?: string }) {
 
   async function submitItem(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!selectedPart || !mode) return;
+    if (!selectedPart || !mode || sendingRef.current) return;
     const requestedAmount = Number(quantity);
     const amount = unitsRequested;
     if (
@@ -187,6 +190,9 @@ export function EmployeeRequestScreen({ routePart }: { routePart?: string }) {
       return;
     }
     if (persistent) {
+      sendingRef.current = true;
+      setSending(true);
+      setError("");
       try {
         const result = await runAction({
           type: "createRequests",
@@ -208,6 +214,9 @@ export function EmployeeRequestScreen({ routePart }: { routePart?: string }) {
             ? error.message
             : "Não foi possível criar a requisição.",
         );
+      } finally {
+        sendingRef.current = false;
+        setSending(false);
       }
       return;
     }
@@ -229,7 +238,7 @@ export function EmployeeRequestScreen({ routePart }: { routePart?: string }) {
   }
 
   async function checkoutCart() {
-    if (!cart.length) return;
+    if (!cart.length || sendingRef.current) return;
     const totals = new Map<string, number>();
     for (const entry of cart) {
       totals.set(entry.code, (totals.get(entry.code) ?? 0) + entry.quantity);
@@ -257,6 +266,9 @@ export function EmployeeRequestScreen({ routePart }: { routePart?: string }) {
       }
     }
     if (persistent) {
+      sendingRef.current = true;
+      setSending(true);
+      setError("");
       try {
         await runAction({
           type: "createRequests",
@@ -267,13 +279,16 @@ export function EmployeeRequestScreen({ routePart }: { routePart?: string }) {
         });
         setCart([]);
         setError("");
-        router.push("/employee/request#meus-pedidos");
+        router.push("/employee/requests");
       } catch (error) {
         setError(
           error instanceof Error
             ? error.message
             : "Não foi possível confirmar o carrinho.",
         );
+      } finally {
+        sendingRef.current = false;
+        setSending(false);
       }
       return;
     }
@@ -294,7 +309,7 @@ export function EmployeeRequestScreen({ routePart }: { routePart?: string }) {
     setRequests((items) => [...newRequests, ...items]);
     setCart([]);
     setError("");
-    router.push("/employee/request#meus-pedidos");
+    router.push("/employee/requests");
   }
 
   const cartPanel = (
@@ -302,6 +317,7 @@ export function EmployeeRequestScreen({ routePart }: { routePart?: string }) {
       id="carrinho"
       className={styles.employeeCart}
       aria-labelledby="cart-title"
+      aria-busy={sending}
     >
       <div className={styles.employeeCartHeading}>
         <div>
@@ -316,11 +332,17 @@ export function EmployeeRequestScreen({ routePart }: { routePart?: string }) {
             type="button"
             className={styles.primaryAction}
             onClick={checkoutCart}
+            disabled={sending}
           >
-            Finalizar requisição <ArrowRight size={17} />
+            {sending ? (
+              <><LoaderCircle size={17} className={styles.requestSpinner} aria-hidden="true" /> Enviando pedido…</>
+            ) : (
+              <>Finalizar requisição <ArrowRight size={17} /></>
+            )}
           </button>
         )}
       </div>
+      {sending && !isDetail && <p className={styles.requestProgress} role="status">Registrando seu pedido. Aguarde a confirmação.</p>}
       {cart.length === 0 && (
         <p>
           Seu carrinho está vazio. Escolha uma peça no catálogo para começar.
@@ -348,6 +370,7 @@ export function EmployeeRequestScreen({ routePart }: { routePart?: string }) {
             <button
               type="button"
               className={styles.outlineButton}
+              disabled={sending}
               onClick={() =>
                 setCart((items) =>
                   items.filter((_, itemIndex) => itemIndex !== index),
@@ -397,6 +420,7 @@ export function EmployeeRequestScreen({ routePart }: { routePart?: string }) {
             <span className={styles.visualCaption}>
               MARCON · PEÇAS METALÚRGICAS
             </span>
+            <PhotoCredit image={selectedPart.image} />
           </div>
           <div className={styles.detailInfo}>
             <div className={styles.breadcrumb}>
@@ -404,8 +428,7 @@ export function EmployeeRequestScreen({ routePart }: { routePart?: string }) {
             </div>
             <h1>{selectedPart.name}</h1>
             <p className={styles.description}>
-              Peça para manutenção e operação industrial. Confira o código, a
-              localização e o saldo antes de solicitar.
+              {selectedPart.description || "Peça para manutenção e operação industrial. Confira o código, a localização e o saldo antes de solicitar."}
             </p>
             <div className={styles.stockPanel}>
               <span
@@ -460,18 +483,18 @@ export function EmployeeRequestScreen({ routePart }: { routePart?: string }) {
                 <div>
                   <strong>Requisição #{createdId} registrada</strong>
                   <p>O líder do {employeeBlock} poderá analisar o pedido.</p>
-                  <Link href="/employee/request#meus-pedidos">Ver minhas requisições</Link>
+                  <Link href="/employee/requests">Ver minhas requisições</Link>
                 </div>
               </div>
             ) : mode ? (
-              <form className={styles.requestForm} onSubmit={submitItem}>
+              <form className={styles.requestForm} onSubmit={submitItem} aria-busy={sending}>
                 <h2>
                   {mode === "request"
                     ? "Fazer requisição"
                     : "Adicionar ao carrinho"}
                 </h2>
                 <p>Confirme a quantidade duas vezes e informe a prioridade.</p>
-                <div className={styles.employeeFields}>
+                <fieldset className={styles.employeeFields} disabled={sending}>
                   <label>
                     Requisitar por
                     <select
@@ -543,7 +566,7 @@ export function EmployeeRequestScreen({ routePart }: { routePart?: string }) {
                       placeholder="Explique a necessidade deste material para a atividade do seu setor/bloco"
                     />
                   </label>
-                </div>
+                </fieldset>
                 <p>
                   {Number(quantity) || 0}{" "}
                   {requestedUnit === "box" ? "caixas" : "peças"} ={" "}
@@ -574,15 +597,18 @@ export function EmployeeRequestScreen({ routePart }: { routePart?: string }) {
                     type="button"
                     className={styles.outlineButton}
                     onClick={resetForm}
+                    disabled={sending}
                   >
                     Cancelar
                   </button>
-                  <button type="submit" className={styles.primaryAction}>
-                    {mode === "request"
+                  <button type="submit" className={styles.primaryAction} disabled={sending}>
+                    {sending && <LoaderCircle size={17} className={styles.requestSpinner} aria-hidden="true" />}
+                    {sending ? "Enviando requisição…" : mode === "request"
                       ? "Confirmar requisição"
                       : "Adicionar ao carrinho"}
                   </button>
                 </div>
+                {sending && <p className={styles.requestProgress} role="status">Registrando seu pedido. Aguarde a confirmação.</p>}
               </form>
             ) : (
               <div className={styles.employeeActions}>
@@ -775,7 +801,6 @@ export function EmployeeRequestScreen({ routePart }: { routePart?: string }) {
         </p>
       )}
       {cartPanel}
-      {persistent && <RequestWorkflowScreen role="funcionario" compact />}
     </main>
   );
 }

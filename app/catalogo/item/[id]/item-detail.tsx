@@ -13,6 +13,7 @@ import {
 import type { CatalogItem } from "@/lib/catalog";
 import { ItemArt } from "../../item-art";
 import styles from "../../catalog.module.css";
+import { PhotoCredit } from "@/components/workspace/screens/product-photo";
 
 type DetailState = "loading" | "ready" | "error" | "missing";
 
@@ -92,6 +93,7 @@ export function ItemDetail({
             <div className={styles.detailArtFrame}>
               <ItemArt item={item} large />
               <span className={styles.visualCaption}>MARCON · MATERIAIS</span>
+              <PhotoCredit image={item.image} />
             </div>
             <div className={styles.detailInfo}>
               <div className={styles.breadcrumb}>

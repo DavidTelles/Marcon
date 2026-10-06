@@ -1,14 +1,46 @@
+import type { Part } from "./demo-data";
+
 export type CatalogItem = {
   id: string;
   name: string;
-  category: "Proteção" | "Ferramentas" | "Elétrica" | "Escritório";
+  category: string;
   stock: number;
   unit: string;
   location: string;
   description: string;
   specification: string;
   featured?: boolean;
+  image?: string;
 };
+
+export function catalogItemFromPart(part: Part): CatalogItem {
+  return {
+    id: part.code,
+    name: part.name,
+    category: part.category || "Peças",
+    stock: part.available ?? part.quantity,
+    unit: part.unit || "un",
+    image: part.image,
+    location:
+      part.locations
+        ?.map((location) =>
+          [location.warehouse, location.aisle, location.shelf]
+            .filter(Boolean)
+            .join(" / "),
+        )
+        .join("; ") ||
+      part.location ||
+      "Localização a definir",
+    description: part.description || part.name,
+    specification: [
+      part.dimensions,
+      part.material,
+      `QR/ID ${part.qrCode ?? part.code}`,
+    ]
+      .filter(Boolean)
+      .join(" · "),
+  };
+}
 
 export const catalogItems: CatalogItem[] = [
   {

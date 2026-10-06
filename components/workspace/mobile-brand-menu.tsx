@@ -58,6 +58,11 @@ export function MobileBrandMenu({ role }: { role: Role }) {
           <Link href={roleLanding[role]} onClick={close}>
             Página inicial
           </Link>
+          {role === "funcionario" && (
+            <Link href="/employee/requests" onClick={close}>
+              Meus pedidos
+            </Link>
+          )}
           <Link
             href={
               role === "funcionario"
@@ -70,7 +75,7 @@ export function MobileBrandMenu({ role }: { role: Role }) {
             }
             onClick={close}
           >
-            Histórico
+            {role === "funcionario" ? "Meu histórico" : "Histórico"}
           </Link>
           <Link href="/profile" onClick={close}>
             Editar perfil
