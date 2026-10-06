@@ -11,6 +11,7 @@ import ws from "ws";
 import { Pool, neonConfig } from "@neondatabase/serverless";
 import ts from "typescript";
 import sharp from "sharp";
+import { startFacialFixtureService, checkFacialWorkflow } from "./facial-flow-checks.mjs";
 
 // Real PostgreSQL and production services, isolated from all public application rows.
 // Only the schema created by this invocation can be removed by the cleanup below.
@@ -33,6 +34,7 @@ let created = false;
 let domainDb;
 let apiServer;
 let webProcess;
+let facialFixture;
 let evidence;
 const checks = [];
 const check = (label) => {
@@ -78,6 +80,37 @@ try {
   process.env.DATABASE_URL = scopedUrl.toString();
   backendEnv.databaseUrl = process.env.DATABASE_URL;
   domainDb = await import("../lib/neon-db.mjs");
+  if (process.argv.includes("--embedded")) {
+    // Exercise the stateless HTTP transport without relying on search_path.
+    // All writes stay in this invocation's temporary schema.
+    const previousVercel = process.env.VERCEL;
+    process.env.VERCEL = "1";
+    const httpUrl = new URL(originalUrl);
+    httpUrl.searchParams.delete("options");
+    process.env.DATABASE_URL = httpUrl.toString();
+    try {
+      await administration.query(`CREATE TABLE "${schema}".http_probe (id bigserial PRIMARY KEY, payload bytea, quantity integer)`);
+      const httpPool = domainDb.getPool();
+      const payload = Buffer.from("isolated-encrypted-vector-transport");
+      const [inserted] = await httpPool.execute(`INSERT INTO "${schema}".http_probe(payload,quantity) VALUES (?,?) RETURNING id`, [payload, 1]);
+      assert.ok(inserted.insertId > 0);
+      assert.equal(inserted.affectedRows, 1);
+      const [updated] = await httpPool.execute(`UPDATE "${schema}".http_probe SET quantity=? WHERE id=?`, [2, inserted.insertId]);
+      assert.equal(updated.affectedRows, 1);
+      const [rows] = await httpPool.query(`SELECT payload,quantity FROM "${schema}".http_probe WHERE id=?`, [inserted.insertId]);
+      assert.ok(Buffer.isBuffer(rows[0].payload));
+      assert.equal(rows[0].payload.toString(), payload.toString());
+      assert.equal(rows[0].quantity, 2);
+      const [deleted] = await httpPool.execute(`DELETE FROM "${schema}".http_probe WHERE id=?`, [inserted.insertId]);
+      assert.equal(deleted.affectedRows, 1);
+      check("Vercel stateless Neon HTTP preserves writes, affected rows and encrypted binary payloads in an isolated schema");
+    } finally {
+      process.env.DATABASE_URL = scopedUrl.toString();
+      if (previousVercel === undefined) delete process.env.VERCEL;
+      else process.env.VERCEL = previousVercel;
+      await domainDb.closeDatabase();
+    }
+  }
   assert.equal(
     (await domainDb.getPool().query("SELECT current_schema() AS name"))[0][0]
       .name,
@@ -953,6 +986,7 @@ try {
     "Catalog initialization persists legacy users, sectors and logical workplaces; preserves physical snapshots and balances; repeat is idempotent",
   );
   if (process.argv.includes("--ui") || process.argv.includes("--marco")) {
+    if (process.argv.includes("--face")) facialFixture = await startFacialFixtureService();
     if (!process.argv.includes("--embedded")) {
       apiServer = app.listen(0, "127.0.0.1");
       await new Promise((resolve) => apiServer.once("listening", resolve));
@@ -972,7 +1006,8 @@ try {
         env: {
           ...process.env,
           BACKEND_URL: process.argv.includes("--embedded") ? "embedded" : `http://127.0.0.1:${apiServer.address().port}`,
-          ...(process.argv.includes("--embedded") ? { VERCEL: "1" } : {}),
+          ...(process.argv.includes("--embedded") ? { VERCEL: facialFixture ? "" : "1" } : {}),
+          ...(facialFixture ? { FACE_SERVICE_URL: facialFixture.url, FACE_SERVICE_TOKEN: facialFixture.token } : {}),
           OPENAI_API_KEY: "",
         },
         windowsHide: true,
@@ -1002,6 +1037,7 @@ try {
     const browser = await chromium.launch({
       channel: process.env.PLAYWRIGHT_CHANNEL || "msedge",
       headless: true,
+      args: facialFixture ? ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"] : [],
     });
     try {
       const page = await browser.newPage({
@@ -1015,6 +1051,11 @@ try {
       });
       assert.equal(login.status(), 200, await login.text());
       console.log("UI: signed login OK");
+      if (facialFixture) {
+        const { FACE_MODEL, FACE_CONSENT } = require("../lib/face-policy.ts");
+        await checkFacialWorkflow({ page, browser, origin, password: testPassword, sql, model: FACE_MODEL, consent: FACE_CONSENT });
+        check("Facial registration stores encrypted vectors; browser camera login reaches the dashboard with both sessions; mismatch, replay and deleted enrollment fail (controlled provider and simulated camera, not physical biometric validation)");
+      }
       if (process.argv.includes("--marco")) {
         const post = (context, body, extra = {}) => context.post(origin + "/api/james/chat", { headers: { origin }, data: body, timeout: 60000, ...extra });
         const workerContext = await browser.newContext();
@@ -1251,6 +1292,7 @@ try {
     });
   }
   if (apiServer) await new Promise((resolve) => apiServer.close(resolve));
+  await facialFixture?.close();
   await domainDb?.closeDatabase();
   await scoped.end();
   if (created) {
@@ -1265,5 +1307,9 @@ try {
 await mkdir(".validation/integrated-logistics", { recursive: true });
 await writeFile(
   ".validation/integrated-logistics/evidence.json",
+  JSON.stringify(evidence, null, 2),
+);
+await writeFile(
+  `.validation/integrated-logistics/evidence-${process.argv.includes("--face") ? "facial" : "serverless"}.json`,
   JSON.stringify(evidence, null, 2),
 );

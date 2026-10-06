@@ -12,7 +12,12 @@ export async function GET() {
       { status: "unavailable", database: "not-configured" },
       { status: 503, headers },
     );
-  const database = await databaseHealth(getPool());
+  let database;
+  try {
+    database = await databaseHealth(getPool());
+  } catch {
+    database = "disconnected";
+  }
   if (database !== "connected") {
     return NextResponse.json(
       { status: "unavailable", database },

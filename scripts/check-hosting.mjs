@@ -61,7 +61,10 @@ if (args.includes("--url")) {
     const { getPool, closeDatabase } = await import("../lib/neon-db.mjs");
     try {
       const state = await databaseHealth(getPool());
-      report(`Neon e tabelas de login/estoque: ${state}`, state === "connected");
+      report(
+        `Neon e tabelas de login/estoque: ${state}`,
+        state === "connected",
+      );
     } catch {
       report(
         "Conexão/tabelas do Neon; confira DATABASE_URL e migrações",

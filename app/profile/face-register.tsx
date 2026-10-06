@@ -14,8 +14,17 @@ export function FaceRegister() {
   const [message, setMessage] = useState("");
   useEffect(() => {
     const c = new AbortController();
-    void faceRequest<{ enrolled: boolean }>(undefined, c.signal)
-      .then((r) => setEnrolled(r.enrolled))
+    void faceRequest<{ enrolled: boolean; compatible: boolean }>(
+      undefined,
+      c.signal,
+    )
+      .then((r) => {
+        setEnrolled(r.enrolled);
+        if (r.enrolled && !r.compatible)
+          setMessage(
+            "Cadastre novamente o rosto e confirme o consentimento para usar a verificação facial atual.",
+          );
+      })
       .catch((e) => {
         if (!c.signal.aborted) setError(e.message);
       });
@@ -43,17 +52,17 @@ export function FaceRegister() {
   }
   return (
     <section className={styles.card} aria-labelledby="face-register-heading">
-      <h2 id="face-register-heading">Reconhecimento facial local</h2>
+      <h2 id="face-register-heading">Reconhecimento facial</h2>
       <p>
         {enrolled === null
           ? "Consultando cadastro…"
           : enrolled
-            ? "Você possui um rosto cadastrado neste servidor."
+            ? "Você possui um rosto cadastrado neste sistema."
             : "Cadastre seu rosto para entrar usando a câmera do computador."}
       </p>
       <p>
-        As cinco fotos serão enviadas ao servidor local para análise em Python.
-        Apenas os vetores faciais serão guardados criptografados até você
+        As cinco fotos serão enviadas ao serviço de verificação facial. Apenas
+        os vetores faciais serão guardados criptografados no sistema até você
         excluir ou substituir o cadastro. Fotos e vídeos não serão salvos. O
         login com senha continua disponível.
       </p>
@@ -75,8 +84,9 @@ export function FaceRegister() {
               checked={consent}
               onChange={(e) => setConsent(e.target.checked)}
             />
-            Autorizo o uso e armazenamento local dos meus dados faciais para
-            autenticação. Sei que posso excluir o cadastro e usar minha senha.
+            Autorizo o processamento das fotos e o armazenamento dos meus dados
+            faciais neste sistema para autenticação. Sei que posso excluir o
+            cadastro e usar minha senha.
           </label>
           <div className={styles.actions}>
             <button

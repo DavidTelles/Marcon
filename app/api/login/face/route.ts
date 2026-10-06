@@ -105,12 +105,12 @@ export async function GET() {
     const user = await currentUser();
     if (!user) return fail("Faça login para consultar seu cadastro.", 401);
     const [rows] = await getPool().execute<RowDataPacket[]>(
-      "SELECT f.model_version FROM face_credentials f JOIN users u ON u.id = f.user_id WHERE u.employee_no = ?",
+      "SELECT f.model_version,f.consent_version FROM face_credentials f JOIN users u ON u.id = f.user_id WHERE u.employee_no = ?",
       [user.id],
     );
     return json({
       enrolled: rows.length > 0,
-      compatible: rows[0]?.model_version === FACE_MODEL,
+      compatible: rows[0]?.model_version === FACE_MODEL && rows[0]?.consent_version === FACE_CONSENT,
     });
   } catch {
     return fail("Não foi possível consultar o cadastro facial.", 503);
@@ -208,12 +208,12 @@ export async function POST(request: NextRequest) {
       }
       if (!registering) {
         const [stored] = await getPool().execute<StoredFace[]>(
-          "SELECT model_version FROM face_credentials WHERE user_id = ?",
+          "SELECT model_version,consent_version FROM face_credentials WHERE user_id = ?",
           [account.id],
         );
-        if (stored[0]?.model_version !== FACE_MODEL)
+        if (stored[0]?.model_version !== FACE_MODEL || stored[0]?.consent_version !== FACE_CONSENT)
           return fail(
-            "Acesso facial indisponível para esta conta. Entre com senha.",
+            "Entre com senha e cadastre novamente o rosto para autorizar a verificação facial atual.",
             401,
           );
       }
@@ -326,12 +326,13 @@ export async function POST(request: NextRequest) {
         return json({ ok: true });
       }
       const [stored] = await c.execute<StoredFace[]>(
-        "SELECT embeddings, model_version FROM face_credentials WHERE user_id = ?",
+        "SELECT embeddings, model_version,consent_version FROM face_credentials WHERE user_id = ?",
         [user.id],
       );
       if (
         !stored[0] ||
         stored[0].model_version !== FACE_MODEL ||
+        stored[0].consent_version !== FACE_CONSENT ||
         !matchesEnrollment(samples, decryptFace(user.id, stored[0].embeddings))
       )
         return fail(

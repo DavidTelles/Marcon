@@ -1,7 +1,7 @@
 // OpenCV YuNet + SFace from the supplied Python prototype.
 export const FACE_MODEL = "opencv-yunet-sface-2023mar-v1";
 export const FACE_THRESHOLD = 0.363;
-export const FACE_CONSENT = "local-face-v1";
+export const FACE_CONSENT = "server-face-v2";
 export const FACE_TTL = 120_000;
 export const FACE_COUNT = 5;
 

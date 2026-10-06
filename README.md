@@ -51,11 +51,11 @@ npm run test:logistics -- --ui --embedded
 npm run check:hosting -- --url https://marcon-ten.vercel.app
 ```
 
-`/health` deve retornar HTTP 200 com `status: "ok"`, `database: "connected"` e `backend: "connected"`. Esse endpoint verifica conexões; confirme também login e operações com as contas dos perfis usados pela empresa. O diagnóstico local valida seu `.env`; somente a verificação com `--url` consulta a configuração publicada.
+`/health` deve retornar HTTP 200 com `status: "ok"`, `database: "connected"` e `backend: "connected"`. O endpoint verifica a conexão e as tabelas essenciais de login e estoque; confirme também login e operações com as contas dos perfis usados pela empresa. O diagnóstico local valida seu `.env`; somente a verificação com `--url` consulta a configuração publicada. O build da Vercel valida as variáveis essenciais e rejeita configuração ausente antes de publicar.
 
 Para um backend hospedado separadamente, use `BACKEND_URL=https://seu-backend.example.com` (URL base sem `/api` ou `/login`) e o mesmo banco. Não aponte essa variável para o próprio frontend: isso chamaria suas páginas em vez da API Express. URLs locais e HTTP são rejeitadas na Vercel com uma mensagem de configuração.
 
-O reconhecimento facial local depende de Python, OpenCV e dos modelos de `face/`; essas dependências não são instaladas pelo runtime Node da Vercel. O login por senha funciona sem elas. O assistente Marco requer a ponte HTTPS descrita em [docs/marco-ollama.md](docs/marco-ollama.md). Essas integrações precisam de infraestrutura própria para serem verificadas em produção.
+O cadastro e o login facial hospedados chamam o serviço Python autenticado de `face/`, publicado como segundo projeto da Vercel. Configure `FACE_SERVICE_URL` e o mesmo `FACE_SERVICE_TOKEN` nos projetos conforme [configuração e validação facial](docs/facial-deployment.md). O login por senha funciona sem esse serviço. O assistente Marco requer a ponte HTTPS descrita em [docs/marco-ollama.md](docs/marco-ollama.md).
 
 ## Comandos
 

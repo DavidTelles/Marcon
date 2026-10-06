@@ -17,7 +17,7 @@ test("o botão de acesso facial inicia a câmera e cancelar encerra a captura", 
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ model: FACE_MODEL }),
+      body: JSON.stringify({ model: FACE_MODEL, poses: ["center", "left", "center", "right", "center"] }),
     });
   });
   await page.addInitScript(() => {
@@ -34,6 +34,7 @@ test("o botão de acesso facial inicia a câmera e cancelar encerra a captura", 
   });
   await page.goto("/login");
   await page.getByLabel("E-mail ou matrícula").fill("teste@marcon.demo");
+  await page.getByLabel("Senha", { exact: true }).fill("CameraTestPassword@123");
   await page
     .getByRole("button", { name: "Entrar com reconhecimento facial" })
     .click();

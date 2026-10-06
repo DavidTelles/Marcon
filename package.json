@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "check:hosting": "node scripts/check-hosting.mjs",
+    "check:face": "node scripts/check-face-service.mjs",
+    "test:face:http": "node scripts/test-face-http.mjs",
     "test:hosting": "node --test scripts/backend-config.test.mjs scripts/backend-client.test.mjs scripts/embedded-backend.test.mjs scripts/db-config.test.mjs scripts/database-health.test.mjs scripts/setup-env.test.mjs scripts/face-service.test.mjs",
     "marco:bridge": "node --env-file-if-exists=.env scripts/marco-bridge.mjs",
     "marco:doctor": "node scripts/marco-doctor.mjs",
