@@ -1,13 +1,35 @@
 import { NextResponse } from "next/server";
 import { databaseEnabled, getPool } from "@/lib/db";
+import { backendFetch, backendUrl } from "@/lib/backend-client";
+import { databaseHealth } from "@/lib/database-health.mjs";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+const headers = { "Cache-Control": "no-store" };
 export async function GET() {
-  if (!databaseEnabled()) return NextResponse.json({ status: "unavailable", database: "not-configured" }, { status: 503 });
+  if (!databaseEnabled())
+    return NextResponse.json(
+      { status: "unavailable", database: "not-configured" },
+      { status: 503, headers },
+    );
+  const database = await databaseHealth(getPool());
+  if (database !== "connected") {
+    return NextResponse.json(
+      { status: "unavailable", database },
+      { status: 503, headers },
+    );
+  }
   try {
-    await getPool().query("SELECT 1");
-    return NextResponse.json({ status: "ok", database: "connected" }, { headers: { "Cache-Control": "no-store" } });
+    const transport = backendUrl() === null ? "embedded" : "external";
+    await backendFetch("/health");
+    return NextResponse.json(
+      { status: "ok", database: "connected", backend: "connected", transport },
+      { headers },
+    );
   } catch {
-    return NextResponse.json({ status: "unavailable", database: "disconnected" }, { status: 503 });
+    return NextResponse.json(
+      { status: "unavailable", database: "connected", backend: "unavailable" },
+      { status: 503, headers },
+    );
   }
 }

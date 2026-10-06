@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import nextEnv from "@next/env";
+import { backendTarget } from "../lib/backend-config.mjs";
 
 nextEnv.loadEnvConfig(process.cwd());
 const base = process.env.TEST_URL || "http://localhost:3000";
-const backend = process.env.BACKEND_URL || "http://localhost:3001";
+const backend = backendTarget();
 const password = process.env.TEST_PASSWORD || process.env.SEED_PASSWORD;
 assert.ok(password, "Defina TEST_PASSWORD ou SEED_PASSWORD para as contas de teste.");
 let checks = 0;
@@ -19,8 +20,11 @@ const login = (identity, secret) => ({
   body: JSON.stringify({ identity, password: secret }),
 });
 
-assert.deepEqual(await (await request("/health", 200)).json(), { status: "ok", database: "connected" });
-await check(backend + "/health", 200);
+const health = await (await request("/health", 200)).json();
+assert.equal(health.status, "ok");
+assert.equal(health.database, "connected");
+assert.equal(health.backend, "connected");
+if (backend) await check(backend + "/health", 200);
 await request("/login", 200);
 await request("/api/login", 403, { ...login("1004", password), headers: { "Content-Type": "application/json", Origin: "https://invalid.example" } });
 await request("/api/login", 400, { ...login("1004", password), body: "{" });
@@ -30,7 +34,7 @@ await request("/api/login", 401, login("1004", "incorrect-password"));
 const apiRoutes = ["/api/workspace", "/api/items", "/api/operations", "/api/requisicoes", "/api/parts-consumption"];
 const backendRoutes = ["/me", "/api/users", "/api/blocks", "/api/sectors", "/api/warehouses", "/api/products", "/api/stock", "/api/stock/movements", "/api/requests", "/api/workspace/snapshot", "/api/workspace/transfers", "/admin/dashboard", "/warehouse/dashboard", "/department-head/dashboard"];
 for (const path of apiRoutes) await request(path, 401);
-for (const path of backendRoutes) await check(backend + path, 401);
+if (backend) for (const path of backendRoutes) await check(backend + path, 401);
 
 for (const [identity, landing] of [["1001", "/employee/request"], ["1002", "/department-head/dashboard"], ["1003", "/warehouse/dashboard"], ["1004", "/admin/dashboard"]]) {
   const response = await request("/api/login", 200, login(identity, password));
@@ -45,7 +49,7 @@ for (const [identity, landing] of [["1001", "/employee/request"], ["1002", "/dep
   await request(landing, 200, { headers });
   await request("/api/workspace", 200, { headers });
   await request("/api/items", 200, { headers });
-  await check(backend + "/me", 200, { headers: { Authorization: `Bearer ${token}` } });
+  if (backend) await check(backend + "/me", 200, { headers: { Authorization: `Bearer ${token}` } });
   const profilePages = {
     "1001": ["/employee/history"],
     "1002": ["/department-head/requests", "/department-head/history", "/department-head/materials"],
@@ -53,10 +57,10 @@ for (const [identity, landing] of [["1001", "/employee/request"], ["1002", "/dep
   };
   for (const path of profilePages[identity] || []) await request(path, 200, { headers });
   await request("/api/parts-consumption", ["1003", "1004"].includes(identity) ? 200 : 403, { headers });
-  await check(backend + "/api/parts/consumption", ["1003", "1004"].includes(identity) ? 200 : 403, { headers: { Authorization: `Bearer ${token}` } });
+  if (backend) await check(backend + "/api/parts/consumption", ["1003", "1004"].includes(identity) ? 200 : 403, { headers: { Authorization: `Bearer ${token}` } });
   if (identity === "1004") {
     for (const path of apiRoutes) await request(path, 200, { headers });
-    for (const path of backendRoutes) await check(backend + path, 200, { headers: { Authorization: `Bearer ${token}` } });
+    if (backend) for (const path of backendRoutes) await check(backend + path, 200, { headers: { Authorization: `Bearer ${token}` } });
     for (const path of ["/admin/map", "/admin/all-requests", "/admin/history", "/admin/create", "/admin/purchases", "/admin/recommendations", "/admin/dashboard/parts", "/admin/dashboard/by-part", "/profile"]) await request(path, 200, { headers });
     const catalog = await request("/catalogo", [200, 307], { headers });
     if (catalog.status === 307) assert.equal(catalog.headers.get("location"), "/admin/dashboard");

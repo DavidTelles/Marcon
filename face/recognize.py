@@ -3,6 +3,8 @@ import base64
 import json
 import os
 import sys
+from functools import lru_cache
+from pathlib import Path
 
 os.environ.setdefault("OPENCV_IO_MAX_IMAGE_PIXELS", "2000000")
 try:
@@ -17,20 +19,28 @@ class CaptureError(ValueError):
     pass
 
 
-def main():
-    payload = json.load(sys.stdin)
+@lru_cache(maxsize=1)
+def engines():
+    root = Path(__file__).resolve().parent / "models"
+    empty_config = np.empty(0, dtype=np.uint8)
+    detector = cv2.FaceDetectorYN.create(
+        "onnx", np.frombuffer((root / "face_detection_yunet_2023mar.onnx").read_bytes(), dtype=np.uint8),
+        empty_config, (320, 240), 0.8, 0.3, 5000,
+    )
+    recognizer = cv2.FaceRecognizerSF.create(
+        "onnx", np.frombuffer((root / "face_recognition_sface_2021dec.onnx").read_bytes(), dtype=np.uint8), empty_config
+    )
+    return detector, recognizer
+
+
+def extract(payload):
+    if not isinstance(payload, dict):
+        raise CaptureError("Dados inválidos.")
     images = payload.get("images")
     poses = payload.get("poses", ["center"] * 5)
     if not isinstance(images, list) or len(images) != 5 or not isinstance(poses, list) or len(poses) != 5 or any(p not in ("center", "left", "right") for p in poses):
         raise CaptureError("São necessárias cinco fotos e posições válidas.")
-    root = os.path.join(os.path.dirname(__file__), "models")
-    detector = cv2.FaceDetectorYN.create(
-        os.path.join(root, "face_detection_yunet_2023mar.onnx"),
-        "", (320, 240), 0.8, 0.3, 5000,
-    )
-    recognizer = cv2.FaceRecognizerSF.create(
-        os.path.join(root, "face_recognition_sface_2021dec.onnx"), ""
-    )
+    detector, recognizer = engines()
     features = []
     previous = None
     for encoded, pose in zip(images, poses):
@@ -64,12 +74,12 @@ def main():
         previous = gray
         aligned = recognizer.alignCrop(frame, faces[0])
         features.append(recognizer.feature(aligned).reshape(-1).tolist())
-    print(json.dumps({"embeddings": features}))
+    return {"embeddings": features}
 
 
 if __name__ == "__main__":
     try:
-        main()
+        print(json.dumps(extract(json.load(sys.stdin))))
     except Exception as error:
         print(json.dumps({"error": str(error) if isinstance(error, CaptureError) else "Serviço facial indisponível ou imagem inválida.", "kind": "capture" if isinstance(error, CaptureError) else "service"}))
         sys.exit(1)

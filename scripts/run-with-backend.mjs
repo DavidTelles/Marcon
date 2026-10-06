@@ -1,6 +1,8 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
+import nextEnv from "@next/env";
+import { backendTarget } from "../lib/backend-config.mjs";
 
 const mode = process.argv[2];
 if (mode !== "dev" && mode !== "start") {
@@ -9,6 +11,12 @@ if (mode !== "dev" && mode !== "start") {
 }
 
 const frontend = resolve(import.meta.dirname, "..");
+// PORT in the shared .env belongs to Express. A platform-provided PORT still
+// controls Next, and explicit Next CLI -p/--port flags take precedence.
+const frontendPort = process.env.PORT;
+nextEnv.loadEnvConfig(frontend, mode === "dev");
+const target = backendTarget();
+const startApi = target !== null && ["localhost", "127.0.0.1", "[::1]"].includes(new URL(target).hostname);
 const backend = resolve(frontend, "backend");
 const next = resolve(frontend, "node_modules", "next", "dist", "bin", "next");
 const nodemon = resolve(
@@ -18,20 +26,20 @@ const nodemon = resolve(
   "bin",
   "nodemon.js",
 );
-if (!existsSync(resolve(backend, "node_modules", "dotenv", "package.json"))) {
+if (startApi && !existsSync(resolve(backend, "node_modules", "dotenv", "package.json"))) {
   console.error(
     "Dependências do backend ausentes. Execute npm ci --prefix backend antes de iniciar.",
   );
   process.exit(1);
 }
-if (mode === "dev" && !existsSync(nodemon)) {
+if (startApi && mode === "dev" && !existsSync(nodemon)) {
   console.error(
     "Instale as dependências de desenvolvimento: npm ci --prefix backend.",
   );
   process.exit(1);
 }
 
-const api = spawn(
+const api = startApi ? spawn(
   process.execPath,
   mode === "dev"
     ? [
@@ -51,14 +59,16 @@ const api = spawn(
     cwd: backend,
     stdio: "inherit",
   },
-);
+) : null;
 const web = spawn(process.execPath, [next, mode, ...process.argv.slice(3)], {
   cwd: frontend,
   stdio: "inherit",
+  env: { ...process.env, PORT: frontendPort || "3000" },
 });
 
 let stopping = false;
 function terminate(child) {
+  if (!child) return;
   if (!child.pid || child.exitCode !== null || child.signalCode !== null)
     return;
   if (process.platform === "win32") {
@@ -89,6 +99,7 @@ for (const [child, name] of [
   [api, "backend"],
   [web, "frontend"],
 ]) {
+  if (!child) continue;
   child.on("error", (error) => {
     console.error(`Falha ao iniciar ${name}:`, error.message);
     stop(1);

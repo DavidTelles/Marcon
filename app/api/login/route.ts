@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
       if (!(error instanceof BackendError) || error.status >= 500) {
         return NextResponse.json(
           {
-            error:
+            error: error instanceof BackendError ? error.message :
               "Não foi possível consultar o backend ou o banco. Verifique a configuração compartilhada e tente novamente.",
           },
           { status: 503 },

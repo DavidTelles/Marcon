@@ -7,7 +7,7 @@ import sys
 import cv2
 import numpy as np
 root = pathlib.Path(__file__).resolve().parents[1]
-fixture = cv2.imread(str(root / "tests/fixtures/ai-face.jpg"))
+fixture = cv2.imdecode(np.frombuffer((root / "tests/fixtures/ai-face.jpg").read_bytes(), dtype=np.uint8), cv2.IMREAD_COLOR)
 assert fixture is not None
 def encode(image):
     ok, data = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, 85])

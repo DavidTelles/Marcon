@@ -953,8 +953,10 @@ try {
     "Catalog initialization persists legacy users, sectors and logical workplaces; preserves physical snapshots and balances; repeat is idempotent",
   );
   if (process.argv.includes("--ui") || process.argv.includes("--marco")) {
-    apiServer = app.listen(0, "127.0.0.1");
-    await new Promise((resolve) => apiServer.once("listening", resolve));
+    if (!process.argv.includes("--embedded")) {
+      apiServer = app.listen(0, "127.0.0.1");
+      await new Promise((resolve) => apiServer.once("listening", resolve));
+    }
     const reserve = createServer();
     reserve.listen(0, "127.0.0.1");
     await new Promise((resolve) => reserve.once("listening", resolve));
@@ -969,7 +971,8 @@ try {
         cwd: process.cwd(),
         env: {
           ...process.env,
-          BACKEND_URL: `http://127.0.0.1:${apiServer.address().port}`,
+          BACKEND_URL: process.argv.includes("--embedded") ? "embedded" : `http://127.0.0.1:${apiServer.address().port}`,
+          ...(process.argv.includes("--embedded") ? { VERCEL: "1" } : {}),
           OPENAI_API_KEY: "",
         },
         windowsHide: true,

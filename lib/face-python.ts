@@ -1,13 +1,20 @@
 import { spawn } from "node:child_process";
 import { join } from "node:path";
 import { existsSync } from "node:fs";
-import { FACE_COUNT, validEmbedding } from "./face-policy";
+import { FACE_COUNT, FACE_MODEL, validEmbedding } from "./face-policy";
+import { faceServiceRequest } from "./face-service.mjs";
 
 export class FaceProcessingError extends Error {
   constructor(message: string, public status = 503) { super(message); }
 }
 
 export async function extractFaces(images: string[], poses: string[] = Array(FACE_COUNT).fill("center")): Promise<number[][]> {
+  if (process.env.FACE_SERVICE_URL || process.env.VERCEL) {
+    const result = await faceServiceRequest("/extract", { model: FACE_MODEL, images, poses });
+    if (result?.model !== FACE_MODEL || !Array.isArray(result.embeddings) || result.embeddings.length !== FACE_COUNT || !result.embeddings.every(validEmbedding))
+      throw new FaceProcessingError("Resposta do serviço facial inválida.");
+    return result.embeddings;
+  }
   const localPython = join(process.cwd(), "face", ".venv", process.platform === "win32" ? "Scripts/python.exe" : "bin/python");
   const executable = process.env.FACE_PYTHON || (existsSync(localPython) ? localPython : "python");
   const script = join(process.cwd(), "face", "recognize.py");

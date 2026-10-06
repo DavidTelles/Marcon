@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { faceRequest } from "@/lib/face-client";
 import { FACE_CONSENT, FACE_COUNT, FACE_MODEL } from "@/lib/face-policy";
+import { roleLanding } from "@/lib/workspace-routes";
 import styles from "./face.module.css";
 
 function captureError(cause: unknown): string {
@@ -135,9 +136,7 @@ export function FaceCapture({
       if (purpose === "login") {
         if (
           !result.destination ||
-          !/^\/inicio\/(admin|lider|almoxarifado|funcionario)$/.test(
-            result.destination,
-          )
+          !Object.values(roleLanding).includes(result.destination)
         )
           throw new Error("Destino de acesso inválido.");
         window.location.assign(result.destination);

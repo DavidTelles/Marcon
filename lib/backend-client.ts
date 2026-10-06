@@ -1,22 +1,12 @@
 import { cookies } from "next/headers";
+import { backendTarget } from "./backend-config.mjs";
 
-// Cliente server-side para a API REST do backend MARCON (Express).
+// Cliente server-side do backend MARCON (integrado ou API Express externa).
 // O JWT do usuário é emitido pelo backend no login e guardado em cookie httpOnly.
 export const apiTokenCookie = "marcon_api_token";
 
 export function backendUrl() {
-  const url = new URL(process.env.BACKEND_URL || "http://localhost:3001");
-  if (
-    process.env.VERCEL &&
-    (url.protocol !== "https:" ||
-      ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname))
-  )
-    throw new Error(
-      "Configure BACKEND_URL HTTPS do backend publicado na Vercel.",
-    );
-  if (url.username || url.password || url.search || url.hash)
-    throw new Error("BACKEND_URL inválida.");
-  return url.href.replace(/\/+$/, "");
+  return backendTarget();
 }
 
 export async function apiToken(): Promise<string | undefined> {
@@ -47,18 +37,31 @@ export async function backendFetch<T = unknown>(
   };
   if (token) headers.Authorization = `Bearer ${token}`;
   let response: Response;
+  let target: string | null;
   try {
-    response = await fetch(`${backendUrl()}${path}`, {
-      method,
-      headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
-      cache: "no-store",
-      redirect: "error",
-      signal: AbortSignal.timeout(25000),
-    });
+    target = backendUrl();
+  } catch (error) {
+    throw new BackendError((error as Error).message, 503);
+  }
+  try {
+    if (target === null) {
+      const { embeddedRequest } = await import("../backend/embedded.js");
+      const result = await embeddedRequest(path, { method, body, token });
+      response = Response.json(result.body, { status: result.status });
+    } else
+      response = await fetch(`${target}${path}`, {
+        method,
+        headers,
+        body: body === undefined ? undefined : JSON.stringify(body),
+        cache: "no-store",
+        redirect: "error",
+        signal: AbortSignal.timeout(25000),
+      });
   } catch {
     throw new BackendError(
-      "API do backend MARCON indisponível. Verifique se ela está em execução (BACKEND_URL).",
+      target === null
+        ? "Backend integrado indisponível. Verifique DATABASE_URL, JWT_SECRET e as migrações."
+        : "API do backend MARCON indisponível. Verifique BACKEND_URL e o backend publicado.",
       503,
     );
   }
@@ -66,7 +69,11 @@ export async function backendFetch<T = unknown>(
   try {
     data = await response.json();
   } catch {
-    data = null;
+    if (response.ok && response.status !== 204)
+      throw new BackendError(
+        "O backend respondeu sem JSON válido. BACKEND_URL deve apontar para a API, ou use embedded.",
+        502,
+      );
   }
   if (!response.ok) {
     const message =

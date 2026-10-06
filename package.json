@@ -3,6 +3,8 @@
   "version": "2.0.0",
   "private": true,
   "scripts": {
+    "check:hosting": "node scripts/check-hosting.mjs",
+    "test:hosting": "node --test scripts/backend-config.test.mjs scripts/backend-client.test.mjs scripts/embedded-backend.test.mjs scripts/db-config.test.mjs scripts/database-health.test.mjs scripts/setup-env.test.mjs scripts/face-service.test.mjs",
     "marco:bridge": "node --env-file-if-exists=.env scripts/marco-bridge.mjs",
     "marco:doctor": "node scripts/marco-doctor.mjs",
     "marco:benchmark": "node scripts/benchmark-marco.mjs",
@@ -34,14 +36,18 @@
     "format": "prettier --write app/login app/globals.css tests playwright.config.ts",
     "format:check": "prettier --check app/login app/globals.css tests playwright.config.ts"
   },
-  "engines": { "node": ">=22.12" },
+  "engines": {
+    "node": ">=22.12"
+  },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
+    "@next/env": "^16.3.6",
     "@tesseract.js-data/por": "^1.0.0",
     "@zxing/browser": "^0.2.1",
     "drizzle-kit": "^0.31.11",
     "drizzle-orm": "^0.45.3",
     "exceljs": "^4.4.0",
+    "jsonwebtoken": "^9.0.2",
     "lucide-react": "^1.48.0",
     "next": "16.3.6",
     "openai": "^7.23.0",
@@ -50,7 +56,8 @@
     "react-dom": "19.2.8",
     "sharp": "^0.35.4",
     "tesseract.js": "^7.0.0",
-    "ws": "^8.22.0"
+    "ws": "^8.22.0",
+    "zod": "3.25.76"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
