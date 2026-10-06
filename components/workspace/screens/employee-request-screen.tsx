@@ -342,7 +342,7 @@ export function EmployeeRequestScreen({ routePart }: { routePart?: string }) {
           </button>
         )}
       </div>
-      {sending && !isDetail && <p className={styles.requestProgress} role="status">Registrando seu pedido. Aguarde a confirmação.</p>}
+      {sending && !isDetail && <p className={styles.srOnly} role="status">Registrando seu pedido. Aguarde a confirmação.</p>}
       {cart.length === 0 && (
         <p>
           Seu carrinho está vazio. Escolha uma peça no catálogo para começar.
@@ -450,7 +450,9 @@ export function EmployeeRequestScreen({ routePart }: { routePart?: string }) {
                 {boxLabel(selectedPart.quantity, selectedPart.packSize)}
               </small>
             </div>
-            <div className={styles.detailFacts}>
+            <details className={styles.partDetails}>
+              <summary>Detalhes da peça</summary>
+              <div className={styles.detailFacts}>
               <div>
                 <MapPin size={18} />
                 <span>
@@ -476,13 +478,14 @@ export function EmployeeRequestScreen({ routePart }: { routePart?: string }) {
                   </strong>
                 </span>
               </div>
-            </div>
+              </div>
+            </details>
             {createdId ? (
               <div className={styles.successCard} role="status">
                 <CheckCircle2 size={28} />
                 <div>
                   <strong>Requisição #{createdId} registrada</strong>
-                  <p>O líder do {employeeBlock} poderá analisar o pedido.</p>
+                  <p>Aguardando análise do {employeeBlock}.</p>
                   <Link href="/employee/requests">Ver minhas requisições</Link>
                 </div>
               </div>
@@ -493,7 +496,7 @@ export function EmployeeRequestScreen({ routePart }: { routePart?: string }) {
                     ? "Fazer requisição"
                     : "Adicionar ao carrinho"}
                 </h2>
-                <p>Confirme a quantidade duas vezes e informe a prioridade.</p>
+                <p className={styles.requestDestination}>Destino: {employeeBlock}</p>
                 <fieldset className={styles.employeeFields} disabled={sending}>
                   <label>
                     Requisitar por
@@ -552,10 +555,6 @@ export function EmployeeRequestScreen({ routePart }: { routePart?: string }) {
                       <option>Urgente</option>
                     </select>
                   </label>
-                  <label>
-                    Bloco
-                    <input value={employeeBlock + " · seu bloco"} readOnly />
-                  </label>
                   <label className={styles.employeeWideField}>
                     Justificativa {unusual && "(obrigatória)"}
                     <textarea
@@ -563,30 +562,28 @@ export function EmployeeRequestScreen({ routePart }: { routePart?: string }) {
                       onChange={(event) => setJustification(event.target.value)}
                       required={unusual}
                       minLength={unusual ? 3 : undefined}
-                      placeholder="Explique a necessidade deste material para a atividade do seu setor/bloco"
+                      placeholder="Motivo do pedido"
                     />
                   </label>
                 </fieldset>
-                <p>
-                  {Number(quantity) || 0}{" "}
-                  {requestedUnit === "box" ? "caixas" : "peças"} ={" "}
-                  {unitsRequested || 0} peças.
-                </p>
+                {requestedUnit === "box" && (
+                  <p>{Number(quantity) || 0} caixas · {unitsRequested || 0} peças</p>
+                )}
                 {anomaly.reasons.map((reason) => (
                   <p key={reason} role="note">
                     {reason}
                   </p>
                 ))}
                 {!anomaly.historySufficient && (
-                  <p>
-                    Histórico ainda insuficiente para comparar o consumo do
-                    setor/bloco. Pedidos urgentes exigem justificativa.
-                  </p>
+                  <details className={styles.requestCriteria}>
+                    <summary>Critérios do pedido</summary>
+                    <p>Histórico de consumo ainda insuficiente para comparação. Pedidos urgentes exigem justificativa.</p>
+                  </details>
                 )}
-                <p className={styles.employeeAvailable}>
+                {reservedForPart > 0 && <p className={styles.employeeAvailable}>
                   Disponível para novo pedido: {availableForPart} unidades{" "}
-                  {reservedForPart > 0 && `(${reservedForPart} no carrinho)`}
-                </p>
+                  ({reservedForPart} no carrinho)
+                </p>}
                 {error && (
                   <p role="alert" className={styles.formError}>
                     {error}
@@ -608,7 +605,7 @@ export function EmployeeRequestScreen({ routePart }: { routePart?: string }) {
                       : "Adicionar ao carrinho"}
                   </button>
                 </div>
-                {sending && <p className={styles.requestProgress} role="status">Registrando seu pedido. Aguarde a confirmação.</p>}
+                {sending && <p className={styles.srOnly} role="status">Registrando seu pedido. Aguarde a confirmação.</p>}
               </form>
             ) : (
               <div className={styles.employeeActions}>
@@ -638,7 +635,7 @@ export function EmployeeRequestScreen({ routePart }: { routePart?: string }) {
             )}
           </div>
         </div>
-        {cartPanel}
+        {cart.length > 0 && cartPanel}
       </main>
     );
   }
@@ -684,7 +681,6 @@ export function EmployeeRequestScreen({ routePart }: { routePart?: string }) {
           <div>
             <span className={styles.sectionEyebrow}>SEU ALMOXARIFADO</span>
             <h2 id="pieces-title">Catálogo de peças</h2>
-            <p>Escolha a peça certa para a sua atividade.</p>
           </div>
           <div className={styles.employeeCatalogTools}>
             <span className={styles.count}>

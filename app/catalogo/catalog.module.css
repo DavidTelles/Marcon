@@ -764,6 +764,41 @@
   flex-shrink: 0;
   animation: request-spin 900ms linear infinite;
 }
+.partDetails,
+.requestCriteria {
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--subtle);
+}
+.partDetails {
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 16px;
+  margin-bottom: 20px;
+}
+.partDetails summary,
+.requestCriteria summary {
+  width: fit-content;
+  max-width: 100%;
+  min-height: 44px;
+  align-content: center;
+  cursor: pointer;
+  font-weight: 600;
+}
+.partDetails summary:focus-visible,
+.requestCriteria summary:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+.requestCriteria p {
+  margin: 4px 0 12px;
+  overflow-wrap: anywhere;
+}
+.requestDestination {
+  font-size: 13px;
+  color: var(--subtle);
+}
 .requestProgress {
   color: var(--subtle);
   font-size: 13px;

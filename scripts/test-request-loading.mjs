@@ -42,10 +42,22 @@ try {
   await mkdir(".validation/request-loading", { recursive: true });
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
   await page.goto(`http://127.0.0.1:${server.address().port}`);
+  await page.getByText("Detalhes da peça", { exact: true }).click();
+  await page.getByText("ID ROL-6205-ZZ · QR ROL-6205-ZZ", { exact: true }).waitFor();
+  for (const width of [320, 375, 768, 1280]) {
+    await page.setViewportSize({ width, height: 812 });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  }
+  await page.getByText("Detalhes da peça", { exact: true }).click();
+  assert.equal(await page.getByRole("heading", { name: "Carrinho · 0 itens", exact: true }).count(), 0);
   await page.getByRole("button", { name: "Requisitar este item", exact: true }).click();
   await page.getByLabel("Quantidade", { exact: true }).fill("2");
   await page.getByLabel("Confirme a quantidade", { exact: true }).fill("2");
   await page.getByLabel(/Justificativa/).fill("Reposição para manutenção");
+  for (const width of [320, 375, 768, 1280]) {
+    await page.setViewportSize({ width, height: 812 });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  }
   await page.getByRole("button", { name: "Confirmar requisição", exact: true }).click();
   assert.equal(await page.getByRole("button", { name: "Enviando requisição…", exact: true }).isDisabled(), true);
   assert.equal(await page.getByLabel("Quantidade", { exact: true }).isDisabled(), true);
@@ -62,6 +74,7 @@ try {
   await page.getByRole("button", { name: "Confirmar requisição", exact: true }).click();
   await page.getByRole("button", { name: "Enviando requisição…", exact: true }).waitFor();
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await page.screenshot({ path: ".validation/request-loading/sending-mobile.png", fullPage: true });
   await page.evaluate(() => window.finish());
   await page.getByRole("status").filter({ hasText: "Requisição #123 registrada" }).waitFor();
   const cartPage = await browser.newPage({ viewport: { width: 375, height: 812 } });
