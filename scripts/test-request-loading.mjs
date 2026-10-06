@@ -8,12 +8,12 @@ import { chromium } from "@playwright/test";
 const mocks = {
   "../demo-store": `import {useState} from 'react'; export function useDemoStore(){
     const [cart,setCart]=useState(window.initialCart || []);
-    return {stock:[{id:1,code:'ROL-6205-ZZ',name:'Rolamento 6205 ZZ',quantity:10,available:10,packSize:1,category:'Rolamentos',warehouse:'Central',unit:'un'}],requests:[],setRequests:()=>{},cart,setCart,persistent:true,
+    return {stock:window.catalogParts || [{id:1,code:'ROL-6205-ZZ',name:'Rolamento 6205 ZZ',quantity:10,available:10,packSize:1,category:'Rolamentos',warehouse:'Central',unit:'un'}],requests:[],setRequests:()=>{},cart,setCart,persistent:true,
     runAction:(action)=>{window.calls=(window.calls||0)+1;window.lastAction=action;return new Promise((resolve,reject)=>{window.finish=()=>resolve({ids:[123]});window.fail=()=>reject(new Error('Falha de teste. Tente novamente.'));});}};}`,
   "../employee-identity": `export const useEmployeeName=()=> 'Funcionário';export const useEmployeeBlock=()=> 'Bloco A';`,
   "next/navigation": `export const useRouter=()=>({push:(path)=>{window.destination=path;}});`,
   "next/link": `export default function Link({children,...props}){return <a {...props}>{children}</a>;}`,
-  "next/image": `export default function Image({fill,unoptimized,priority,...props}){return <img {...props}/>;}`,
+  "next/image": `export default function Image({fill,unoptimized,priority,...props}){return <img {...props} style={fill ? {position:'absolute',inset:0,width:'100%',height:'100%'} : undefined}/>;}`,
 };
 const compiled = await build({
   stdin: {
@@ -31,7 +31,16 @@ const compiled = await build({
 const js = compiled.outputFiles.find((file) => file.path.endsWith(".js")).text;
 const css = compiled.outputFiles.find((file) => file.path.endsWith(".css")).text;
 const globalCss = await readFile("app/globals.css", "utf8");
+const catalogParts = JSON.parse(await readFile("data/parts-catalog.json", "utf8")).map((part, index) => ({
+  ...part, id: index + 1, quantity: 10, available: 10, minimum: 0, warehouse: "Central",
+}));
+const assets = new Map(await Promise.all(catalogParts.map(async (part) => [part.image, await readFile("public" + part.image)])));
 const server = createServer((request, response) => {
+  if (assets.has(request.url)) {
+    response.setHeader("Content-Type", "image/webp");
+    response.end(assets.get(request.url));
+    return;
+  }
   response.setHeader("Content-Type", request.url === "/fixture.js" ? "text/javascript" : "text/html");
   response.end(request.url === "/fixture.js" ? js : `<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1"><style>${globalCss}\n${css}</style><div id="root"></div><script src="/fixture.js"></script>`);
 });
@@ -85,6 +94,37 @@ try {
   assert.equal(await cartPage.getByRole("button", { name: "Remover", exact: true }).isDisabled(), true);
   await cartPage.evaluate(() => window.finish());
   await cartPage.waitForFunction(() => window.destination === "/employee/requests");
+  const catalogPage = await browser.newPage();
+  await catalogPage.addInitScript((parts) => { window.initialCart = []; window.catalogParts = parts; }, catalogParts);
+  await catalogPage.goto(`http://127.0.0.1:${server.address().port}`);
+  const cards = catalogPage.locator("article");
+  await cards.nth(11).waitFor();
+  await catalogPage.waitForFunction(() => Array.from(document.images).every((img) => img.complete && img.naturalWidth > 0));
+  for (const width of [320, 375, 390, 600]) {
+    await catalogPage.setViewportSize({ width, height: 812 });
+    const first = await cards.nth(0).boundingBox();
+    const second = await cards.nth(1).boundingBox();
+    assert.equal(first.y, second.y);
+    assert.ok(second.x > first.x);
+    assert.ok(first.height < 280);
+    assert.equal(await catalogPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    await catalogPage.getByRole("heading", { name: "Catálogo de peças", exact: true }).scrollIntoViewIfNeeded();
+    if (width === 375) await catalogPage.screenshot({ path: ".validation/request-loading/catalog-mobile.png", fullPage: true });
+  }
+  await catalogPage.setViewportSize({ width: 1280, height: 900 });
+  const desktop = await cards.nth(0).boundingBox();
+  const hero = await catalogPage.locator("section").first().boundingBox();
+  await catalogPage.evaluate(() => {
+    for (const sheet of document.styleSheets) {
+      for (let index = sheet.cssRules.length - 1; index >= 0; index--) {
+        const rule = sheet.cssRules[index];
+        if (rule instanceof CSSMediaRule && rule.conditionText === "(max-width: 600px)") sheet.deleteRule(index);
+      }
+    }
+  });
+  assert.deepEqual(await cards.nth(0).boundingBox(), desktop);
+  assert.deepEqual(await catalogPage.locator("section").first().boundingBox(), hero);
+  console.info("PASS: Mobile catalog shows two compact cards per row from 320 to 600px, all real photos load and desktop layout matches without the mobile rules");
   console.info("PASS: Actual request form and cart show loading, prevent duplicate submits, preserve input after errors, confirm success and fit mobile screens (controlled store response)");
 } finally {
   await browser?.close();

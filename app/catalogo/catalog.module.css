@@ -1171,3 +1171,62 @@
     margin-top: 0;
   }
 }
+
+/* Denser catalog on phones; desktop proportions stay unchanged. */
+@media (max-width: 600px) {
+  .content,
+  .appShell .content { padding: 16px 12px 40px; }
+  .hero,
+  .appShell .hero { min-height: 0; border-radius: 12px; }
+  .heroText,
+  .appShell .heroText { padding: 16px 18px; }
+  .hero h1,
+  .appShell .hero h1 {
+    font-size: 22px;
+    line-height: 1.2;
+    letter-spacing: -.6px;
+    margin: 8px 0 0;
+  }
+  .hero p,
+  .heroLink { display: none; }
+  .catalogSection { padding-top: 20px; }
+  .sectionHeading { gap: 4px; margin-bottom: 12px; }
+  .sectionHeading .sectionEyebrow { display: none; }
+  .sectionHeading h2,
+  .appShell .sectionHeading h2 { font-size: 20px; margin: 0; }
+  .employeeCatalogTools { gap: 8px; }
+  .cartShortcut { min-height: 44px; padding: 8px; }
+  .toolbar { margin-bottom: 8px; gap: 4px; }
+  .searchBox { min-height: 44px; padding-inline: 12px; }
+  .searchBox input { height: 42px; }
+  .chips { padding-bottom: 8px; gap: 6px; overscroll-behavior-x: contain; }
+  .chip,
+  .chipActive { padding-inline: 12px; }
+  .productGrid,
+  .skeletonGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .appShell .productGrid,
+  .appShell .skeletonGrid { gap: 10px; }
+  .productCard { border-radius: 12px; }
+  .productCard .itemArt { height: clamp(104px, 30vw, 140px); }
+  .productCard .artCode { display: none; }
+  .cardBody,
+  .appShell .cardBody { min-height: 105px; padding: 10px; }
+  .cardBody .category { font-size: 0; }
+  .cardBody .category span { font-size: 10px; overflow-wrap: anywhere; }
+  .cardBody h3,
+  .appShell .cardBody h3 {
+    font-size: 13px;
+    line-height: 1.35;
+    margin: 6px 0 10px;
+    overflow-wrap: anywhere;
+  }
+  .cardBottom { gap: 4px; align-items: flex-end; }
+  .cardBottom .available,
+  .cardBottom .unavailable { font-size: 10px; line-height: 1.4; }
+  .cardBottom .available::before,
+  .cardBottom .unavailable::before { flex-shrink: 0; }
+  .cardArrow { flex-shrink: 0; }
+}
