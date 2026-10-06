@@ -1,5 +1,6 @@
-const { query } = require('../config/db');
-const { ROLE_CODES, ROLE_PERMISSIONS } = require('../config/constants');
+const { query, withTransaction } = require("../config/db");
+const { resolveUserLocation } = require("../workspace/user-location");
+const { ROLE_CODES, ROLE_PERMISSIONS } = require("../config/constants");
 
 function publicUser(row) {
   if (!row) return null;
@@ -13,9 +14,12 @@ function publicUser(row) {
     role_name: row.role,
     sector: row.sector,
     block_id: row.block_id,
+    branch_id: row.branch_id,
+    sector_id: row.sector_id,
+    workplace_id: row.workplace_id,
     block: row.block_name || null,
     is_active: Boolean(row.active),
-    created_at: row.created_at
+    created_at: row.created_at,
   };
 }
 
@@ -40,77 +44,139 @@ async function findByEmployeeCode(code) {
   return rows[0] || null;
 }
 
-
 async function list(filters = {}) {
   const where = [];
   const params = [];
   if (filters.role) {
-    where.push('u.role = ?');
+    where.push("u.role = ?");
     params.push(ROLE_ENUM_FROM_CODE(filters.role));
   }
   if (filters.sector) {
-    where.push('u.sector = ?');
+    where.push("u.sector = ?");
     params.push(filters.sector);
   }
-  const sql = `${BASE_SELECT} ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY u.id`;
+  const sql = `${BASE_SELECT} ${where.length ? `WHERE ${where.join(" AND ")}` : ""} ORDER BY u.id`;
   return query(sql, params);
 }
 
 function ROLE_ENUM_FROM_CODE(role) {
   // aceita tanto o código (ADMIN) quanto o enum (admin)
-  return ROLE_CODES[role] ? role : (Object.entries(ROLE_CODES).find(([, v]) => v === role) || [])[0] || role;
+  return ROLE_CODES[role]
+    ? role
+    : (Object.entries(ROLE_CODES).find(([, v]) => v === role) || [])[0] || role;
 }
 
 async function create(data) {
-  const result = await query(
-    `INSERT INTO users (employee_no, name, email, password_hash, role, sector, block_id, active)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      data.employee_code,
-      data.name,
-      data.email,
-      data.password_hash,
-      data.role_enum,
-      data.sector || 'Geral',
-      data.block_id || null,
-      data.is_active ?? 1
-    ]
-  );
-  return findById(result.insertId);
-}
-
-async function update(id, data) {
-  const fields = [];
-  const params = [];
-  const map = {
-    name: 'name',
-    email: 'email',
-    password_hash: 'password_hash',
-    role_enum: 'role',
-    sector: 'sector',
-    block_id: 'block_id',
-    is_active: 'active'
-  };
-  for (const [key, column] of Object.entries(map)) {
-    if (data[key] !== undefined) {
-      fields.push(`${column} = ?`);
-      params.push(data[key]);
-    }
-  }
-  if (!fields.length) return findById(id);
-  params.push(id);
-  await query(`UPDATE users SET ${fields.join(', ')} WHERE id = ?`, params);
+  const id = await withTransaction(async (c) => {
+    const location = await resolveUserLocation(
+      c,
+      {
+        sector: data.sector || "Geral",
+        sectorId: data.sector_id,
+        workplaceId: data.workplace_id,
+      },
+      data.block_id ? Number(data.block_id) : null,
+    );
+    const [result] = await c.execute(
+      `INSERT INTO users (employee_no, name, email, password_hash, role, sector, block_id, active, branch_id, sector_id, workplace_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+      [
+        data.employee_code,
+        data.name,
+        data.email,
+        data.password_hash,
+        data.role_enum,
+        location.sector,
+        location.blockId,
+        data.is_active ?? 1,
+        location.branchId,
+        location.sectorId,
+        location.workplaceId,
+      ],
+    );
+    return result.insertId;
+  });
   return findById(id);
 }
 
+async function update(id, data) {
+  return withTransaction(async (c) => {
+    const [existingRows] = await c.execute(
+      "SELECT * FROM users WHERE id=? FOR UPDATE",
+      [id],
+    );
+    const existing = existingRows[0];
+    if (!existing) return null;
+    const changes = { ...data };
+    delete changes.branch_id;
+    if (
+      ["sector", "block_id", "sector_id", "workplace_id"].some(
+        (key) => data[key] !== undefined,
+      )
+    ) {
+      const location = await resolveUserLocation(
+        c,
+        {
+          sector: data.sector ?? existing.sector,
+          sectorId: data.sector_id,
+          workplaceId: data.workplace_id,
+        },
+        data.block_id === undefined
+          ? existing.block_id
+            ? Number(existing.block_id)
+            : null
+          : data.block_id
+            ? Number(data.block_id)
+            : null,
+        existing,
+      );
+      Object.assign(changes, {
+        sector: location.sector,
+        block_id: location.blockId,
+        branch_id: location.branchId,
+        sector_id: location.sectorId,
+        workplace_id: location.workplaceId,
+      });
+    }
+    const fields = [];
+    const params = [];
+    const map = {
+      name: "name",
+      email: "email",
+      password_hash: "password_hash",
+      role_enum: "role",
+      sector: "sector",
+      block_id: "block_id",
+      branch_id: "branch_id",
+      sector_id: "sector_id",
+      workplace_id: "workplace_id",
+      is_active: "active",
+    };
+    for (const [key, column] of Object.entries(map)) {
+      if (changes[key] !== undefined) {
+        fields.push(`${column} = ?`);
+        params.push(changes[key]);
+      }
+    }
+    if (!fields.length) return existing;
+    params.push(id);
+    await c.execute(
+      `UPDATE users SET ${fields.join(", ")} WHERE id = ?`,
+      params,
+    );
+    const [saved] = await c.execute(`${BASE_SELECT} WHERE u.id=?`, [id]);
+    return saved[0];
+  });
+}
+
 async function getPermissionsForUser(userId) {
-  const rows = await query('SELECT role FROM users WHERE id = ?', [userId]);
+  const rows = await query("SELECT role FROM users WHERE id = ?", [userId]);
   if (!rows[0]) return [];
   const roleCode = ROLE_CODES[rows[0].role];
   const set = new Set(ROLE_PERMISSIONS[roleCode] || []);
   const overrides = await query(
-    'SELECT permission, allowed FROM user_permission_overrides WHERE user_id = ?',
-    [userId]
+    "SELECT permission, allowed FROM user_permission_overrides WHERE user_id = ?",
+    [userId],
   );
   for (const o of overrides) {
     if (o.allowed) set.add(o.permission);
@@ -119,8 +185,13 @@ async function getPermissionsForUser(userId) {
   return [...set];
 }
 async function getPermissionOverridesForUser(userId) {
-  const rows = await query('SELECT permission,allowed FROM user_permission_overrides WHERE user_id=?', [userId]);
-  return Object.fromEntries(rows.map((row) => [row.permission, Boolean(row.allowed)]));
+  const rows = await query(
+    "SELECT permission,allowed FROM user_permission_overrides WHERE user_id=?",
+    [userId],
+  );
+  return Object.fromEntries(
+    rows.map((row) => [row.permission, Boolean(row.allowed)]),
+  );
 }
 
 async function setPermissionOverride(userId, permissionCode, allowed) {
@@ -128,7 +199,7 @@ async function setPermissionOverride(userId, permissionCode, allowed) {
     `INSERT INTO user_permission_overrides (user_id, permission, allowed)
      VALUES (?, ?, ?)
      ON DUPLICATE KEY UPDATE allowed = VALUES(allowed)`,
-    [userId, permissionCode, allowed ? 1 : 0]
+    [userId, permissionCode, allowed ? 1 : 0],
   );
   return getPermissionsForUser(userId);
 }
@@ -143,5 +214,5 @@ module.exports = {
   create,
   update,
   getPermissionsForUser,
-  setPermissionOverride
+  setPermissionOverride,
 };

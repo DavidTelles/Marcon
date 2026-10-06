@@ -7,6 +7,7 @@ import { Pencil, Plus, UserRoundCheck, UserRoundX } from "lucide-react";
 import { heading } from "../ui";
 import { useDemoStore } from "../demo-store";
 import type { StaffRole, StaffUser } from "@/lib/staff-data";
+import { IndustrialLinks } from "../operations/industrial-links";
 
 const roles: StaffRole[] = [
   "Administrador",
@@ -230,6 +231,7 @@ export function StaffScreen({
           <strong>{staff.filter((user) => !user.active).length}</strong>
         </div>
       </div>
+      {persistent && <IndustrialLinks />}
       {formOpen && (
         <form className="panel staff-form" onSubmit={saveUser}>
           <div className="panel-head">

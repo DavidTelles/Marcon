@@ -27,6 +27,7 @@ var import_password = require("./password");
 var import_permissions = require("./permissions");
 var import_permissions2 = require("./permissions");
 var import_inventory_actions = require("./inventory-actions");
+const { resolveUserLocation } = require("./user-location");
 function requireRole(user, roles) {
   if (!roles.includes(user.role))
     throw new import_permissions.ActionError("Perfil sem permiss\xE3o para esta a\xE7\xE3o.", 403);
@@ -83,6 +84,9 @@ async function executeWorkspaceActionCore(user, input, connection) {
         const actor = await actorId(c, user);
         const part = await one(c, "SELECT id FROM parts WHERE code=? AND active=TRUE", [action.code]);
         if (!part) throw new import_permissions.ActionError("Material inexistente.", 404);
+        const proposal = await one(c, "SELECT key,status FROM stock_recommendations WHERE key=? AND part_id=? FOR UPDATE", [action.recommendation.key, part.id]);
+        if (!proposal || proposal.status !== 'Pendente') throw new import_permissions.ActionError("A recomendação mudou ou já foi decidida. Atualize o relatório.", 409);
+        await c.execute("UPDATE stock_recommendations SET status='Rejeitada',decided_at=NOW(),decided_by=? WHERE key=?", [actor,proposal.key]);
         await audit(c, actor, "recommendation", Number(part.id), "reject", action.recommendation);
         return { ok: true };
       });
@@ -138,10 +142,12 @@ async function executeWorkspaceActionCore(user, input, connection) {
         if (action.editingId) {
           const existing = await one(
             connection2,
-            "SELECT id FROM users WHERE employee_no = ? FOR UPDATE",
+            "SELECT * FROM users WHERE employee_no = ? FOR UPDATE",
             [action.editingId]
           );
           if (!existing) throw new import_permissions.ActionError("Usu\xE1rio n\xE3o encontrado.", 404);
+          const location = await resolveUserLocation(connection2, data, blockId ? Number(blockId) : null, existing);
+          await connection2.execute("UPDATE users SET branch_id=?,sector_id=?,workplace_id=?,block_id=?,sector=? WHERE id=?", [location.branchId, location.sectorId, location.workplaceId, location.blockId, location.sector, existing.id]);
           if (password) {
             await connection2.execute(
               "UPDATE users SET employee_no = ?, name = ?, email = ?, sector = ?, role = ?, block_id = ?, active = ?, password_hash = ? WHERE id = ?",
@@ -149,7 +155,7 @@ async function executeWorkspaceActionCore(user, input, connection) {
                 employeeNo,
                 name,
                 email,
-                sector,
+                location.sector,
                 role,
                 blockId,
                 active,
@@ -164,7 +170,7 @@ async function executeWorkspaceActionCore(user, input, connection) {
                 employeeNo,
                 name,
                 email,
-                sector,
+                location.sector,
                 role,
                 blockId,
                 active,
@@ -182,17 +188,21 @@ async function executeWorkspaceActionCore(user, input, connection) {
           );
           return { id: Number(existing.id) };
         }
+        const location = await resolveUserLocation(connection2, data, blockId ? Number(blockId) : null);
         const [result] = await connection2.execute(
-          "INSERT INTO users (employee_no, name, email, password_hash, sector, role, block_id, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+          "INSERT INTO users (employee_no, name, email, password_hash, sector, role, block_id, active,branch_id,sector_id,workplace_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?,?,?,?)",
           [
             employeeNo,
             name,
             email,
             (0, import_password.hashPassword)(password),
-            sector,
+            location.sector,
             role,
             blockId,
-            active
+            active,
+            location.branchId,
+            location.sectorId,
+            location.workplaceId
           ]
         );
         await audit(connection2, actor, "user", result.insertId, "create", {

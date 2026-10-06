@@ -29,8 +29,12 @@ Acesse http://localhost:3000. A API fica em http://localhost:3001 e o Swagger em
 - `npm run dev:api`: inicia só o Express.
 - `npm run build` e `npm start`: build e execução.
 - `npm run test:api`: testes da API.
+- `npm run test:logistics`: integração dos fluxos operacionais em schema temporário do PostgreSQL real.
+- `npm run test:logistics:ui`: inclui navegador, sessão, vínculos, exportações e publicação; execute `npm run build` antes.
 - `npm run test:login-routes`: verifica login dos quatro perfis, cookies, logout e rotas com os serviços em execução; requer `TEST_PASSWORD` ou `SEED_PASSWORD` das contas de teste.
 
 A instalação também pode ser feita separadamente com `npm ci` e `npm ci --prefix backend`. O reconhecimento facial requer Python e os pacotes listados em `face/requirements.txt`. Consulte [APP.md](APP.md) para detalhes da interface.
 
 Os fluxos de solicitações, retirada, entrega, materiais do bloco, reposição e planta estão descritos em [Fluxo integrado de materiais](docs/enterprise-workflow.md). O acesso operacional exige o banco e o backend, sem login automático de demonstração.
+
+O assistente Marco usa Ollama local, com comandos validados, voz e ponte autenticada para acesso pela Vercel. Consulte [configuração e cobertura](docs/marco-ollama.md) e [testes e medições](docs/marco-tests.md). Comece por `npm run marco:doctor`.

@@ -227,6 +227,9 @@ async function workspaceSnapshot(user, catalogOnly = false) {
         name: String(u.name),
         email: String(u.email),
         sector: String(u.sector),
+        branchId: u.branch_id ? Number(u.branch_id) : void 0,
+        sectorId: u.sector_id ? Number(u.sector_id) : void 0,
+        workplaceId: u.workplace_id ? Number(u.workplace_id) : void 0,
         role: roles[u.role],
         active: Boolean(u.active),
         block: u.block ? String(u.block) : void 0

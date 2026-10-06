@@ -10,6 +10,58 @@ export type MapText = {
   y: number;
   confidence: number;
 };
+
+/** Only unambiguous exact catalog matches acquire IDs; positions still require review. */
+export function bindSuggestedLocations(
+  graph: FacilityGraph,
+  catalog: {
+    warehouses: { id: number; name: string }[];
+    blocks: { id: number; name: string }[];
+    sectors: { id: number; name: string; block_id: number }[];
+  },
+) {
+  const normalized = (s: string) =>
+    s
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+  return {
+    ...graph,
+    reviewed: false,
+    nodes: graph.nodes.map((node) => {
+      if (!node.suggestedLabel) return node;
+      const label = normalized(node.suggestedLabel);
+      const matches = [
+        ...catalog.warehouses
+          .filter((w) => normalized(w.name) === label)
+          .map((w) => ({
+            kind: "warehouse" as const,
+            warehouseId: Number(w.id),
+          })),
+        ...catalog.blocks
+          .filter((b) => normalized(b.name) === label)
+          .map((b) => ({ kind: "block" as const, blockId: Number(b.id) })),
+        ...catalog.sectors
+          .filter((s) => normalized(s.name) === label)
+          .map((s) => ({
+            kind: "sector" as const,
+            sectorId: Number(s.id),
+            blockId: Number(s.block_id),
+          })),
+      ];
+      if (matches.length !== 1) return node;
+      return {
+        ...node,
+        ...matches[0],
+        label: node.suggestedLabel,
+        uncertain: true,
+        suggestion: `Cadastro identificado pelo texto da planta: ${node.suggestedLabel}. Confira a posição física antes de publicar.`,
+      };
+    }),
+  };
+}
 // Conservative occupancy: even a thin dark stroke blocks its entire cell.
 // Text/furniture may therefore reject a real passage. Never erase ink to guess a door.
 export function obstacleGrid(

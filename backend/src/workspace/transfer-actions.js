@@ -28,7 +28,17 @@ async function transferAction(c, actor, a) {
         const currentRoute = await (0, delivery_planning_1.storageRoute)(c, Number(p.id), Number(source.id), Number(dest.id), { objective: a.objective, transport: a.transport });
         let routeEvidence = currentRoute;
         if (a.recommendation && typeof a.recommendation === "object") {
-            const rec = a.recommendation;
+            const key = a.recommendation.key;
+            if (typeof key !== "string" || !/^[a-f0-9]{64}$/.test(key))
+                throw new permissions_1.ActionError("Recomendação inválida.");
+            const saved = await (0, stock_ledger_1.first)(c, "SELECT *,created_at<DATE_SUB(NOW(),INTERVAL 15 MINUTE) AS expired FROM stock_recommendations WHERE key=? FOR UPDATE", [key]);
+            if (!saved || saved.status !== "Pendente" || saved.expired || Number(saved.part_id) !== Number(p.id) || Number(saved.source_warehouse_id) !== Number(source.id) || Number(saved.destination_warehouse_id) !== Number(dest.id) || Number(saved.quantity) !== q || String(saved.part_updated_at) !== String(p.updated_at))
+                throw new permissions_1.ActionError("A recomendação mudou, expirou ou já foi decidida. Atualize o relatório.", 409);
+            const rec = typeof saved.payload === "string" ? JSON.parse(saved.payload) : saved.payload;
+            rec.key = key;
+            rec.mapVersion = Number(saved.map_version_id);
+            if (Number(rec.sourceAvailable) !== (0, stock_ledger_1.available)(b) || !destination || Number(rec.destinationAvailable) !== (0, stock_ledger_1.available)(destination))
+                throw new permissions_1.ActionError("Os saldos ou reservas mudaram. Atualize a recomendação.", 409);
             if (currentRoute.mapVersion !== rec.mapVersion)
                 throw new permissions_1.ActionError("A planta mudou. Atualize a recomendação.", 409);
             const route = currentRoute.route;
@@ -44,8 +54,10 @@ async function transferAction(c, actor, a) {
             reason: note,
             route: routeEvidence,
         });
-        if (a.recommendation)
+        if (a.recommendation) {
+            await c.execute("UPDATE stock_recommendations SET status='Aceita',decided_at=NOW(),decided_by=?,transfer_id=? WHERE key=?", [actor, r.insertId, a.recommendation.key]);
             await (0, stock_ledger_1.audit)(c, actor, "recommendation", Number(p.id), "accept", { transferId: r.insertId, ...routeEvidence });
+        }
         return { id: r.insertId };
     }
     const id = (0, permissions_1.integer)(a.id);

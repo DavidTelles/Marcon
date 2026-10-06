@@ -95,6 +95,7 @@ export const inventory = pgTable("inventory", {
 }, (t) => [primaryKey({ columns: [t.partId, t.warehouseId] })]);
 
 export const requests = pgTable("requests", {
+  destinationPointId: varchar("destination_point_id", { length: 64 }),
   sectorId: bigint("sector_id", { mode: "number" }).references(() => sectors.id),
   workplaceId: bigint("workplace_id", { mode: "number" }).references((): AnyPgColumn => workplaces.id),
   requestedUnit: varchar("requested_unit", { length: 12 }).notNull().default("piece"),
@@ -113,7 +114,7 @@ export const requests = pgTable("requests", {
   deliveredAt: timestamp("delivered_at", { mode: "string", precision: 3 }),
   receivedAt: timestamp("received_at", { mode: "string", precision: 3 }),
   cancellationReason: varchar("cancellation_reason", { length: 1000 }),
-}, (t) => [index("idx_request_block_status").on(t.blockId, t.status, t.createdAt), index("idx_request_user_date").on(t.requesterId, t.createdAt), index("idx_request_part_date").on(t.partId, t.createdAt)]);
+}, (t) => [index("idx_request_block_status").on(t.blockId, t.status, t.createdAt), index("idx_request_user_date").on(t.requesterId, t.createdAt), index("idx_request_part_date").on(t.partId, t.createdAt), index("idx_requests_destination_point").on(t.destinationPointId).where(sql`${t.destinationPointId} IS NOT NULL`), foreignKey({name:"requests_destination_point_id_fkey",columns:[t.destinationPointId],foreignColumns:[plantPoints.id]})]);
 
 export const stockTransfers = pgTable("stock_transfers", {
   id: id(), partId: ref("part_id", () => parts), sourceWarehouseId: ref("source_warehouse_id", () => warehouses), destinationWarehouseId: ref("destination_warehouse_id", () => warehouses),
@@ -245,3 +246,20 @@ export const reportedBalances = pgTable("reported_balances", {
 export const reportedPurchases = pgTable("reported_purchases", {
   id: id(), sourceLineId: bigint("source_line_id", { mode: "number" }).notNull().unique().references(() => materialImportLines.id), materialId: bigint("material_id", { mode: "number" }).references(() => parts.id), branchId: ref("branch_id", () => branches), directive: text("directive"), orderQuantity: decimal("order_quantity", { precision: 20, scale: 6, mode: "number" }), parcelTotal: decimal("parcel_total", { precision: 20, scale: 6, mode: "number" }), programme: jsonb("programme").notNull(),
 });
+
+export const stockRecommendations = pgTable("stock_recommendations", {
+  key: char("key", { length: 64 }).primaryKey(), partId: bigint("part_id", { mode: "number" }).notNull(),
+  sourceWarehouseId: bigint("source_warehouse_id", { mode: "number" }).notNull(), destinationWarehouseId: bigint("destination_warehouse_id", { mode: "number" }).notNull(),
+  quantity: integer("quantity").notNull(), mapVersionId: bigint("map_version_id", { mode: "number" }).notNull(),
+  partUpdatedAt: timestamp("part_updated_at", { mode: "string", precision: 3 }).notNull(), payload: jsonb("payload").notNull(),
+  status: varchar("status", { length: 16 }).notNull().default("Pendente"), createdAt: createdAt(),
+  decidedAt: timestamp("decided_at", { mode: "string", precision: 3 }), decidedBy: bigint("decided_by", { mode: "number" }),
+  transferId: bigint("transfer_id", { mode: "number" }),
+}, (t) => [index("idx_stock_recommendations_part").on(t.partId,t.status), check("stock_recommendations_quantity_check", sql`${t.quantity}>0`), check("stock_recommendations_status_check", sql`${t.status} IN ('Pendente','Aceita','Rejeitada')`),
+  foreignKey({name:"stock_recommendations_part_id_fkey",columns:[t.partId],foreignColumns:[parts.id]}),
+  foreignKey({name:"stock_recommendations_source_warehouse_id_fkey",columns:[t.sourceWarehouseId],foreignColumns:[warehouses.id]}),
+  foreignKey({name:"stock_recommendations_destination_warehouse_id_fkey",columns:[t.destinationWarehouseId],foreignColumns:[warehouses.id]}),
+  foreignKey({name:"stock_recommendations_map_version_id_fkey",columns:[t.mapVersionId],foreignColumns:[mapVersions.id]}),
+  foreignKey({name:"stock_recommendations_decided_by_fkey",columns:[t.decidedBy],foreignColumns:[users.id]}),
+  foreignKey({name:"stock_recommendations_transfer_id_fkey",columns:[t.transferId],foreignColumns:[stockTransfers.id]}),
+]);

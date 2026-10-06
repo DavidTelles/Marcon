@@ -117,8 +117,7 @@ async function recordDeliveryPlan(c, user, a, id) {
             ? graph.nodes.find((n) => n.id === v.map_node_id &&
                 n.warehouseId === Number(v.warehouse_id))?.id
             : graph.nodes.find((n) => n.warehouseId === Number(v.warehouse_id))?.id);
-        const workplace = r.workplace_id ? await (0, stock_ledger_1.first)(c, "SELECT point_id FROM workplaces WHERE id=?", [r.workplace_id]) : null;
-        const ends = (0, routing_1.deliveryTargets)(graph, Number(r.block_id), r.sector_id ? Number(r.sector_id) : undefined, workplace?.point_id ? String(workplace.point_id) : undefined);
+        const ends = (0, routing_1.deliveryTargets)(graph, Number(r.block_id), r.sector_id ? Number(r.sector_id) : undefined, r.destination_point_id ? String(r.destination_point_id) : undefined);
         if (destinations.some((d) => !graph.nodes.some((n) => n.id === d && n.kind === "delivery")))
             throw new permissions_1.ActionError("Destino adicional não é um ponto de entrega do mapa atual.");
         start ||= pickups[0] ?? "";

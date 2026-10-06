@@ -7,15 +7,125 @@ exports.syncPublishedPoints = syncPublishedPoints;
 const db_1 = require("./db");
 const permissions_1 = require("./permissions");
 const stock_ledger_1 = require("./stock-ledger");
+const routing_1 = require("./routing");
+/** Published, reviewed IDs are authoritative; ambiguous positions remain unset. */
+async function fillUnmappedInventory(c, graph, version, actor) {
+    if (!graph.reviewed || (0, routing_1.graphProblems)(graph).length)
+        return 0;
+    const inventory = await (0, stock_ledger_1.rows)(c, "SELECT i.part_id,i.warehouse_id FROM inventory i JOIN parts p ON p.id=i.part_id JOIN warehouses w ON w.id=i.warehouse_id WHERE i.map_node_id IS NULL AND p.active=TRUE AND w.active=TRUE ORDER BY i.part_id,i.warehouse_id");
+    let linked = 0;
+    for (const i of inventory) {
+        const candidates = graph.nodes.filter((n) => n.warehouseId === Number(i.warehouse_id) &&
+            !!(0, routing_1.shortestPath)(graph, n.id, n.id));
+        if (candidates.length !== 1)
+            continue;
+        const [result] = await c.execute("UPDATE inventory SET map_node_id=? WHERE part_id=? AND warehouse_id=? AND map_node_id IS NULL", [candidates[0].id, i.part_id, i.warehouse_id]);
+        if (!result.affectedRows)
+            continue;
+        linked++;
+        await (0, stock_ledger_1.audit)(c, actor, "industrial_link", Number(i.part_id), "inventoryPoint", {
+            warehouseId: Number(i.warehouse_id),
+            pointId: candidates[0].id,
+            mapVersion: version,
+            basis: "unique_published_point",
+        });
+    }
+    return linked;
+}
+async function validateWorkplacePoint(c, point, blockId, sectorId) {
+    const map = await (0, stock_ledger_1.first)(c, "SELECT graph FROM map_versions WHERE status='Publicada' FOR SHARE");
+    const graph = map
+        ? typeof map.graph === "string"
+            ? JSON.parse(map.graph)
+            : map.graph
+        : null;
+    if (!graph?.reviewed ||
+        (0, routing_1.graphProblems)(graph).length ||
+        !(0, routing_1.deliveryTargets)(graph, blockId, sectorId, point).some((n) => !n.blocked && !n.restricted))
+        throw new permissions_1.ActionError("O ponto não é um destino transitável do bloco e setor na planta publicada.", 409);
+}
 async function industrialLinks(user) {
     (0, permissions_1.demand)(user, "people");
-    const c = (0, db_1.getPool)();
-    const [branches, blocks, sectors, workplaces, points, users, warehouses, pending] = await Promise.all([
-        (0, stock_ledger_1.rows)(c, "SELECT * FROM branches ORDER BY code"), (0, stock_ledger_1.rows)(c, "SELECT * FROM blocks ORDER BY code"), (0, stock_ledger_1.rows)(c, "SELECT * FROM sectors ORDER BY code"), (0, stock_ledger_1.rows)(c, "SELECT * FROM workplaces ORDER BY code"), (0, stock_ledger_1.rows)(c, "SELECT * FROM plant_points WHERE active=TRUE ORDER BY label"),
-        (0, stock_ledger_1.rows)(c, "SELECT id,employee_no,name,block_id,branch_id,sector_id,workplace_id FROM users WHERE active=TRUE ORDER BY employee_no"), (0, stock_ledger_1.rows)(c, "SELECT id,code,name,block_id,branch_id FROM warehouses WHERE active=TRUE ORDER BY code"),
-        (0, stock_ledger_1.rows)(c, "SELECT p.code,w.name AS warehouse,i.map_node_id FROM inventory i JOIN parts p ON p.id=i.part_id JOIN warehouses w ON w.id=i.warehouse_id LEFT JOIN plant_points pt ON pt.id=i.map_node_id WHERE i.map_node_id IS NULL OR pt.id IS NULL OR pt.active=FALSE ORDER BY p.code,w.name LIMIT 200"),
-    ]);
-    return { branches, blocks, sectors, workplaces, points, users, warehouses, pending, basis: "Vínculos explícitos por IDs. Cadastros históricos sem vínculo exigem configuração; nomes não determinam localização." };
+    return (0, db_1.transaction)(async (c) => {
+        await c.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY");
+        const [branches, blocks, sectors, workplaces, points, users, warehouses, inventory, maps,] = await Promise.all([
+            (0, stock_ledger_1.rows)(c, "SELECT * FROM branches ORDER BY code"),
+            (0, stock_ledger_1.rows)(c, "SELECT * FROM blocks ORDER BY code"),
+            (0, stock_ledger_1.rows)(c, "SELECT * FROM sectors ORDER BY code"),
+            (0, stock_ledger_1.rows)(c, "SELECT * FROM workplaces ORDER BY code"),
+            (0, stock_ledger_1.rows)(c, "SELECT * FROM plant_points WHERE active=TRUE ORDER BY label"),
+            (0, stock_ledger_1.rows)(c, "SELECT id,employee_no,name,role,block_id,branch_id,sector_id,workplace_id FROM users WHERE active=TRUE ORDER BY employee_no"),
+            (0, stock_ledger_1.rows)(c, "SELECT id,code,name,block_id,branch_id FROM warehouses WHERE active=TRUE ORDER BY code"),
+            (0, stock_ledger_1.rows)(c, "SELECT p.id AS part_id,p.code,p.name,i.warehouse_id,w.name AS warehouse,i.map_node_id FROM inventory i JOIN parts p ON p.id=i.part_id JOIN warehouses w ON w.id=i.warehouse_id WHERE p.active=TRUE AND w.active=TRUE ORDER BY p.code,w.name"),
+            (0, stock_ledger_1.rows)(c, "SELECT id,graph FROM map_versions WHERE status='Publicada'"),
+        ]);
+        const graph = maps[0]
+            ? typeof maps[0].graph === "string"
+                ? JSON.parse(maps[0].graph)
+                : maps[0].graph
+            : null;
+        const valid = !!graph?.reviewed && !(0, routing_1.graphProblems)(graph).length;
+        const pending = inventory.filter((i) => !valid ||
+            !i.map_node_id ||
+            !graph.nodes.some((n) => n.id === i.map_node_id &&
+                n.warehouseId === Number(i.warehouse_id) &&
+                !!(0, routing_1.shortestPath)(graph, n.id, n.id)));
+        const destinations = users
+            .filter((u) => u.role === "funcionario")
+            .map((u) => {
+            const workplace = workplaces.find((w) => Number(w.id) === Number(u.workplace_id));
+            const targets = valid && u.block_id
+                ? (0, routing_1.deliveryTargets)(graph, Number(u.block_id), u.sector_id ? Number(u.sector_id) : undefined, workplace?.point_id || undefined)
+                : [];
+            const reachable = targets.some((t) => inventory.some((i) => i.map_node_id &&
+                !pending.includes(i) &&
+                (0, routing_1.shortestPath)(graph, String(i.map_node_id), t.id)));
+            return {
+                id: Number(u.id),
+                employee_no: String(u.employee_no),
+                name: String(u.name),
+                configured: !!u.sector_id,
+                reachable,
+            };
+        });
+        const unmappedWarehouses = warehouses.filter((w) => !valid || !graph.nodes.some((n) => n.warehouseId === Number(w.id)));
+        const unmappedBlocks = blocks.filter((b) => !valid || !graph.nodes.some((n) => n.blockId === Number(b.id)));
+        const readiness = {
+            mapVersion: valid ? Number(maps[0].id) : null,
+            mapPublished: valid,
+            scaleCalibrated: valid && graph.scaleCalibrated === true,
+            inventoryTotal: inventory.length,
+            inventoryPending: pending.length,
+            hierarchyPending: [...blocks, ...warehouses].filter((r) => !r.branch_id)
+                .length,
+            unmappedWarehouses: unmappedWarehouses.map((w) => ({
+                id: w.id,
+                name: w.name,
+            })),
+            unmappedBlocks: unmappedBlocks.map((b) => ({ id: b.id, name: b.name })),
+            employees: destinations,
+            ready: valid &&
+                graph.scaleCalibrated === true &&
+                [...blocks, ...warehouses].every((r) => !!r.branch_id) &&
+                !pending.length &&
+                !unmappedWarehouses.length &&
+                !unmappedBlocks.length &&
+                destinations.every((u) => u.configured && u.reachable),
+        };
+        return {
+            branches,
+            blocks,
+            sectors,
+            workplaces,
+            points,
+            users,
+            warehouses,
+            inventory,
+            pending: pending.slice(0, 200),
+            readiness,
+            basis: "Vínculos explícitos por IDs. Cadastros históricos sem vínculo exigem configuração; nomes não determinam localização.",
+        };
+    });
 }
 async function configureIndustrialLink(user, a) {
     (0, permissions_1.demand)(user, "people");
@@ -23,6 +133,32 @@ async function configureIndustrialLink(user, a) {
         const actor = await (0, stock_ledger_1.first)(c, "SELECT id FROM users WHERE employee_no=? AND active=TRUE FOR UPDATE", [user.id]);
         if (!actor)
             throw new permissions_1.ActionError("Sessão inválida.", 401);
+        if (a.type === "reconcile") {
+            (0, permissions_1.demand)(user, "stock");
+            const existing = await (0, stock_ledger_1.rows)(c, "SELECT u.id,u.sector,u.block_id,b.branch_id FROM users u JOIN blocks b ON b.id=u.block_id WHERE u.active=TRUE AND u.role IN ('funcionario','lider') AND u.sector_id IS NULL AND u.workplace_id IS NULL ORDER BY u.id FOR UPDATE OF u");
+            let employees = 0;
+            for (const u of existing) {
+                if (!u.branch_id || !String(u.sector || "").trim())
+                    continue;
+                const matches = await (0, stock_ledger_1.rows)(c, "SELECT id,name FROM sectors WHERE block_id=? AND branch_id=? AND LOWER(TRIM(name))=LOWER(TRIM(?))", [u.block_id, u.branch_id, u.sector]);
+                if (matches.length !== 1)
+                    continue;
+                await c.execute("UPDATE users SET sector_id=?,sector=?,branch_id=? WHERE id=?", [matches[0].id, matches[0].name, u.branch_id, u.id]);
+                await (0, stock_ledger_1.audit)(c, Number(actor.id), "industrial_link", Number(u.id), "userSector", { sectorId: Number(matches[0].id), basis: "unique_official_sector" });
+                employees++;
+            }
+            const map = await (0, stock_ledger_1.first)(c, "SELECT id,graph FROM map_versions WHERE status='Publicada' FOR SHARE");
+            const graph = map
+                ? typeof map.graph === "string"
+                    ? JSON.parse(map.graph)
+                    : map.graph
+                : null;
+            const inventory = graph
+                ? await fillUnmappedInventory(c, graph, Number(map.id), Number(actor.id))
+                : 0;
+            await (0, stock_ledger_1.audit)(c, Number(actor.id), "industrial_link", Number(actor.id), "reconcile", { employees, inventory });
+            return { id: Number(actor.id), reconciled: { employees, inventory } };
+        }
         let id;
         if (a.type === "branch") {
             const code = (0, permissions_1.text)(a.code, 64), name = (0, permissions_1.text)(a.name, 160) || null;
@@ -34,18 +170,27 @@ async function configureIndustrialLink(user, a) {
         else if (a.type === "blockBranch" || a.type === "warehouseBranch") {
             id = (0, permissions_1.integer)(a.id);
             const branchId = (0, permissions_1.integer)(a.branchId), table = a.type === "blockBranch" ? "blocks" : "warehouses";
-            if (!await (0, stock_ledger_1.first)(c, "SELECT id FROM branches WHERE id=?", [branchId]) || !await (0, stock_ledger_1.first)(c, `SELECT id FROM ${table} WHERE id=? FOR UPDATE`, [id]))
+            if (!(await (0, stock_ledger_1.first)(c, "SELECT id FROM branches WHERE id=?", [branchId])) ||
+                !(await (0, stock_ledger_1.first)(c, `SELECT id FROM ${table} WHERE id=? FOR UPDATE`, [id])))
                 throw new permissions_1.ActionError("Filial ou cadastro inexistente.", 404);
-            const dependents = await (0, stock_ledger_1.first)(c, table === "blocks" ? "SELECT id FROM sectors WHERE block_id=? AND branch_id<>? LIMIT 1" : "SELECT id FROM inventory i JOIN reported_balances r ON r.warehouse_id=i.warehouse_id WHERE i.warehouse_id=? AND r.branch_id<>? LIMIT 1", [id, branchId]);
+            const dependents = await (0, stock_ledger_1.first)(c, table === "blocks"
+                ? "SELECT id FROM sectors WHERE block_id=? AND branch_id<>? LIMIT 1"
+                : "SELECT id FROM reported_balances WHERE warehouse_id=? AND branch_id<>? LIMIT 1", [id, branchId]);
             if (dependents)
                 throw new permissions_1.ActionError("Existem vínculos incompatíveis; revise-os antes de alterar a filial.", 409);
-            await c.execute(`UPDATE ${table} SET branch_id=? WHERE id=?`, [branchId, id]);
+            await c.execute(`UPDATE ${table} SET branch_id=? WHERE id=?`, [
+                branchId,
+                id,
+            ]);
         }
         else if (a.type === "sector") {
             const branchId = (0, permissions_1.integer)(a.branchId), blockId = (0, permissions_1.integer)(a.blockId), code = (0, permissions_1.text)(a.code, 64), name = (0, permissions_1.text)(a.name, 160);
             if (!code || !name)
                 throw new permissions_1.ActionError("Informe código e nome oficiais do setor.");
-            if (!await (0, stock_ledger_1.first)(c, "SELECT id FROM blocks WHERE id=? AND branch_id=?", [blockId, branchId]))
+            if (!(await (0, stock_ledger_1.first)(c, "SELECT id FROM blocks WHERE id=? AND branch_id=?", [
+                blockId,
+                branchId,
+            ])))
                 throw new permissions_1.ActionError("Vincule o bloco à filial antes de cadastrar o setor.", 409);
             const r = await (0, stock_ledger_1.insert)(c, "INSERT INTO sectors(code,name,branch_id,block_id) VALUES(?,?,?,?) RETURNING id", [code, name, branchId, blockId]);
             id = Number(r.id);
@@ -54,20 +199,83 @@ async function configureIndustrialLink(user, a) {
             const sectorId = (0, permissions_1.integer)(a.sectorId), code = (0, permissions_1.text)(a.code, 64), name = (0, permissions_1.text)(a.name, 160), point = (0, permissions_1.text)(a.pointId, 64) || null;
             if (!code || !name)
                 throw new permissions_1.ActionError("Informe código e nome oficiais do local de trabalho.");
-            const sector = await (0, stock_ledger_1.first)(c, "SELECT * FROM sectors WHERE id=?", [sectorId]);
+            const sector = await (0, stock_ledger_1.first)(c, "SELECT * FROM sectors WHERE id=?", [
+                sectorId,
+            ]);
             if (!sector)
                 throw new permissions_1.ActionError("Setor inexistente.", 404);
-            if (point && !await (0, stock_ledger_1.first)(c, "SELECT id FROM plant_points WHERE id=? AND active=TRUE AND block_id=? AND (sector_id IS NULL OR sector_id=?)", [point, sector.block_id, sector.id]))
+            if (point &&
+                !(await (0, stock_ledger_1.first)(c, "SELECT id FROM plant_points WHERE id=? AND active=TRUE AND block_id=? AND (sector_id IS NULL OR sector_id=?)", [point, sector.block_id, sector.id])))
                 throw new permissions_1.ActionError("Selecione um ponto publicado do bloco/setor autorizado.", 409);
+            if (point)
+                await validateWorkplacePoint(c, point, Number(sector.block_id), Number(sector.id));
             const r = await (0, stock_ledger_1.insert)(c, "INSERT INTO workplaces(code,name,branch_id,block_id,sector_id,point_id) VALUES(?,?,?,?,?,?) RETURNING id", [code, name, sector.branch_id, sector.block_id, sector.id, point]);
             id = Number(r.id);
+        }
+        else if (a.type === "workplacePoint") {
+            id = (0, permissions_1.integer)(a.id);
+            const workplace = await (0, stock_ledger_1.first)(c, "SELECT * FROM workplaces WHERE id=? FOR UPDATE", [id]);
+            if (!workplace)
+                throw new permissions_1.ActionError("Local de trabalho inexistente.", 404);
+            const point = (0, permissions_1.text)(a.pointId, 64) || null;
+            if (point &&
+                !(await (0, stock_ledger_1.first)(c, "SELECT id FROM plant_points WHERE id=? AND active=TRUE AND block_id=? AND (sector_id IS NULL OR sector_id=?)", [point, workplace.block_id, workplace.sector_id])))
+                throw new permissions_1.ActionError("Selecione um ponto publicado compatível com o bloco e setor.", 409);
+            if (point)
+                await validateWorkplacePoint(c, point, Number(workplace.block_id), Number(workplace.sector_id));
+            await c.execute("UPDATE workplaces SET point_id=? WHERE id=?", [
+                point,
+                id,
+            ]);
+        }
+        else if (a.type === "inventoryPoint") {
+            (0, permissions_1.demand)(user, "stock");
+            id = (0, permissions_1.integer)(a.partId);
+            const warehouseId = (0, permissions_1.integer)(a.warehouseId), point = (0, permissions_1.text)(a.pointId, 64);
+            if (!point)
+                throw new permissions_1.ActionError("Selecione o ponto real da posição de estoque.");
+            if (!(await (0, stock_ledger_1.first)(c, "SELECT id FROM parts WHERE id=? AND active=TRUE FOR UPDATE", [id])) ||
+                !(await (0, stock_ledger_1.first)(c, "SELECT i.part_id FROM inventory i JOIN warehouses w ON w.id=i.warehouse_id WHERE i.part_id=? AND i.warehouse_id=? AND w.active=TRUE FOR UPDATE", [id, warehouseId])))
+                throw new permissions_1.ActionError("Posição de estoque inexistente ou inativa.", 404);
+            const map = await (0, stock_ledger_1.first)(c, "SELECT graph FROM map_versions WHERE status='Publicada' FOR SHARE");
+            const graph = map
+                ? typeof map.graph === "string"
+                    ? JSON.parse(map.graph)
+                    : map.graph
+                : null;
+            if (!graph?.reviewed ||
+                (0, routing_1.graphProblems)(graph).length ||
+                !graph.nodes.some((n) => n.id === point &&
+                    n.warehouseId === warehouseId &&
+                    !n.blocked &&
+                    !n.restricted))
+                throw new permissions_1.ActionError("Selecione um ponto transitável do mesmo almoxarifado na planta publicada.", 409);
+            await c.execute("UPDATE inventory SET map_node_id=? WHERE part_id=? AND warehouse_id=?", [point, id, warehouseId]);
+        }
+        else if (a.type === "userSector") {
+            id = (0, permissions_1.integer)(a.id);
+            const sector = await (0, stock_ledger_1.first)(c, "SELECT * FROM sectors WHERE id=?", [
+                (0, permissions_1.integer)(a.sectorId),
+            ]);
+            if (!sector ||
+                !(await (0, stock_ledger_1.first)(c, "SELECT id FROM users WHERE id=? FOR UPDATE", [id])))
+                throw new permissions_1.ActionError("Usuário ou setor inexistente.", 404);
+            await c.execute("UPDATE users SET workplace_id=NULL,sector_id=?,sector=?,branch_id=?,block_id=? WHERE id=?", [sector.id, sector.name, sector.branch_id, sector.block_id, id]);
         }
         else if (a.type === "userWorkplace") {
             id = (0, permissions_1.integer)(a.id);
             const workplace = await (0, stock_ledger_1.first)(c, "SELECT wp.*,s.name AS sector FROM workplaces wp JOIN sectors s ON s.id=wp.sector_id WHERE wp.id=?", [(0, permissions_1.integer)(a.workplaceId)]);
-            if (!workplace || !await (0, stock_ledger_1.first)(c, "SELECT id FROM users WHERE id=? FOR UPDATE", [id]))
+            if (!workplace ||
+                !(await (0, stock_ledger_1.first)(c, "SELECT id FROM users WHERE id=? FOR UPDATE", [id])))
                 throw new permissions_1.ActionError("Usuário ou local inexistente.", 404);
-            await c.execute("UPDATE users SET workplace_id=?,sector_id=?,sector=?,branch_id=?,block_id=? WHERE id=?", [workplace.id, workplace.sector_id, workplace.sector, workplace.branch_id, workplace.block_id, id]);
+            await c.execute("UPDATE users SET workplace_id=?,sector_id=?,sector=?,branch_id=?,block_id=? WHERE id=?", [
+                workplace.id,
+                workplace.sector_id,
+                workplace.sector,
+                workplace.branch_id,
+                workplace.block_id,
+                id,
+            ]);
         }
         else
             throw new permissions_1.ActionError("Vínculo inválido.");
@@ -75,15 +283,39 @@ async function configureIndustrialLink(user, a) {
         return { id };
     });
 }
-async function syncPublishedPoints(c, graph, version) {
+async function syncPublishedPoints(c, graph, version, actor) {
+    const stocked = await (0, stock_ledger_1.rows)(c, "SELECT i.map_node_id,i.warehouse_id,p.code FROM inventory i JOIN parts p ON p.id=i.part_id JOIN warehouses w ON w.id=i.warehouse_id WHERE i.map_node_id IS NOT NULL AND p.active=TRUE AND w.active=TRUE");
+    for (const i of stocked)
+        if (!graph.nodes.some((n) => n.id === i.map_node_id && n.warehouseId === Number(i.warehouse_id)))
+            throw new permissions_1.ActionError(`A peça ${i.code} perderia sua posição no almoxarifado. Revise o vínculo de estoque antes de publicar.`, 409);
     const linked = await (0, stock_ledger_1.rows)(c, "SELECT wp.code,wp.point_id,wp.block_id,wp.sector_id FROM workplaces wp WHERE wp.point_id IS NOT NULL");
     for (const wp of linked)
-        if (!graph.nodes.some(n => n.id === wp.point_id && n.blockId === Number(wp.block_id) && (!n.sectorId || n.sectorId === Number(wp.sector_id))))
+        if (!graph.nodes.some((n) => n.id === wp.point_id &&
+            n.blockId === Number(wp.block_id) &&
+            (!n.sectorId || n.sectorId === Number(wp.sector_id))))
             throw new permissions_1.ActionError(`O local ${wp.code} perderia seu ponto vinculado. Revise o cadastro antes de publicar.`, 409);
+    const pending = await (0, stock_ledger_1.rows)(c, "SELECT id,block_id,sector_id,destination_point_id FROM requests WHERE destination_point_id IS NOT NULL AND status NOT IN ('Entregue','Cancelada','Rejeitada')");
+    for (const r of pending)
+        if (!(0, routing_1.deliveryTargets)(graph, Number(r.block_id), r.sector_id ? Number(r.sector_id) : undefined, String(r.destination_point_id)).length)
+            throw new permissions_1.ActionError(`A requisição ${r.id} perderia seu ponto de entrega. Preserve o destino até concluir o atendimento.`, 409);
     await c.execute("UPDATE plant_points SET active=FALSE WHERE active=TRUE");
     for (const n of graph.nodes) {
-        if (n.sectorId && !await (0, stock_ledger_1.first)(c, "SELECT id FROM sectors WHERE id=? AND block_id=?", [n.sectorId, n.blockId ?? null]))
+        if (n.sectorId &&
+            !(await (0, stock_ledger_1.first)(c, "SELECT id FROM sectors WHERE id=? AND block_id=?", [
+                n.sectorId,
+                n.blockId ?? null,
+            ])))
             throw new permissions_1.ActionError("Setor do ponto não pertence ao bloco selecionado.", 409);
-        await c.execute("INSERT INTO plant_points(id,label,kind,warehouse_id,block_id,sector_id,published_version_id,active) VALUES(?,?,?,?,?,?,?,1) ON CONFLICT(id) DO UPDATE SET label=EXCLUDED.label,kind=EXCLUDED.kind,warehouse_id=EXCLUDED.warehouse_id,block_id=EXCLUDED.block_id,sector_id=EXCLUDED.sector_id,published_version_id=EXCLUDED.published_version_id,active=TRUE", [n.id, n.label, n.kind, n.warehouseId ?? null, n.blockId ?? null, n.sectorId ?? null, version]);
+        await c.execute("INSERT INTO plant_points(id,label,kind,warehouse_id,block_id,sector_id,published_version_id,active) VALUES(?,?,?,?,?,?,?,1) ON CONFLICT(id) DO UPDATE SET label=EXCLUDED.label,kind=EXCLUDED.kind,warehouse_id=EXCLUDED.warehouse_id,block_id=EXCLUDED.block_id,sector_id=EXCLUDED.sector_id,published_version_id=EXCLUDED.published_version_id,active=TRUE", [
+            n.id,
+            n.label,
+            n.kind,
+            n.warehouseId ?? null,
+            n.blockId ?? null,
+            n.sectorId ?? null,
+            version,
+        ]);
     }
+    if (actor)
+        await fillUnmappedInventory(c, graph, version, actor);
 }

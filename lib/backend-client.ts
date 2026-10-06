@@ -5,7 +5,18 @@ import { cookies } from "next/headers";
 export const apiTokenCookie = "marcon_api_token";
 
 export function backendUrl() {
-  return (process.env.BACKEND_URL || "http://localhost:3001").replace(/\/+$/, "");
+  const url = new URL(process.env.BACKEND_URL || "http://localhost:3001");
+  if (
+    process.env.VERCEL &&
+    (url.protocol !== "https:" ||
+      ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname))
+  )
+    throw new Error(
+      "Configure BACKEND_URL HTTPS do backend publicado na Vercel.",
+    );
+  if (url.username || url.password || url.search || url.hash)
+    throw new Error("BACKEND_URL inválida.");
+  return url.href.replace(/\/+$/, "");
 }
 
 export async function apiToken(): Promise<string | undefined> {
@@ -31,7 +42,9 @@ export async function backendFetch<T = unknown>(
   path: string,
   { method = "GET", body, token }: Options = {},
 ): Promise<T> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
   if (token) headers.Authorization = `Bearer ${token}`;
   let response: Response;
   try {
@@ -40,6 +53,8 @@ export async function backendFetch<T = unknown>(
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
       cache: "no-store",
+      redirect: "error",
+      signal: AbortSignal.timeout(25000),
     });
   } catch {
     throw new BackendError(

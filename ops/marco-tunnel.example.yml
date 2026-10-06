@@ -1,0 +1,8 @@
+# Template only. No tunnel is created or started by the application.
+# Replace identifiers and protect the credentials file outside the repository.
+tunnel: REPLACE_WITH_TUNNEL_UUID
+credentials-file: C:/Users/YOUR_USER/.cloudflared/REPLACE_WITH_TUNNEL_UUID.json
+ingress:
+  - hostname: marco-pc.YOUR_DOMAIN.example
+    service: http://127.0.0.1:11435
+  - service: http_status:404

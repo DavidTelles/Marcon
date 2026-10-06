@@ -72,10 +72,13 @@ export function MapEditor() {
     setSectors(body.sectors ?? []);
   }
   useEffect(() => {
+    const linksUpdated = () => void refresh().catch((e) => setMessage(e.message));
+    window.addEventListener("marcon:industrial-links-updated", linksUpdated);
     void Promise.resolve()
       .then(refresh)
       .catch((e) => setMessage(e.message));
     return () => {
+      window.removeEventListener("marcon:industrial-links-updated", linksUpdated);
       if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
     };
   }, []);

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "version": 2,
+  "installCommand": "node scripts/install-vercel-api.mjs",
+  "builds": [
+    {
+      "src": "backend/server.js",
+      "use": "@vercel/node",
+      "config": {
+        "maxDuration": 60,
+        "includeFiles": ["lib/neon-db.mjs", "backend/src/**"]
+      }
+    }
+  ],
+  "routes": [{ "src": "/(.*)", "dest": "backend/server.js" }]
+}

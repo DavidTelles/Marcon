@@ -1,10 +1,10 @@
-const crypto = require('crypto');
-const AppError = require('../utils/AppError');
-const { hashPassword, comparePassword } = require('../utils/password');
-const { signToken } = require('../utils/token');
-const userRepository = require('../repositories/userRepository');
-const { query, withTransaction } = require('../config/db');
-const { ROLES, ROLE_CODES } = require('../config/constants');
+const crypto = require("crypto");
+const AppError = require("../utils/AppError");
+const { hashPassword, comparePassword } = require("../utils/password");
+const { signToken } = require("../utils/token");
+const userRepository = require("../repositories/userRepository");
+const { query, withTransaction } = require("../config/db");
+const { ROLES, ROLE_CODES } = require("../config/constants");
 
 function sanitize(user) {
   return userRepository.publicUser(user);
@@ -14,65 +14,102 @@ function issueToken(user) {
   return signToken({
     sub: Number(user.id),
     eno: user.employee_no,
-    role: user.role
+    role: user.role,
   });
 }
 
 async function loginFace({ grant }) {
-  if (typeof grant !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(grant)) throw new AppError(400, 'Autorização facial inválida');
+  if (typeof grant !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(grant))
+    throw new AppError(400, "Autorização facial inválida");
   return withTransaction(async (c) => {
-    const tokenHash = crypto.createHash('sha256').update(grant).digest();
-    const [grants] = await c.execute('SELECT * FROM face_login_grants WHERE token_hash=? AND expires_at>UTC_TIMESTAMP(3) FOR UPDATE', [tokenHash]);
-    if (!grants[0]) throw new AppError(401, 'Autorização facial expirada ou já utilizada');
-    const [users] = await c.execute('SELECT u.*,f.embeddings FROM users u JOIN face_credentials f ON f.user_id=u.id WHERE u.id=? FOR UPDATE', [grants[0].user_id]);
+    const tokenHash = crypto.createHash("sha256").update(grant).digest();
+    const [grants] = await c.execute(
+      "SELECT * FROM face_login_grants WHERE token_hash=? AND expires_at>UTC_TIMESTAMP(3) FOR UPDATE",
+      [tokenHash],
+    );
+    if (!grants[0])
+      throw new AppError(401, "Autorização facial expirada ou já utilizada");
+    const [users] = await c.execute(
+      "SELECT u.*,f.embeddings FROM users u JOIN face_credentials f ON f.user_id=u.id WHERE u.id=? FOR UPDATE",
+      [grants[0].user_id],
+    );
     const user = users[0];
-    if (!user || !user.active || user.password_hash !== grants[0].password_hash || crypto.createHash('sha256').update(user.embeddings).digest('hex') !== grants[0].credential_hash)
-      throw new AppError(401, 'Conta ou cadastro facial alterado; entre com senha');
-    await c.execute('DELETE FROM face_login_grants WHERE token_hash=?', [tokenHash]);
+    if (
+      !user ||
+      !user.active ||
+      user.password_hash !== grants[0].password_hash ||
+      crypto.createHash("sha256").update(user.embeddings).digest("hex") !==
+        grants[0].credential_hash
+    )
+      throw new AppError(
+        401,
+        "Conta ou cadastro facial alterado; entre com senha",
+      );
+    await c.execute("DELETE FROM face_login_grants WHERE token_hash=?", [
+      tokenHash,
+    ]);
     return { token: issueToken(user), user: sanitize(user) };
   });
 }
 
 async function resolveRoleCode(payloadRole, actor) {
-  let roleEnum = 'funcionario';
+  let roleEnum = "funcionario";
   if (payloadRole) {
-    const asEnum = ROLE_CODES[String(payloadRole)] ? String(payloadRole)
-      : (Object.entries(ROLE_CODES).find(([, v]) => v === String(payloadRole)) || [])[0];
-    if (!asEnum) throw new AppError(400, 'Papel inválido');
+    const asEnum = ROLE_CODES[String(payloadRole)]
+      ? String(payloadRole)
+      : (Object.entries(ROLE_CODES).find(
+          ([, v]) => v === String(payloadRole),
+        ) || [])[0];
+    if (!asEnum) throw new AppError(400, "Papel inválido");
     roleEnum = asEnum;
   }
-  if (actor && actor.roleCode !== ROLES.ADMIN) roleEnum = 'funcionario';
+  if (actor && actor.roleCode !== ROLES.ADMIN) roleEnum = "funcionario";
   return roleEnum;
 }
 
 async function register(payload, actor) {
-  if (!actor || actor.roleCode !== ROLES.ADMIN || actor.permissionOverrides?.['users.manage'] === false)
-    throw new AppError(403, 'Cadastro de usuários exige administrador autorizado');
-  const employeeCode = String(payload.id || payload.employee_code || payload.employee_no || '').trim();
-  const email = (payload.email || `${employeeCode.toLowerCase()}@marcon.local`).trim().toLowerCase();
+  if (
+    !actor ||
+    actor.roleCode !== ROLES.ADMIN ||
+    actor.permissionOverrides?.["users.manage"] === false
+  )
+    throw new AppError(
+      403,
+      "Cadastro de usuários exige administrador autorizado",
+    );
+  const employeeCode = String(
+    payload.id || payload.employee_code || payload.employee_no || "",
+  ).trim();
+  const email = (payload.email || `${employeeCode.toLowerCase()}@marcon.local`)
+    .trim()
+    .toLowerCase();
   const name = payload.name || payload.employee_code || employeeCode;
   const password = payload.password;
-  if (!employeeCode || typeof password !== 'string' || password.length < 12) {
-    throw new AppError(400, 'id e password são obrigatórios');
+  if (!employeeCode || typeof password !== "string" || password.length < 12) {
+    throw new AppError(400, "id e password são obrigatórios");
   }
-  if (!/^[A-Za-z0-9_-]{1,30}$/.test(employeeCode)) throw new AppError(400, 'Matrícula inválida');
+  if (!/^[A-Za-z0-9_-]{1,30}$/.test(employeeCode))
+    throw new AppError(400, "Matrícula inválida");
 
   const existing = await userRepository.findByEmployeeCode(employeeCode);
-  if (existing) throw new AppError(409, 'Usuário já cadastrado');
+  if (existing) throw new AppError(409, "Usuário já cadastrado");
   const existingEmail = await userRepository.findByEmail(email);
-  if (existingEmail) throw new AppError(409, 'E-mail já cadastrado');
+  if (existingEmail) throw new AppError(409, "E-mail já cadastrado");
 
   const roleEnum = await resolveRoleCode(payload.role, actor);
 
   let blockId = payload.block_id || null;
   if (!blockId && payload.block) {
-    const blocks = await query('SELECT id FROM blocks WHERE name = ? OR code = ?', [payload.block, payload.block]);
+    const blocks = await query(
+      "SELECT id FROM blocks WHERE name = ? OR code = ?",
+      [payload.block, payload.block],
+    );
     blockId = blocks[0] ? blocks[0].id : null;
   }
-  if (['funcionario', 'lider'].includes(roleEnum) && !blockId) {
-    throw new AppError(400, 'Defina o bloco de atuação para este papel');
+  if (["funcionario", "lider"].includes(roleEnum) && !blockId) {
+    throw new AppError(400, "Defina o bloco de atuação para este papel");
   }
-  if (['admin', 'almoxarifado'].includes(roleEnum)) blockId = null;
+  if (["admin", "almoxarifado"].includes(roleEnum)) blockId = null;
 
   const user = await userRepository.create({
     employee_code: employeeCode,
@@ -80,9 +117,11 @@ async function register(payload, actor) {
     email,
     password_hash: await hashPassword(password),
     role_enum: roleEnum,
-    sector: payload.sector || 'Geral',
+    sector: payload.sector || "Geral",
     block_id: blockId,
-    is_active: 1
+    sector_id: payload.sector_id,
+    workplace_id: payload.workplace_id,
+    is_active: 1,
   });
 
   const permissions = await userRepository.getPermissionsForUser(user.id);
@@ -90,13 +129,13 @@ async function register(payload, actor) {
 }
 
 async function login({ login, password }) {
-  const identifier = String(login || '').trim();
+  const identifier = String(login || "").trim();
   let user = await userRepository.findByEmail(identifier.toLowerCase());
   if (!user) user = await userRepository.findByEmployeeCode(identifier);
   if (!user || !(await comparePassword(password, user.password_hash))) {
-    throw new AppError(401, 'Credenciais inválidas');
+    throw new AppError(401, "Credenciais inválidas");
   }
-  if (!user.active) throw new AppError(403, 'Usuário inativo');
+  if (!user.active) throw new AppError(403, "Usuário inativo");
   const permissions = await userRepository.getPermissionsForUser(user.id);
   return { token: issueToken(user), user: sanitize(user), permissions };
 }
@@ -106,41 +145,64 @@ async function forgotPassword({ email, employee_code }) {
     ? await userRepository.findByEmail(String(email).toLowerCase())
     : await userRepository.findByEmployeeCode(employee_code);
   if (!user) {
-    return { message: 'Se o cadastro existir, um token de redefinição será gerado' };
+    return {
+      message: "Se o cadastro existir, um token de redefinição será gerado",
+    };
   }
-  const token = crypto.randomBytes(24).toString('hex');
-  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  const token = crypto.randomBytes(24).toString("hex");
+  const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
   const expires = new Date(Date.now() + 60 * 60 * 1000);
   await query(
-    'INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES (?, ?, ?)',
-    [user.id, tokenHash, expires]
+    "INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES (?, ?, ?)",
+    [user.id, tokenHash, expires],
   );
   return {
-    message: 'Token de redefinição gerado',
+    message: "Token de redefinição gerado",
     // Tokens must never be delivered to an unauthenticated HTTP caller.
-    delivery: 'Sem provedor de envio configurado; solicite recuperação ao administrador'
+    delivery:
+      "Sem provedor de envio configurado; solicite recuperação ao administrador",
   };
 }
 
 async function resetPassword({ token, password }) {
-  if (typeof password !== 'string' || password.length < 12 || password.length > 1024) throw new AppError(400, 'Nova senha deve ter 12–1024 caracteres');
-  const tokenHash = crypto.createHash('sha256').update(String(token || '')).digest('hex');
+  if (
+    typeof password !== "string" ||
+    password.length < 12 ||
+    password.length > 1024
+  )
+    throw new AppError(400, "Nova senha deve ter 12–1024 caracteres");
+  const tokenHash = crypto
+    .createHash("sha256")
+    .update(String(token || ""))
+    .digest("hex");
   const rows = await query(
-    'SELECT * FROM password_reset_tokens WHERE token_hash = ? AND used_at IS NULL AND expires_at > NOW() ORDER BY id DESC LIMIT 1',
-    [tokenHash]
+    "SELECT * FROM password_reset_tokens WHERE token_hash = ? AND used_at IS NULL AND expires_at > NOW() ORDER BY id DESC LIMIT 1",
+    [tokenHash],
   );
-  if (!rows[0]) throw new AppError(400, 'Token inválido ou expirado');
-  await userRepository.update(rows[0].user_id, { password_hash: await hashPassword(password) });
-  await query('UPDATE password_reset_tokens SET used_at = NOW() WHERE id = ?', [rows[0].id]);
-  return { message: 'Senha atualizada' };
+  if (!rows[0]) throw new AppError(400, "Token inválido ou expirado");
+  await userRepository.update(rows[0].user_id, {
+    password_hash: await hashPassword(password),
+  });
+  await query("UPDATE password_reset_tokens SET used_at = NOW() WHERE id = ?", [
+    rows[0].id,
+  ]);
+  return { message: "Senha atualizada" };
 }
 
 async function forgotEmail({ employee_code, id }) {
   const user = await userRepository.findByEmployeeCode(employee_code || id);
-  if (!user) throw new AppError(404, 'Usuário inexistente');
-  const [local, domain] = user.email.split('@');
+  if (!user) throw new AppError(404, "Usuário inexistente");
+  const [local, domain] = user.email.split("@");
   const hint = `${local.slice(0, 2)}***@${domain}`;
   return { email_hint: hint };
 }
 
-module.exports = { register, login, loginFace, forgotPassword, resetPassword, forgotEmail, sanitize };
+module.exports = {
+  register,
+  login,
+  loginFace,
+  forgotPassword,
+  resetPassword,
+  forgotEmail,
+  sanitize,
+};

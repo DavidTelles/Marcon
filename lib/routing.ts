@@ -104,8 +104,13 @@ export function deliveryTargets(
         "replenishment",
       ].includes(node.kind),
   );
-  if (pointId) return points.filter(node=>node.id===pointId);
-  if (sectorId) return points.filter(node=>node.sectorId===sectorId);
+  if (pointId)
+    return points.filter(
+      (node) =>
+        node.id === pointId &&
+        (!sectorId || !node.sectorId || node.sectorId === sectorId),
+    );
+  if (sectorId) return points.filter((node) => node.sectorId === sectorId);
   return points.filter((node) => !node.sectorId && !node.sector);
 }
 export function nextPointLabel(g: FacilityGraph, kind: keyof typeof mapKinds) {
@@ -244,7 +249,8 @@ export function graphProblems(g: FacilityGraph): string[] {
         (v) => v !== undefined && typeof v !== "boolean",
       ) ||
       !validTransport(n.allowedTransport) ||
-      (n.sectorId !== undefined && (!Number.isSafeInteger(n.sectorId) || n.sectorId < 1 || !n.blockId)) ||
+      (n.sectorId !== undefined &&
+        (!Number.isSafeInteger(n.sectorId) || n.sectorId < 1 || !n.blockId)) ||
       (n.sector !== undefined &&
         (typeof n.sector !== "string" ||
           !n.sector.trim() ||

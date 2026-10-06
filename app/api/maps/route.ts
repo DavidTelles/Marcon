@@ -4,7 +4,13 @@ import sharp from "sharp";
 import { randomUUID } from "node:crypto";
 import { currentUser } from "@/lib/auth";
 import { databaseEnabled, getPool, transaction } from "@/lib/db";
-import { ActionError, demand, integer, text } from "@/lib/permissions";
+import {
+  ActionError,
+  demand,
+  integer,
+  text,
+  permitted,
+} from "@/lib/permissions";
 import {
   graphProblems,
   planStops,
@@ -14,6 +20,7 @@ import {
 } from "@/lib/routing";
 import type { RowDataPacket, ResultSetHeader } from "@/lib/db-types";
 import { imageObstacles, imageSuggestions } from "@/lib/map-image";
+import { bindSuggestedLocations } from "@/lib/map-suggestions";
 import { deliveryHistory, planDelivery } from "@/lib/delivery-planning";
 export const runtime = "nodejs";
 const json = (body: object, status = 200) =>
@@ -65,10 +72,18 @@ export async function GET(request: NextRequest) {
     const [sectors] = await getPool().query<RowDataPacket[]>(
       "SELECT s.id,s.block_id,b.name AS block,s.name AS sector,COUNT(u.id) AS employees FROM sectors s JOIN blocks b ON b.id=s.block_id LEFT JOIN users u ON u.sector_id=s.id AND u.active=TRUE GROUP BY s.id,s.block_id,b.name,s.name ORDER BY b.name,s.name",
     );
-    return json({ maps, warehouses, blocks, sectors: sectors.map((sector) => ({
-      id: Number(sector.id), blockId: Number(sector.block_id), block: String(sector.block),
-      sector: String(sector.sector), employees: Number(sector.employees),
-    })) });
+    return json({
+      maps,
+      warehouses,
+      blocks,
+      sectors: sectors.map((sector) => ({
+        id: Number(sector.id),
+        blockId: Number(sector.block_id),
+        block: String(sector.block),
+        sector: String(sector.sector),
+        employees: Number(sector.employees),
+      })),
+    });
   } catch (e) {
     if (e instanceof ActionError) return json({ error: e.message }, e.status);
     return json(
@@ -218,18 +233,42 @@ export async function POST(request: NextRequest) {
       if (!image)
         throw new ActionError("Envie a planta antes de gerar sugestões.");
       const meta = await sharp(image).metadata();
-      return json(
-        await imageSuggestions(image, {
-          width: meta.width!,
-          height: meta.height!,
-          metersPerPixel: 1,
-          scaleCalibrated: false,
-          nodes: [],
-          edges: [],
-          walls: [],
-          reviewed: false,
+      const suggested = await imageSuggestions(image, {
+        width: meta.width!,
+        height: meta.height!,
+        metersPerPixel: 1,
+        scaleCalibrated: false,
+        nodes: [],
+        edges: [],
+        walls: [],
+        reviewed: false,
+      });
+      const pool = getPool();
+      const [[warehouses], [blocks], [sectors]] = await Promise.all([
+        pool.query<RowDataPacket[]>(
+          "SELECT id,name FROM warehouses WHERE active=TRUE",
+        ),
+        pool.query<RowDataPacket[]>("SELECT id,name FROM blocks"),
+        pool.query<RowDataPacket[]>("SELECT id,name,block_id FROM sectors"),
+      ]);
+      return json({
+        ...suggested,
+        graph: bindSuggestedLocations(suggested.graph, {
+          warehouses: warehouses.map((w) => ({
+            id: Number(w.id),
+            name: String(w.name),
+          })),
+          blocks: blocks.map((b) => ({
+            id: Number(b.id),
+            name: String(b.name),
+          })),
+          sectors: sectors.map((s) => ({
+            id: Number(s.id),
+            name: String(s.name),
+            block_id: Number(s.block_id),
+          })),
         }),
-      );
+      });
     }
     return await transaction(async (c) => {
       const [actors] = await c.execute<RowDataPacket[]>(
@@ -334,7 +373,12 @@ export async function POST(request: NextRequest) {
             errors[0] ??
               "Teste os caminhos e confirme a conferência física antes de publicar.",
           );
-        await syncPublishedPoints(c,graph,id);
+        await syncPublishedPoints(
+          c,
+          graph,
+          id,
+          permitted(user, "stock") ? Number(actors[0].id) : undefined,
+        );
         await c.query(
           "UPDATE map_versions SET status='Arquivada' WHERE status='Publicada'",
         );

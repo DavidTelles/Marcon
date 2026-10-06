@@ -4,6 +4,8 @@ backend/node_modules/
 dist/
 .env
 .env.local
+.env.*
+!.env.example
 *.log
 __pycache__/
 face/.venv/

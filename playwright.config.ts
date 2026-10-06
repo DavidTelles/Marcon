@@ -5,7 +5,7 @@ const baseURL = `http://localhost:${port}`;
 
 export default defineConfig({
   testDir: "./tests",
-  testIgnore: "**/neon/**",
+  testIgnore: ["**/neon/**", "**/marco-*.test.mjs"],
   fullyParallel: false,
   workers: 1,
   reporter: "list",

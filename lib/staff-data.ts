@@ -8,6 +8,9 @@ export type StaffUser = {
   sector: string;
   role: StaffRole;
   block?: string;
+  branchId?: number;
+  sectorId?: number;
+  workplaceId?: number;
   active: boolean;
 };
 

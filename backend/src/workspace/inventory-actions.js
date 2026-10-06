@@ -36,6 +36,8 @@ async function executeInventoryAction(user, a, connection) {
         if (request_actions_1.requestActions.has(String(a.type)))
             return (0, request_actions_1.executeRequestAction)(c, user, actor, a);
         (0, permissions_1.demand)(user, "stock");
+        if (a.type === "transfer" && a.recommendation)
+            (0, permissions_1.demand)(user, "planning");
         if (a.type === "reconcileImportBalance") {
             if (a.confirmed !== true)
                 throw new permissions_1.ActionError("Confirme a abertura ou a contagem física atual.", 422);

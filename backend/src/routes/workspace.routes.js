@@ -3,12 +3,21 @@ const rateLimit = require('express-rate-limit');
 const { authenticate } = require('../middlewares/auth');
 const workspace = require('../controllers/workspaceController');
 const { partsConsumption } = require('../workspace/parts-consumption');
+const { industrialLinks, configureIndustrialLink } = require('../workspace/industrial-links');
 const { ActionError } = require('../workspace/permissions');
 const AppError = require('../utils/AppError');
 const asyncHandler = require('../utils/asyncHandler');
 
 const router = express.Router();
 const actionLimiter = rateLimit({ windowMs: 60 * 1000, max: 240, standardHeaders: true });
+router.get('/api/industrial-links', authenticate, asyncHandler(async (req, res) => {
+  try { res.set('Cache-Control', 'no-store'); res.json(await industrialLinks(req.user)); }
+  catch (error) { if (error instanceof ActionError) throw new AppError(error.status, error.message); throw error; }
+}));
+router.post('/api/industrial-links', actionLimiter, authenticate, asyncHandler(async (req, res) => {
+  try { res.set('Cache-Control', 'no-store'); res.json(await configureIndustrialLink(req.user, req.body)); }
+  catch (error) { if (error instanceof ActionError) throw new AppError(error.status, error.message); throw error; }
+}));
 router.get('/api/parts/consumption', authenticate, asyncHandler(async (req, res) => {
   try { res.set('Cache-Control', 'no-store'); res.json(await partsConsumption(req.user, new URLSearchParams(req.query))); }
   catch (error) { if (error instanceof ActionError) throw new AppError(error.status, error.message); throw error; }

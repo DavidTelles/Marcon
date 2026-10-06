@@ -7,9 +7,14 @@ import { useJamesLocalVoice } from "./useJamesLocalVoice";
 import { choiceIndex, explicitConfirmation } from "@/lib/james-voice";
 import type { JamesCart } from "@/lib/james-actions";
 import type { JamesReportContext } from "@/lib/james-reports";
+import { marcoUICommand } from "@/lib/marco-ui";
+import { readMarcoReply } from "@/lib/marco-stream";
+import type { MarcoMetrics } from "@/lib/marco-ollama.mjs";
 import styles from "./JamesAssistant.module.css";
 import { useJamesPet, type Dock } from "./useJamesPet";
 type Reply = {
+  source?: "ollama";
+  metrics?: MarcoMetrics;
   reply?: string;
   error?: string;
   cart?: JamesCart;
@@ -76,6 +81,12 @@ export default function JamesAssistant({ userId }: { userId: string }) {
   const [providerConfigured, setProviderConfigured] = useState(true);
   const [speechError, setSpeechError] = useState("");
   const [elapsed, setElapsed] = useState(0);
+  const [phase, setPhase] = useState("interpretando");
+  const [metrics, setMetrics] = useState<MarcoMetrics>({});
+  const [uiReview, setUIReview] = useState<string | null>(null);
+  const uiConfirmation = useRef<(() => string) | null>(null);
+  const browserSpeech = useRef<SpeechSynthesisUtterance | null>(null);
+  const localTTS = useRef<boolean | null>(null);
   useEffect(() => {
     if (state !== "processing") return;
     const started = performance.now();
@@ -134,7 +145,12 @@ export default function JamesAssistant({ userId }: { userId: string }) {
   }, [cart, review]);
   const stopSpeech = useCallback(() => {
     if (resumeTimer.current) clearTimeout(resumeTimer.current);
-    const wasSpeaking = !!speech.current;
+    const wasSpeaking = !!speech.current || !!browserSpeech.current;
+    if (browserSpeech.current) {
+      browserSpeech.current.onend = browserSpeech.current.onerror = null;
+      browserSpeech.current = null;
+      window.speechSynthesis?.cancel();
+    }
     speechRequest.current?.abort();
     speechRequest.current = null;
     if (speech.current) {
@@ -213,40 +229,87 @@ export default function JamesAssistant({ userId }: { userId: string }) {
       if (speechRequest.current !== request) return;
       suppress.current = Date.now() + 800;
       speech.current = null;
+      browserSpeech.current = null;
       speechRequest.current = null;
       if (speechUrl.current) URL.revokeObjectURL(speechUrl.current);
       speechUrl.current = null;
       resumeTimer.current = setTimeout(() => resumeVoice.current(), 850);
       setState(reviewRef.current ? "confirming" : "idle");
     };
-    void fetch("/api/james/voice", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: text.slice(0, 700) }),
-      signal: request.signal,
-    }).then(async (response) => {
-      if (!response.ok) {
-        const data = await response.json().catch(() => null);
-        throw new Error(data?.error || "Voz local indisponível.");
-      }
-      if (request.signal.aborted) return;
-      const url = URL.createObjectURL(await response.blob());
-      if (request.signal.aborted) { URL.revokeObjectURL(url); return; }
-      speechUrl.current = url;
-      const audio = new Audio(url);
-      speech.current = audio;
-      audio.onended = finish;
-      audio.onerror = () => {
+    const browserSpeak = () => {
+      if (!("speechSynthesis" in window))
+        throw new Error("Este navegador não oferece leitura em áudio.");
+      const utterance = new SpeechSynthesisUtterance(text.slice(0, 1200));
+      utterance.lang = "pt-BR";
+      const selected = window.speechSynthesis
+        .getVoices()
+        .find((v) => v.lang.toLowerCase() === "pt-br");
+      if (selected) utterance.voice = selected;
+      browserSpeech.current = utterance;
+      utterance.onend = finish;
+      utterance.onerror = () => {
         finish();
-        setSpeechError("Falha na reprodução do áudio. A resposta continua no texto.");
+        setSpeechError(
+          "O navegador não conseguiu ler a resposta. Ela continua no texto.",
+        );
       };
-      await audio.play();
-      if (!audio.paused && speech.current === audio) setState("speaking");
-    }).catch((cause) => {
-      if (request.signal.aborted) return;
-      finish();
-      setSpeechError(`${cause instanceof Error ? cause.message : "Voz local indisponível."} A resposta continua no texto.`);
-    });
+      window.speechSynthesis.speak(utterance);
+      setState("speaking");
+    };
+    void (async () => {
+      if (localTTS.current === null) {
+        const status = await fetch("/api/james/voice", {
+          signal: AbortSignal.any([request.signal, AbortSignal.timeout(5000)]),
+          cache: "no-store",
+        });
+        if (!status.ok)
+          throw new Error("Sess?o ou servi?o de voz indispon?vel.");
+        localTTS.current = (await status.json()).speak === true;
+      }
+      if (request.signal.aborted) return null;
+      if (!localTTS.current) {
+        browserSpeak();
+        return null;
+      }
+      return fetch("/api/james/voice", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: text.slice(0, 700) }),
+        signal: AbortSignal.any([request.signal, AbortSignal.timeout(40000)]),
+      });
+    })()
+      .then(async (response) => {
+        if (!response) return;
+        if (!response.ok) {
+          const data = await response.json().catch(() => null);
+          throw new Error(data?.error || "Voz local indisponível.");
+        }
+        if (request.signal.aborted) return;
+        const url = URL.createObjectURL(await response.blob());
+        if (request.signal.aborted) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        speechUrl.current = url;
+        const audio = new Audio(url);
+        speech.current = audio;
+        audio.onended = finish;
+        audio.onerror = () => {
+          finish();
+          setSpeechError(
+            "Falha na reprodução do áudio. A resposta continua no texto.",
+          );
+        };
+        await audio.play();
+        if (!audio.paused && speech.current === audio) setState("speaking");
+      })
+      .catch((cause) => {
+        if (request.signal.aborted) return;
+        finish();
+        setSpeechError(
+          `${cause instanceof Error ? cause.message : "Voz local indisponível."} A resposta continua no texto.`,
+        );
+      });
   }
   function minimize() {
     stopSpeech();
@@ -306,6 +369,57 @@ export default function JamesAssistant({ userId }: { userId: string }) {
       speak(reply);
       return;
     }
+    if (
+      [
+        "parar de falar",
+        "interromper fala",
+        "silencio",
+        "interromper",
+      ].includes(localCommand)
+    ) {
+      stopSpeech();
+      if (localCommand === "interromper" && !confirming.current) {
+        pending.current?.abort();
+        pending.current = null;
+      }
+      setState(reviewRef.current ? "confirming" : "idle");
+      return;
+    }
+    if (localCommand === "confirmar formulario") {
+      const reply =
+        uiConfirmation.current?.() ||
+        "Não há formulário aguardando confirmação.";
+      uiConfirmation.current = null;
+      setUIReview(null);
+      setMessages((m) => [...m, { answer: { reply } }]);
+      speak(reply);
+      return;
+    }
+    if (localCommand === "cancelar" && uiConfirmation.current) {
+      uiConfirmation.current = null;
+      setUIReview(null);
+      const reply = "Envio do formulário cancelado.";
+      setMessages((m) => [...m, { answer: { reply } }]);
+      speak(reply);
+      return;
+    }
+    if (!pending.current && !confirm && !formToken && !reviewRef.current) {
+      const action = marcoUICommand(text);
+      if (action) {
+        uiConfirmation.current = action.confirm || null;
+        setUIReview(action.confirm ? action.reply : null);
+        setMessages((m) => [
+          ...m,
+          { user: text },
+          { answer: { reply: action.reply } },
+        ]);
+        speak(action.reply);
+        setInput("");
+        return;
+      }
+    }
+    uiConfirmation.current = null;
+    setUIReview(null);
     const currentReview = reviewRef.current;
     if (/^(cancelar|cancele|nao|não)[.!]?$/i.test(text.trim())) {
       if (pending.current && confirming.current) {
@@ -374,6 +488,7 @@ export default function JamesAssistant({ userId }: { userId: string }) {
     setError("");
     setState("processing");
     setElapsed(0);
+    setPhase(confirm ? "executando" : "interpretando");
     setMessages((m) => [...m.slice(-19), { user: text }]);
     setInput("");
     const controller = new AbortController();
@@ -382,7 +497,10 @@ export default function JamesAssistant({ userId }: { userId: string }) {
     try {
       const r = await fetch("/api/james/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/x-ndjson",
+        },
         body: JSON.stringify(
           confirm
             ? {
@@ -424,10 +542,11 @@ export default function JamesAssistant({ userId }: { userId: string }) {
         ),
         signal: AbortSignal.any([
           controller.signal,
-          AbortSignal.timeout(30000),
+          AbortSignal.timeout(60000),
         ]),
       });
-      const data: Reply = await r.json();
+      const data = await readMarcoReply<Reply>(r, setPhase);
+      setMetrics(data.metrics || {});
       if (controller.signal.aborted) return;
       if (r.status === 401) {
         stopVoice();
@@ -474,7 +593,10 @@ export default function JamesAssistant({ userId }: { userId: string }) {
       if (!controller.signal.aborted) {
         const message = e instanceof Error ? e.message : "Falha de rede.";
         setError(message);
-        setMessages((m) => [...m, { answer: { reply: `Não consegui responder: ${message}` } }]);
+        setMessages((m) => [
+          ...m,
+          { answer: { reply: `Não consegui responder: ${message}` } },
+        ]);
         setInput(text);
         setState(currentReview ? "confirming" : "idle");
       }
@@ -531,7 +653,11 @@ export default function JamesAssistant({ userId }: { userId: string }) {
     window.addEventListener("focus", verify);
     const timer = setInterval(verify, 30000);
     const logout = (event: Event) => {
-      if (!(event.target instanceof HTMLFormElement) || new URL(event.target.action, location.href).pathname !== "/api/logout") return;
+      if (
+        !(event.target instanceof HTMLFormElement) ||
+        new URL(event.target.action, location.href).pathname !== "/api/logout"
+      )
+        return;
       c.abort();
       stopVoice();
       stopSpeech();
@@ -603,7 +729,7 @@ export default function JamesAssistant({ userId }: { userId: string }) {
       const url = URL.createObjectURL(await response.blob());
       const a = document.createElement("a");
       a.href = url;
-      a.download = `marcon-james.${new URL(href, location.origin).searchParams.get("format")}`;
+      a.download = `marcon-marco.${new URL(href, location.origin).searchParams.get("format")}`;
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
       const reply = "Arquivo gerado. Confira os downloads do navegador.";
@@ -652,7 +778,7 @@ export default function JamesAssistant({ userId }: { userId: string }) {
         />
         <span>
           {voice.capturing
-            ? "Marco · escuta local ativa"
+            ? `Marco · escuta ${voice.mode === "browser" ? "no navegador" : "local"} ativa`
             : voice.listening
               ? "Marco · escuta em espera"
               : "Marco"}
@@ -674,11 +800,7 @@ export default function JamesAssistant({ userId }: { userId: string }) {
       >
         {open && (
           <>
-            <div
-              ref={symbol}
-              className={styles.symbol}
-              aria-hidden="true"
-            >
+            <div ref={symbol} className={styles.symbol} aria-hidden="true">
               <div className={styles.orbit} />
               <div className={styles.halo} />
               <JamesCharacter
@@ -719,7 +841,7 @@ export default function JamesAssistant({ userId }: { userId: string }) {
                 {!messages.length && (
                   <>
                     <p>
-                      Ative a escuta e diga “Marco” ou “Marco”. Depois, fale
+                      Ative a escuta e diga “Marco” ou “Marcos”. Depois, fale
                       normalmente. Também pode digitar.
                     </p>
                     <div className={styles.suggestions}>
@@ -732,17 +854,18 @@ export default function JamesAssistant({ userId }: { userId: string }) {
                           ]
                         : role === "lider"
                           ? [
-                              "Pedidos do meu bloco",
-                              "Dashboard do meu bloco",
-                              "Exportar requisições em PDF",
+                              "Consulte requisições",
+                              "Consulte dashboard do bloco",
+                              "Exportar em PDF",
                             ]
                           : [
                               "Procure parafusos",
-                              "Abra recomendações de estoque",
+                              "Abra recomendações",
                               "Solicitar transferência",
                               "Registrar devolução",
                               "Registrar entrada prevista",
-                              "Exportar estoque em planilha",
+                              "Consulte dashboard de estoque",
+                              "Exportar em planilha",
                             ]
                       ).map((s) => (
                         <button key={s} onClick={() => void send(s)}>
@@ -759,6 +882,12 @@ export default function JamesAssistant({ userId }: { userId: string }) {
                   >
                     {m.user || (
                       <>
+                        {m.answer?.source === "ollama" && (
+                          <small>
+                            Resposta do modelo · nenhuma operação executada
+                            nesta mensagem
+                          </small>
+                        )}
                         <p>{m.answer?.reply}</p>
                         {m.answer?.draft && (
                           <p>
@@ -771,8 +900,10 @@ export default function JamesAssistant({ userId }: { userId: string }) {
                                 : ""}{" "}
                             de {m.answer.draft.query || "peça pendente"}. Falta:{" "}
                             {m.answer.draft.pending}.
-                            {m.answer.draft.purpose && ` Uso informado: ${m.answer.draft.purpose}.`}
-                            {m.answer.draft.dimensions && ` Medida informada: ${m.answer.draft.dimensions}.`}
+                            {m.answer.draft.purpose &&
+                              ` Uso informado: ${m.answer.draft.purpose}.`}
+                            {m.answer.draft.dimensions &&
+                              ` Medida informada: ${m.answer.draft.dimensions}.`}
                           </p>
                         )}
                         {m.answer?.choices?.map((p, index) => (
@@ -896,32 +1027,62 @@ export default function JamesAssistant({ userId }: { userId: string }) {
               </div>
               <p className={styles.status} role="status">
                 {state === "processing"
-                  ? elapsed < 10
-                    ? "Pedido recebido. Consultando…"
-                    : `Ainda processando (${elapsed}s). Você pode interromper. Limite: 45 segundos.`
+                  ? `${phase.charAt(0).toUpperCase() + phase.slice(1)} (${elapsed}s). Limite do pedido: 60 segundos.`
                   : state === "speaking"
                     ? "Falando. Você pode interromper."
                     : voice.transcribing
                       ? "Fala detectada. Transcrevendo no servidor…"
-                    : validReview
-                      ? "Aguardando sua confirmação explícita."
-                      : voice.hearing
-                        ? "Ouvindo sua fala…"
-                      : voice.capturing
-                        ? `Ouvindo ${voice.mode === "browser" ? "pelo navegador" : "pelo servidor"}. Diga Marco ou continue a conversa.`
-                        : voice.listening
-                          ? voice.hidden
-                            ? "Escuta em espera. Retoma ao voltar para esta aba."
-                            : "Escuta pronta."
-                          : voice.permissionDenied
-                            ? "Sem permissão para o microfone. Você pode digitar."
-                            : voice.paused
-                              ? "Escuta pausada. Ative para retomar."
-                              : "Pronto. Digite ou ative a escuta."}
+                      : voice.starting
+                        ? "Ativando o microfone… Você pode cancelar a ativação."
+                        : validReview
+                          ? "Aguardando sua confirmação explícita."
+                          : voice.hearing
+                            ? "Ouvindo sua fala…"
+                            : voice.capturing
+                              ? state === "listening"
+                                ? "Chamado reconhecido. Estou ouvindo; pode falar seu pedido."
+                                : `Ouvindo ${voice.mode === "browser" ? "pelo navegador" : "pelo servidor"}. Diga Marco ou Marcos.`
+                              : voice.listening
+                                ? voice.hidden
+                                  ? "Escuta em espera. Retoma ao voltar para esta aba."
+                                  : "Escuta pronta."
+                                : voice.permissionDenied
+                                  ? "Sem permissão para o microfone. Você pode digitar."
+                                  : voice.paused
+                                    ? "Escuta pausada. Ative para retomar."
+                                    : "Pronto. Digite ou ative a escuta."}
               </p>
+              {(metrics.serverMs !== undefined ||
+                voice.transcriptionMs !== null) && (
+                <small>
+                  Tempos: transcrição{" "}
+                  {voice.transcriptionMs === null
+                    ? "não medida"
+                    : `${voice.transcriptionMs} ms`}
+                  ; primeiro conteúdo do modelo {metrics.modelFirstMs ?? "—"}{" "}
+                  ms; modelo total {metrics.modelTotalMs ?? "—"} ms; ação
+                  confirmada {metrics.actionMs ?? "—"} ms; servidor{" "}
+                  {metrics.serverMs ?? "—"} ms.
+                </small>
+              )}
+              {uiReview && (
+                <div role="status">
+                  <p>{uiReview}</p>
+                  <button
+                    type="button"
+                    onClick={() => void send("confirmar formulário")}
+                  >
+                    Confirmar formulário
+                  </button>
+                  <button type="button" onClick={() => void send("cancelar")}>
+                    Cancelar
+                  </button>
+                </div>
+              )}
               {!providerConfigured && (
                 <p role="alert" className={styles.error}>
-                  Conversa com IA indisponível: configure OPENAI_API_KEY no servidor e reinicie o aplicativo.
+                  Conversa com IA indisponível: verifique MARCO_OLLAMA_URL e a
+                  configuração da ponte no servidor.
                 </p>
               )}
               {voice.transcript && (
@@ -939,8 +1100,13 @@ export default function JamesAssistant({ userId }: { userId: string }) {
               )}
               {speechError && (
                 <div className={styles.actions}>
-                  <p role="alert" className={styles.error}>{speechError}</p>
-                  <button type="button" onClick={() => speak(lastSpeech.current)}>
+                  <p role="alert" className={styles.error}>
+                    {speechError}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => speak(lastSpeech.current)}
+                  >
                     Tentar falar novamente
                   </button>
                 </div>
@@ -996,8 +1162,19 @@ export default function JamesAssistant({ userId }: { userId: string }) {
                   >
                     Enviar
                   </button>
-                  <button type="button" onClick={() => voice.listening ? pause() : void voice.start()}>
-                    {voice.listening ? "Pausar escuta" : "Ativar escuta"}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      voice.listening || voice.starting
+                        ? pause()
+                        : void voice.start()
+                    }
+                  >
+                    {voice.starting
+                      ? "Cancelar ativação"
+                      : voice.listening
+                        ? "Pausar escuta"
+                        : "Ativar escuta"}
                   </button>
                   {voice.browserFallback && !voice.listening && (
                     <button type="button" onClick={() => voice.startBrowser()}>
@@ -1031,6 +1208,15 @@ export default function JamesAssistant({ userId }: { userId: string }) {
                     </button>
                   )}
                 </div>
+                {!voice.listening && (
+                  <small>
+                    Ao ativar a escuta, a transcrição usa o servidor local
+                    quando disponível; caso contrário, usa o reconhecimento do
+                    navegador, que pode enviar áudio ao serviço dele. Autorize o
+                    microfone quando o navegador solicitar e aguarde o estado
+                    “Ouvindo”.
+                  </small>
+                )}
                 <details className={styles.settings}>
                   <summary>Preferências do Marco</summary>
                   <label>
@@ -1064,19 +1250,15 @@ export default function JamesAssistant({ userId }: { userId: string }) {
                     >
                       <option value="right">Direita, se houver espaço</option>
                       <option value="left">Esquerda, se houver espaço</option>
-                      <option value="inline">
-                        Centro inferior
-                      </option>
+                      <option value="inline">Centro inferior</option>
                     </select>
                   </label>
                   <label>
                     <input
                       type="checkbox"
-                      checked={voice.listening}
+                      checked={voice.listening || voice.starting}
                       onChange={(e) =>
-                        e.target.checked
-                          ? void voice.start()
-                          : pause()
+                        e.target.checked ? void voice.start() : pause()
                       }
                     />
                     Manter Marco pronto enquanto uso o site
@@ -1105,18 +1287,24 @@ export default function JamesAssistant({ userId }: { userId: string }) {
                       }
                     }}
                   />
-                  Ler respostas com voz local
+                  Ler respostas em áudio
                 </label>
                 <details className={styles.privacy}>
-                  <summary>Privacidade · OpenAI · voz no servidor MARCON</summary>
+                  <summary>Privacidade · Ollama no seu PC · voz</summary>
                   <small>
                     Seu comando em texto e os itens do carrinho são processados
-                    pela OpenAI. Após ativar o microfone, trechos de fala são transcritos no servidor MARCON;
-                    áudio bruto não é guardado após o processamento.{" "}
-                    Após ativar, a escuta continua ao recolher Marco e navegar.
-                    Pausa na aba oculta e retoma ao voltar. Para encerrar, use
-                    Desligar escuta ou saia da conta.
-                    O reconhecimento do navegador é opcional quando a transcrição local está indisponível; conforme o navegador, o áudio pode ser processado pelo serviço dele. Ele só inicia após clicar em “Usar reconhecimento do navegador”.
+                    pelo Ollama no computador configurado. O modelo não
+                    transcreve áudio. Quando configurada, a transcrição local
+                    usa o servidor MARCON; áudio bruto não é guardado após o
+                    processamento. A leitura usa Piper local quando configurado
+                    ou a síntese do navegador, cujo processamento depende da voz
+                    escolhida. Após ativar, a escuta continua ao recolher Marco
+                    e navegar. Pausa na aba oculta e retoma ao voltar. Para
+                    encerrar, use Desligar escuta ou saia da conta. O
+                    reconhecimento do navegador é usado quando a transcrição
+                    local está indisponível; conforme o navegador, o áudio pode
+                    ser processado pelo serviço dele. A escuta só inicia após
+                    você ativá-la e autorizar o microfone.
                   </small>
                 </details>
                 {voice.listening && (

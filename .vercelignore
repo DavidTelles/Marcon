@@ -1,0 +1,9 @@
+.env
+.env.*
+.validation/
+.next-*/
+test-results*/
+playwright-report/
+coverage/
+face/.venv/
+__pycache__/

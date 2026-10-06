@@ -55,6 +55,14 @@ async function executeRequestAction(c, user, actor, a) {
             entries.length)
             throw new permissions_1.ActionError("Agrupe os itens repetidos no carrinho.");
         const batch = (0, node_crypto_1.randomUUID)(), ids = [];
+        if (actor.sector_id) {
+            const sector = await (0, stock_ledger_1.first)(c, "SELECT block_id FROM sectors WHERE id=?", [actor.sector_id]);
+            if (!sector || Number(sector.block_id) !== Number(actor.block_id))
+                throw new permissions_1.ActionError("O setor do funcionário não pertence ao seu bloco. Revise o vínculo industrial.", 409);
+        }
+        const workplace = actor.workplace_id ? await (0, stock_ledger_1.first)(c, "SELECT point_id,block_id,sector_id FROM workplaces WHERE id=?", [actor.workplace_id]) : null;
+        if (actor.workplace_id && (!workplace || Number(workplace.block_id) !== Number(actor.block_id) || Number(workplace.sector_id) !== Number(actor.sector_id)))
+            throw new permissions_1.ActionError("O local de trabalho não corresponde ao bloco e setor do funcionário. Revise o vínculo.", 409);
         for (const e of [...entries].sort((x, y) => String(x.code).localeCompare(String(y.code)))) {
             const p = await (0, stock_ledger_1.partLock)(c, e.code);
             if (e.requestedUnit === "box" && Number(p.pack_verified) === 0)
@@ -75,7 +83,7 @@ async function executeRequestAction(c, user, actor, a) {
             if (q >
                 (await (0, stock_ledger_1.stock)(c, Number(p.id))).reduce((sum, r) => sum + (0, stock_ledger_1.available)(r), 0))
                 throw new permissions_1.ActionError("Saldo disponível insuficiente.", 409);
-            const [r] = await c.execute("INSERT INTO requests(requester_id,block_id,part_id,quantity,priority,justification,batch_id,sector,requested_unit,requested_amount,pack_size_at_request,anomaly,sector_id,workplace_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)", [
+            const [r] = await c.execute("INSERT INTO requests(requester_id,block_id,part_id,quantity,priority,justification,batch_id,sector,requested_unit,requested_amount,pack_size_at_request,anomaly,sector_id,workplace_id,destination_point_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", [
                 actorId,
                 actor.block_id,
                 p.id,
@@ -90,6 +98,7 @@ async function executeRequestAction(c, user, actor, a) {
                 JSON.stringify(anomaly),
                 actor.sector_id ?? null,
                 actor.workplace_id ?? null,
+                workplace?.point_id ?? null,
             ]);
             ids.push(r.insertId);
             await (0, stock_ledger_1.audit)(c, actorId, "request", r.insertId, "create", {
@@ -229,17 +238,14 @@ async function executeRequestAction(c, user, actor, a) {
                     ? JSON.parse(published.graph)
                     : published.graph)
                 : null;
-            const workplace = r.workplace_id ? await (0, stock_ledger_1.first)(c, "SELECT point_id FROM workplaces WHERE id=?", [r.workplace_id]) : null;
             const destinations = graph
-                ? (0, routing_1.deliveryTargets)(graph, Number(r.block_id), r.sector_id ? Number(r.sector_id) : undefined, workplace?.point_id ? String(workplace.point_id) : undefined)
+                ? (0, routing_1.deliveryTargets)(graph, Number(r.block_id), r.sector_id ? Number(r.sector_id) : undefined, r.destination_point_id ? String(r.destination_point_id) : undefined)
                 : [];
             const ranked = locations
                 .map((l) => {
-                const node = graph?.nodes.find((n) => n.id === l.map_node_id) ??
-                    graph?.nodes.find((n) => n.warehouseId === Number(l.warehouse_id));
-                const paths = graph && node
-                    ? destinations
-                        .map((destination) => (0, routing_1.shortestPath)(graph, node.id, destination.id))
+                const nodes = graph?.nodes.filter((n) => n.warehouseId === Number(l.warehouse_id) && (!l.map_node_id || n.id === l.map_node_id)) || [];
+                const paths = graph
+                    ? nodes.flatMap(node => destinations.map(destination => (0, routing_1.shortestPath)(graph, node.id, destination.id)))
                         .filter((path) => path !== null)
                     : [];
                 return {

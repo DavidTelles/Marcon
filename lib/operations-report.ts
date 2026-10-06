@@ -122,7 +122,7 @@ export async function operationsReport(user: Account, filters: ReportFilter) {
           ? [user.blockId!]
           : [];
   const [movements] = await pool.execute<RowDataPacket[]>(
-    `SELECT r.sector AS request_sector,r.sector_id AS request_sector_id,r.status AS request_status,r.priority AS request_priority,m.request_id,m.id,m.part_id,m.warehouse_id,m.kind,m.quantity,m.reason,au.name AS actor,p.code,DATE_FORMAT(m.created_at,'%Y-%m-%d') AS date,b.id AS block_id,b.name AS block,u.employee_no AS requester FROM stock_movements m JOIN users au ON au.id=m.actor_id JOIN parts p ON p.id=m.part_id LEFT JOIN requests r ON r.id=m.request_id LEFT JOIN users u ON u.id=r.requester_id LEFT JOIN blocks b ON b.id=m.block_id WHERE ${scope} AND m.created_at>=? AND m.created_at<DATE_ADD(?,INTERVAL 1 DAY) ORDER BY m.created_at,m.id`,
+    `SELECT r.sector AS request_sector,r.sector_id AS request_sector_id,r.destination_point_id AS request_point_id,r.status AS request_status,r.priority AS request_priority,m.request_id,m.id,m.part_id,m.warehouse_id,m.kind,m.quantity,m.reason,au.name AS actor,p.code,DATE_FORMAT(m.created_at,'%Y-%m-%d') AS date,b.id AS block_id,b.name AS block,u.employee_no AS requester FROM stock_movements m JOIN users au ON au.id=m.actor_id JOIN parts p ON p.id=m.part_id LEFT JOIN requests r ON r.id=m.request_id LEFT JOIN users u ON u.id=r.requester_id LEFT JOIN blocks b ON b.id=m.block_id WHERE ${scope} AND m.created_at>=? AND m.created_at<DATE_ADD(?,INTERVAL 1 DAY) ORDER BY m.created_at,m.id`,
     [...params, from, to],
   );
   const [warehouses] = await pool.query<RowDataPacket[]>(
@@ -244,6 +244,7 @@ export async function operationsReport(user: Account, filters: ReportFilter) {
           locationIds,
           new Map(p.locations?.map((l) => [l.warehouseId, l.nodeId])),
           m.request_sector_id ? Number(m.request_sector_id) : undefined,
+          m.request_point_id ? String(m.request_point_id) : undefined,
         );
         let remaining = m.quantity;
         for (const candidate of ranked) {
@@ -566,7 +567,17 @@ export async function operationsReport(user: Account, filters: ReportFilter) {
           ?.key,
     ),
   );
+  const [decisions] = permitted(user, "planning")
+    ? await pool.query<RowDataPacket[]>("SELECT key FROM stock_recommendations WHERE status<>'Pendente'")
+    : [[]];
+  decisions.forEach(r=>rejectedKeys.add(r.key));
   const visibleTransfers = transfers.filter((t) => !rejectedKeys.has(t.key));
+  // Persist the exact server calculation. Acceptance checks this record under lock,
+  // rather than trusting coverage/quantity supplied by the browser.
+  for (const t of visibleTransfers) {
+    const part=snapshot.stock.find(p=>p.code===t.code)!,source=warehouses.find(w=>w.name===t.from)!,destination=warehouses.find(w=>w.name===t.to)!;
+    await pool.execute("INSERT INTO stock_recommendations(key,part_id,source_warehouse_id,destination_warehouse_id,quantity,map_version_id,part_updated_at,payload) SELECT ?,?,?,?,?,?,updated_at,? FROM parts WHERE id=? ON CONFLICT(key) DO UPDATE SET created_at=NOW() WHERE stock_recommendations.status='Pendente'",[t.key,part.id,source.id,destination.id,t.quantity,published[0].id,JSON.stringify(t.evidence),part.id]);
+  }
   for (const r of reportRows) {
     r.transfer = visibleTransfers
       .filter((t) => t.code === r.code && t.to === r.warehouse)

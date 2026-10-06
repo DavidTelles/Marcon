@@ -3,6 +3,13 @@
   "version": "2.0.0",
   "private": true,
   "scripts": {
+    "marco:bridge": "node --env-file-if-exists=.env scripts/marco-bridge.mjs",
+    "marco:doctor": "node scripts/marco-doctor.mjs",
+    "marco:benchmark": "node scripts/benchmark-marco.mjs",
+    "test:marco": "node --test tests/marco-*.test.mjs",
+    "test:marco:integration": "node scripts/test-integrated-logistics.mjs --marco",
+    "test:marco:regression": "playwright test --config playwright.marco.config.ts",
+    "test:marco:cancel": "node scripts/test-marco-cancel.mjs",
     "dev": "node scripts/run-with-backend.mjs dev",
     "dev:next": "next dev",
     "build": "next build",
@@ -20,10 +27,14 @@
     "seed": "node scripts/db-seed.mjs",
     "dev:api": "npm --prefix backend run dev",
     "test:api": "npm --prefix backend test",
+    "test:logistics": "node scripts/test-integrated-logistics.mjs",
+    "test:logistics:ui": "node scripts/test-integrated-logistics.mjs --ui",
+    "links:preview": "node scripts/link-existing-records.mjs",
     "test:login-routes": "node scripts/test-login-routes.mjs",
     "format": "prettier --write app/login app/globals.css tests playwright.config.ts",
     "format:check": "prettier --check app/login app/globals.css tests playwright.config.ts"
   },
+  "engines": { "node": ">=22.12" },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
     "@tesseract.js-data/por": "^1.0.0",

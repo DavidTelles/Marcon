@@ -198,6 +198,8 @@ export async function confirmJames(
   )
     throw new ActionError("Confirme explicitamente o resumo exibido.", 400);
   const t = readTicket(user, token, "request");
+  if (!Array.isArray(currentCart) || JSON.stringify(currentCart) !== JSON.stringify(t.entries))
+    throw new ActionError("O carrinho mudou. Revise a requisição antes de confirmar.", 409);
   const result = await executeWorkspaceAction(user, {
     type: "createRequests",
     entries: t.entries,
@@ -532,16 +534,18 @@ export async function converseJames(
   const justification = message.match(/^justificativa\s*:\s*(.+)$/i);
   const history = Array.isArray(input.history)
     ? input.history
-        .slice(-6)
+        .slice(-4)
         .filter((v) => typeof v === "string")
-        .map((v) => v.slice(0, 2000))
+        .map((v) => v.slice(0, 400))
     : [];
+  const navigationMatch = simple.match(/^(?:abra|abrir|acesse|acessar)(?: a| o)? (catalogo|estoque|requisicoes|transferencias|rotas|recomendacoes|compra|mapa|perfil|historico|funcionarios|devolucoes|nova|dashboard)$/);
   const operation = explicitOperation(message);
   let reportState: JamesReportContext | undefined = reportContext(
     input.reportContext,
   );
   const steps =
     continuation ??
+    (navigationMatch ? [{ action: "navigate" as const, view: navigationMatch[1] }] : undefined) ??
     (operation
       ? [
           {
@@ -703,6 +707,7 @@ export async function converseJames(
       }[]
     | undefined;
   for (const [index, step] of steps.entries()) {
+    signal.throwIfAborted();
     if (step.action === "form") {
       const form = advanceJamesForm(beginJamesForm(step.view));
       demand(
@@ -719,7 +724,7 @@ export async function converseJames(
       };
     }
     if (step.action === "chat")
-      return { reply: step.answer, cart, updatedAt: new Date().toISOString() };
+      return { reply: step.answer, source: "ollama" as const, cart, updatedAt: new Date().toISOString() };
     if (step.action === "operation") {
       if (
         step.operation?.reason &&

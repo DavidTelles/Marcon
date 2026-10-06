@@ -108,20 +108,12 @@ test("painéis reais: responsividade, registros de origem, evolução e filtros 
     .getByLabel("Almoxarifado de origem da retirada")
     .selectOption("Origem 2");
   await expect(table).toContainText("2 un");
-  const tabs = page.getByRole("navigation", { name: "Painéis de peças" });
-  await expect(
-    tabs.getByRole("link", { name: "Peça · materiais", exact: true }),
-  ).toHaveAttribute("href", /warehouse=Origem\+2/);
-  await tabs
-    .getByRole("link", { name: "Peça · materiais", exact: true })
-    .click();
-  await expect(
-    page.getByRole("heading", { name: "Peça", exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByLabel("Almoxarifado de origem da retirada"),
-  ).toHaveValue("Origem 2");
-  await expect(page.getByLabel("Peça selecionada")).toHaveValue("P1");
+  await expect(page.getByRole("navigation", { name: "Painéis de peças" })).toHaveCount(0);
+  await page.goto(comparison);
+  await expect(page.getByRole("heading", { name: "Consumos", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "P1", exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("Almoxarifado de origem da retirada")).toHaveValue("");
+
 });
 
 test("respostas antigas, falha/repetição, unidade e exportação", async ({
@@ -183,12 +175,37 @@ test("respostas antigas, falha/repetição, unidade e exportação", async ({
   await expect(page.getByLabel("Unidade compatível")).toHaveValue("kg");
   await expect(table).toContainText("kg");
   await expect(table).not.toContainText("Parafuso");
-  const link = page.getByRole("link", { name: "Planilha", exact: true });
-  await expect(link).toHaveAttribute("href", /code=P3/);
-  await expect(link).toHaveAttribute("href", /export=all/);
-  const exported = await page.request.get((await link.getAttribute("href"))!);
-  expect(exported.status()).toBe(200);
-  expect(exported.headers()["content-type"]).toContain("spreadsheetml");
+  for (const [label, format, mime] of [
+    ["Exportar planilha", "xlsx", "spreadsheetml"],
+    ["Exportar PDF", "pdf", "application/pdf"],
+  ]) {
+    const requestPromise = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return url.pathname === "/api/parts-consumption" && url.searchParams.get("format") === format;
+    });
+    const downloadPromise = page.waitForEvent("download");
+    await page.getByRole("button", { name: label, exact: true }).click();
+    const response = await requestPromise;
+    expect(response.status()).toBe(200);
+    expect(response.headers()["content-type"]).toContain(mime);
+    expect(new URL(response.url()).searchParams.get("code")).toBe("P3");
+    expect(new URL(response.url()).searchParams.get("export")).toBe("all");
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toMatch(new RegExp(`\\.${format}$`));
+    expect(await download.failure()).toBeNull();
+  }
+  await page.route("**/api/parts-consumption?**", async (route) => {
+    if (new URL(route.request().url()).searchParams.has("format"))
+      await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({error: "Exportação indisponível para teste"}) });
+    else await route.continue();
+  });
+  await page.getByRole("button", {name: "Exportar PDF", exact: true}).click();
+  await expect(page.getByRole("alert")).toContainText("Exportação indisponível para teste");
+  await page.unrouteAll({behavior: "wait"});
+  const retryDownload = page.waitForEvent("download");
+  await page.getByRole("button", {name: "Exportar PDF", exact: true}).click();
+  expect(await (await retryDownload).failure()).toBeNull();
+
 });
 
 test("blocos selecionados, dados ausentes e permissão de recomendações", async ({

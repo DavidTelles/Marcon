@@ -56,7 +56,13 @@ export async function transferAction(
     const currentRoute = await storageRoute(c, Number(p.id), Number(source.id), Number(dest.id), { objective: a.objective as RouteOptions["objective"], transport: a.transport as RouteOptions["transport"] });
     let routeEvidence: unknown = currentRoute;
     if (a.recommendation && typeof a.recommendation === "object") {
-      const rec = a.recommendation as Record<string, unknown>;
+      const key=(a.recommendation as Record<string,unknown>).key;
+      if(typeof key!=="string"||!/^[a-f0-9]{64}$/.test(key))throw new ActionError("Recomendação inválida.");
+      const saved=await first(c,"SELECT *,created_at<DATE_SUB(NOW(),INTERVAL 15 MINUTE) AS expired FROM stock_recommendations WHERE key=? FOR UPDATE",[key]);
+      if(!saved||saved.status!=="Pendente"||saved.expired||Number(saved.part_id)!==Number(p.id)||Number(saved.source_warehouse_id)!==Number(source.id)||Number(saved.destination_warehouse_id)!==Number(dest.id)||Number(saved.quantity)!==q||String(saved.part_updated_at)!==String(p.updated_at))throw new ActionError("A recomendação mudou, expirou ou já foi decidida. Atualize o relatório.",409);
+      const rec = typeof saved.payload==="string"?JSON.parse(saved.payload):saved.payload;
+      rec.key=key;rec.mapVersion=Number(saved.map_version_id);
+      if(Number(rec.sourceAvailable)!==available(b)||!destination||Number(rec.destinationAvailable)!==available(destination))throw new ActionError("Os saldos ou reservas mudaram. Atualize a recomendação.",409);
       if (currentRoute.mapVersion !== rec.mapVersion) throw new ActionError("A planta mudou. Atualize a recomendação.", 409);
       const route = currentRoute.route;
       if (![rec.sourceTarget, rec.sourceMinimum].every((v) => typeof v === "number" && Number.isFinite(v) && v >= 0)) throw new ActionError("Cobertura inválida.");
@@ -73,7 +79,10 @@ export async function transferAction(
       reason: note,
       route: routeEvidence,
     });
-    if (a.recommendation) await audit(c, actor, "recommendation", Number(p.id), "accept", { transferId: r.insertId, ...routeEvidence as object });
+    if (a.recommendation) {
+      await c.execute("UPDATE stock_recommendations SET status='Aceita',decided_at=NOW(),decided_by=?,transfer_id=? WHERE key=?",[actor,r.insertId,(a.recommendation as Record<string,unknown>).key]);
+      await audit(c, actor, "recommendation", Number(p.id), "accept", { transferId: r.insertId, ...routeEvidence as object });
+    }
     return { id: r.insertId };
   }
   const id = integer(a.id);

@@ -16,6 +16,7 @@ const config = () => ({
 });
 
 export async function localVoiceStatus() {
+  if (process.env.VERCEL) return { transcribe: false, speak: false };
   const paths = config();
   const exists = async (path?: string) => {
     if (!path) return false;

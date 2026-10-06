@@ -67,6 +67,8 @@ export function PartsConsumptionScreen({
   const [report, setReport] = useState<PartsConsumptionReport | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState<"pdf" | "xlsx" | null>(null);
+  const [exportError, setExportError] = useState("");
   const [revision, setRevision] = useState(0);
   const [origin, setOrigin] = useState<Record<string, string> | null>(null);
   const [originReport, setOriginReport] =
@@ -80,7 +82,6 @@ export function PartsConsumptionScreen({
   );
   const originHeading = useRef<HTMLHeadingElement>(null);
   const mainHeading = useRef<HTMLDivElement>(null);
-  const prefix = role === "admin" ? "/admin/dashboard" : leader ? "/department-head/dashboard" : "/warehouse/dashboard";
   const selected = filters.code || "";
   let selectedBlocks: string[] = [];
   try {
@@ -256,31 +257,67 @@ export function PartsConsumptionScreen({
   );
   const busy = loading || !report;
   const unit = report?.filters.unit || "";
+  const downloadReport = async (format: "pdf" | "xlsx") => {
+    if (busy || error || exporting || (mode === "share" && !selected)) return;
+    setExporting(format);
+    setExportError("");
+    try {
+      const response = await fetch(link("/api/parts-consumption", {
+        format,
+        export: "all",
+      }), { cache: "no-store" });
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        throw new Error(data?.error || "Não foi possível exportar o relatório.");
+      }
+      const mime = format === "pdf"
+        ? "application/pdf"
+        : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+      if (!response.headers.get("Content-Type")?.includes(mime))
+        throw new Error("A exportação retornou um arquivo inválido. Tente novamente.");
+      const blob = await response.blob();
+      if (!blob.size) throw new Error("O arquivo exportado está vazio.");
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = response.headers.get("Content-Disposition")
+        ?.match(/filename="([^"]+)"/)?.[1]
+        || `marcon-${mode === "comparison" ? "consumos" : "peca"}-${report!.period.from}.${format}`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (cause) {
+      setExportError(cause instanceof Error ? cause.message : "Falha na exportação.");
+    } finally {
+      setExporting(null);
+    }
+  };
   return (
     <div className={styles.root}>
       <div ref={mainHeading} tabIndex={-1}>
         {heading(
           "MATERIAIS · ENTREGAS CONFIRMADAS",
-          leader ? "Fluxo do bloco" : mode === "comparison" ? "Peça" : "Por Peça",
+          leader ? "Fluxo do bloco" : mode === "comparison" ? "Consumos" : "Peça",
           leader ? "Solicitações, entregas e devoluções do bloco autorizado. Entrega e transferência não comprovam consumo efetivo." : mode === "comparison"
             ? "Compare materiais na mesma unidade, com acesso às entregas que compõem cada resultado."
             : "Selecione um material e compare as entregas entre blocos.",
         )}
       </div>
-      {!leader && <nav className={styles.tabs} aria-label="Painéis de peças">
-        <Link
-          href={link(`${prefix}/parts`)}
-          aria-current={mode === "comparison" ? "page" : undefined}
-        >
-          Peça · materiais
-        </Link>
-        <Link
-          href={link(`${prefix}/by-part`)}
-          aria-current={mode === "share" ? "page" : undefined}
-        >
-          Por Peça · blocos
-        </Link>
-      </nav>}
+      <div className={styles.actions} aria-label="Exportar relatório">
+        <button type="button" className="button secondary"
+          disabled={busy || !!error || !!exporting || (mode === "share" && !selected)}
+          onClick={() => void downloadReport("xlsx")}>
+          {exporting === "xlsx" ? "Gerando planilha…" : "Exportar planilha"}
+        </button>
+        <button type="button" className="button secondary"
+          disabled={busy || !!error || !!exporting || (mode === "share" && !selected)}
+          onClick={() => void downloadReport("pdf")}>
+          {exporting === "pdf" ? "Gerando PDF…" : "Exportar PDF"}
+        </button>
+      </div>
+      {exporting && <p role="status">Preparando arquivo com todos os resultados dos filtros selecionados…</p>}
+      {exportError && <p role="alert">{exportError}</p>}
       <section className="panel" aria-label="Filtros de entregas">
         <div className={styles.filters}>
           <label>
@@ -520,26 +557,6 @@ export function PartsConsumptionScreen({
                         período anterior positivo ficam sem base.
                       </p>
                     </div>
-                    <div className={styles.actions}>
-                      <a
-                        className="button secondary"
-                        href={link("/api/parts-consumption", {
-                          format: "pdf",
-                          export: "all",
-                        })}
-                      >
-                        PDF
-                      </a>
-                      <a
-                        className="button secondary"
-                        href={link("/api/parts-consumption", {
-                          format: "xlsx",
-                          export: "all",
-                        })}
-                      >
-                        Planilha
-                      </a>
-                    </div>
                   </div>
                   <p>
                     Exportação: todos os resultados agregados do filtro,
@@ -585,15 +602,7 @@ export function PartsConsumptionScreen({
                                 {...rowProps({ detailCode: p.code })}
                               >
                                 <td>
-                                  <Link
-                                    href={link(leader ? prefix : `${prefix}/by-part`, {
-                                      code: p.code,
-                                      unit: p.unit,
-                                      page: "1",
-                                    })}
-                                  >
-                                    {p.code}
-                                  </Link>
+                                  <strong>{p.code}</strong>
                                   <small>{p.name}</small>
                                 </td>
                                 <td>{p.unit}</td>

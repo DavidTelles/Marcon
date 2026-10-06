@@ -34,11 +34,13 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
-    "**/*.mts",
-    ".next-james-test/types/**/*.ts",
-    ".next-james-test/dev/types/**/*.ts"
+    "**/*.mts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    ".validation",
+    ".next-*",
+    "test-results",
+    "playwright-report"
   ]
 }

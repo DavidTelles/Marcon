@@ -6,7 +6,7 @@ export async function exportPartsReport(
   format: "pdf" | "xlsx",
 ) {
   const metadata: (string | number)[][] = [
-    ["MARCON", "Peça / Por Peça · quantidade entregue"],
+    ["MARCON", "Consumos / Peça · quantidade entregue"],
     [
       "Recorte",
       "Todos os resultados agregados filtrados; não inclui linhas individuais de origem",

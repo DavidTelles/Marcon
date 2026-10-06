@@ -51,6 +51,7 @@ export async function executeInventoryAction(
     if (requestActions.has(String(a.type)))
       return executeRequestAction(c, user, actor, a);
     demand(user, "stock");
+    if (a.type === "transfer" && a.recommendation) demand(user, "planning");
     if (a.type === "reconcileImportBalance") {
       if (a.confirmed !== true) throw new ActionError("Confirme a abertura ou a contagem física atual.",422);
       const ref = await first(c,"SELECT material_id FROM reported_balances WHERE id=?",[integer(a.id)]);

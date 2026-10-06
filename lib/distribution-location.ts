@@ -49,9 +49,10 @@ export function accessibleWarehousesForBlock(
   warehouseIds: number[],
   bindings: Map<number, string | undefined> = new Map(),
   sectorId?: number,
+  pointId?: string,
 ) {
   if (!graph || blockId === null) return [];
-  const targets = deliveryTargets(graph, blockId, sectorId);
+  const targets = deliveryTargets(graph, blockId, sectorId, pointId);
   const ranked = warehouseIds
     .map((id) => ({
       id,

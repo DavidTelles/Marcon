@@ -581,8 +581,8 @@ export default function Workspace({
                     ["estoque", "Estoque"],
                     ["requisicoes", "Requisições"],
                     ["materiais", "Materiais"],
-                    ["pecas", "Peças"],
-                    ["por-peca", "Por peça"],
+                    ["pecas", "Consumos"],
+                    ["por-peca", "Peça"],
                   ]
                     .filter(
                       ([view]) =>

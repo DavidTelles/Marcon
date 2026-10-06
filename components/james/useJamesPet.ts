@@ -288,7 +288,7 @@ export function useJamesPet(userId: string, path: string, open: boolean) {
     highlight.current = target;
     highlightTimer.current = setTimeout(clearHighlight, 6000);
     setTip(
-      "O controle destacado é o próximo passo. Marco não clica nem preenche por você.",
+      "O controle destacado é o próximo passo. Você pode usar os comandos de campo ou a tarefa guiada; operações exigem revisão e confirmação.",
     );
   };
   return {
