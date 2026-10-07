@@ -35,7 +35,7 @@ import { RequestsScreen } from "./screens/requests-screen";
 import { RequestWorkflowScreen } from "./screens/request-workflow-screen";
 import { MaterialsScreen } from "./screens/materials-screen";
 import { PartsConsumptionScreen } from "./screens/parts-consumption-screen";
-import { PcpScreen } from "./screens/pcp-screen";
+import { PieceLookup } from "./operations/piece-lookup";
 import { type Request, type Part } from "@/lib/demo-data";
 import {
   pathFor,
@@ -67,7 +67,6 @@ const roles: Record<
   admin: {
     name: "Admin",
     pages: [
-      { id: "pcp", label: "PCP e etiquetas" },
       { id: "dashboard", label: "Dashboard" },
       { id: "mapa", label: "Planta e rotas" },
       { id: "compra", label: "Compra preditiva" },
@@ -79,7 +78,6 @@ const roles: Record<
   lider: {
     name: "Líder de bloco",
     pages: [
-      { id: "pcp", label: "PCP" },
       { id: "dashboard", label: "Dashboard" },
       { id: "solicitacoes", label: "Solicitações" },
       { id: "historico", label: "Histórico geral" },
@@ -88,7 +86,6 @@ const roles: Record<
   almoxarifado: {
     name: "Almoxarifado",
     pages: [
-      { id: "pcp", label: "PCP e etiquetas" },
       { id: "dashboard", label: "Dashboard" },
       { id: "requisicoes", label: "Requisições" },
       { id: "estoque", label: "Estoque" },
@@ -101,7 +98,6 @@ const roles: Record<
   funcionario: {
     name: "Funcionário",
     pages: [
-      { id: "pcp", label: "Requisição PCP" },
       { id: "nova", label: "Fazer requisição" },
       { id: "requisicoes", label: "Meus pedidos" },
       { id: "historico", label: "Meu histórico" },
@@ -109,7 +105,6 @@ const roles: Record<
   },
 };
 const pageIcons = {
-  pcp: ClipboardList,
   pecas: Boxes,
   "por-peca": ChartNoAxesCombined,
   materiais: Boxes,
@@ -200,7 +195,6 @@ export default function Workspace({
   const menuButton = useRef<HTMLButtonElement>(null);
   const sidebar = useRef<HTMLElement>(null);
   const pagePermissions = {
-    pcp: "history",
     materiais: "history",
     pecas: "stock",
     "por-peca": "stock",
@@ -696,6 +690,7 @@ export default function Workspace({
               <strong>{active.label}</strong>
             </span>
           </div>
+          <PieceLookup role={role} />
           <div className="role-control">
             <ThemeToggle />
             <strong>{current.name}</strong>
@@ -806,7 +801,6 @@ export default function Workspace({
               <StockMovementHistory />
             )}
           {page === "nova" && <EmployeeRequestScreen routePart={routePart} />}
-          {page === "pcp" && <PcpScreen role={role} />}
           {page === "funcionarios" && routePart === "new" && (
             <StaffCreateScreen />
           )}

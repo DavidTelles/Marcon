@@ -328,7 +328,9 @@
     padding: 6px 12px;
   }
   .compact.compact :global(.topbar .top-left) {
-    width: 100%;
+    flex: 1;
+    min-width: 0;
+    width: auto;
   }
   .compact.compact :global(.topbar .top-left > :not(.menu)),
   .compact.compact :global(.topbar .role-control) {

@@ -469,7 +469,6 @@ export async function executeInventoryAction(
       [p.id, w.id],
     );
     if (a.type === "stockEntry" || a.type === "replenishStock" || a.type === "adjustStock") {
-      if (a.type === "replenishStock") scan(p, a.qrCode);
       const b = (await stock(c, Number(p.id))).find(
           (b) => Number(b.warehouse_id) === Number(w.id),
         )!,

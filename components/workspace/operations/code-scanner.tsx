@@ -1,11 +1,28 @@
 ﻿"use client";
 import { useEffect, useRef, useState } from "react";
+export type ResolvedPiece = {
+  material: { id: number; code: string; name: string; unit: string };
+  balances: {
+    warehouseId: number;
+    warehouse: string;
+    physical: number;
+    available: number;
+    unit: string;
+  }[];
+  scope: string;
+};
 export function CodeScanner({
   onCode,
-  raw = false,
+  onResolved,
+  onInvalid,
+  expectedCode,
+  allowManual = false,
 }: {
   onCode: (code: string) => void;
-  raw?: boolean;
+  onResolved?: (piece: ResolvedPiece) => void;
+  onInvalid?: () => void;
+  expectedCode?: string;
+  allowManual?: boolean;
 }) {
   const video = useRef<HTMLVideoElement>(null),
     stop = useRef<(() => void) | null>(null),
@@ -13,10 +30,10 @@ export function CodeScanner({
   const [active, setActive] = useState(false),
     [error, setError] = useState("");
   const [reading, setReading] = useState(false);
+  const [manual, setManual] = useState("");
   const [confirmed, setConfirmed] = useState("");
   const resolving = useRef(false);
   const request = useRef<AbortController | null>(null);
-  const last = useRef<{ code: string; at: number } | null>(null);
   const decoding = useRef(false);
   async function createReader(rotateFrames = false) {
     const [{ BrowserMultiFormatReader }, { DecodeHintType, BarcodeFormat }] =
@@ -58,15 +75,12 @@ export function CodeScanner({
     return reader;
   }
   async function resolveCode(raw: string) {
-    if (
-      resolving.current ||
-      (last.current?.code === raw && Date.now() - last.current.at < 1500)
-    )
-      return;
+    if (resolving.current) return;
     resolving.current = true;
     setReading(true);
     setError("");
     setConfirmed("");
+    onInvalid?.();
     const controller = new AbortController();
     request.current?.abort();
     request.current = controller;
@@ -80,12 +94,14 @@ export function CodeScanner({
       const data = await response.json();
       if (!response.ok)
         throw new Error(data.error || "Falha ao consultar o código.");
+      if (expectedCode && data.material.code !== expectedCode)
+        throw new Error("Código lido não corresponde à peça desta entrega.");
       if (!controller.signal.aborted) {
         setConfirmed(
           `${data.material.code} · ${data.material.name}. ${data.balances.length ? data.balances.map((balance: { warehouse: string; available: number; unit: string }) => `${balance.warehouse}: ${balance.available} ${balance.unit} disponíveis`).join("; ") : "Sem saldo cadastrado no escopo autorizado."}`,
         );
-        last.current = { code: raw, at: Date.now() };
         onCode(data.material.code);
+        onResolved?.(data);
         return true;
       }
     } catch (cause) {
@@ -101,20 +117,12 @@ export function CodeScanner({
     }
   }
   async function acceptCode(value: string) {
-    if (!raw) return resolveCode(value);
-    if (!value || value.length > 128 || value.includes("\0")) {
-      setError("A etiqueta deve conter até 128 caracteres válidos.");
-      return false;
-    }
-    setError("");
-    setConfirmed(
-      `Conteúdo lido: ${value}. Confira o produto selecionado e salve o cadastro para vincular a etiqueta.`,
-    );
-    onCode(value);
-    return true;
+    return resolveCode(value);
   }
   async function readImage(file: File | undefined) {
     if (!file || reading || decoding.current) return;
+    setConfirmed("");
+    onInvalid?.();
     if (!file.type.startsWith("image/") || file.size > 10_000_000) {
       setError("Selecione uma imagem de até 10 MB.");
       return;
@@ -174,6 +182,8 @@ export function CodeScanner({
     const media = video.current?.srcObject as MediaStream | null;
     media?.getTracks().forEach((t) => t.stop());
     request.current?.abort();
+    resolving.current = false;
+    setReading(false);
     setActive(false);
   }
   useEffect(() => {
@@ -197,6 +207,8 @@ export function CodeScanner({
     const id = ++generation.current;
     setActive(true);
     setError("");
+    setConfirmed("");
+    onInvalid?.();
     try {
       if (!window.isSecureContext)
         throw new Error("Use localhost ou HTTPS para acessar a câmera.");
@@ -238,6 +250,33 @@ export function CodeScanner({
   }
   return (
     <div className="code-scanner">
+      {allowManual && (
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void resolveCode(manual);
+          }}
+        >
+          <label>
+            QR ou ID da peça
+            <input
+              value={manual}
+              maxLength={1024}
+              required
+              onChange={(event) => {
+                setManual(event.target.value);
+                request.current?.abort();
+                setConfirmed("");
+                setError("");
+                onInvalid?.();
+              }}
+            />
+          </label>
+          <button className="button primary" disabled={reading || !manual}>
+            Pesquisar peça
+          </button>
+        </form>
+      )}
       <button
         type="button"
         className="button secondary"
@@ -276,8 +315,9 @@ export function CodeScanner({
       />
       {error && <p role="alert">{error}</p>}
       <small>
-        A leitura apenas preenche o código; confirme a operação para alterar
-        saldo.
+        {allowManual
+          ? "A pesquisa consulta a peça e seus saldos, sem movimentar estoque."
+          : "A leitura apenas preenche o código; confirme a entrega para alterar saldo."}
       </small>
     </div>
   );

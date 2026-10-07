@@ -1058,6 +1058,11 @@ try {
       });
       assert.equal(login.status(), 200, await login.text());
       console.log("UI: signed login OK");
+      if (process.argv.includes("--qr")) {
+        const { checkQrWorkflow } = await import("./qr-flow-checks.mjs");
+        await checkQrWorkflow({ browser, origin, sql, action, insert, part, near, far, testPassword });
+        check("PCP removed in all four roles; QR lookup by image, camera and ID respects scope; delivery rejects mismatched QR and quantity and records stock once");
+      }
       if (catalogFixture) {
         const { checkCatalogWorkflow } = await import("./catalog-flow-checks.mjs");
         await checkCatalogWorkflow({ browser, origin, password: testPassword, adminRequest: page.request, sql, items: catalogFixture, warehouse: "Test near warehouse", warehouseId: near });
@@ -1113,8 +1118,8 @@ try {
         };
         const naturalNav = await natural(page.request, "Você pode me levar até a tela de estoque, por favor?");
         assert.equal(naturalNav.navigate, true); assert.equal(naturalNav.href, "/admin/dashboard/stock");
-        const naturalPcp = await natural(page.request, "Me leve para a rotina de PCP, por favor");
-        assert.equal(naturalPcp.navigate, true); assert.equal(naturalPcp.href, "/admin/pcp");
+        const naturalCatalog = await natural(page.request, "Me leve para o catalogo de pecas, por favor");
+        assert.equal(naturalCatalog.navigate, true); assert.equal(naturalCatalog.href, "/catalogo");
         const naturalStock = await natural(page.request, "Quantas unidades de TEST-PART estão disponíveis e em quais locais?");
         assert.match(naturalStock.reply, /TEST-PART.*Disponível:/); assert.match(naturalStock.reply, /Locais:/);
         const naturalList = await natural(workerContext.request, "Quais itens estão disponíveis para pedir agora?");
@@ -1136,7 +1141,7 @@ try {
         assert.equal(naturalSaved.status(), 200, await naturalSaved.text()); assert.equal((await naturalSaved.json()).operationCompleted, true);
         assert.equal(await balance(), beforeNatural + 3);
         assert.equal((await post(page.request, naturalConfirm)).status(), 200); assert.equal(await balance(), beforeNatural + 3);
-        check("Marco natural language with real Groq: navigation, PCP, stock queries, available products, exact cart, guided form, permission refusal, multiple-action clarification and confirmed idempotent stock write to PostgreSQL");
+        check("Marco natural language with real Groq: navigation, catalog, stock queries, available products, exact cart, guided form, permission refusal, multiple-action clarification and confirmed idempotent stock write to PostgreSQL");
         // Request confirmation must bind to the exact reviewed cart on the server too.
         const cartPreviewResponse = await post(workerContext.request, { message: "quero 2 unidades de TEST-PART", cart: [] });
         assert.equal(cartPreviewResponse.status(), 200, await cartPreviewResponse.text());

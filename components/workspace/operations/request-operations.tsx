@@ -245,6 +245,11 @@ export function RequestOperations({
         r.fulfilledBy === accountId && (
           <>
             <CodeScanner
+              expectedCode={r.code}
+              onInvalid={() => {
+                setCode("");
+                setConfirmation("");
+              }}
               onCode={(value) => {
                 setCode(value);
                 setConfirmation("");

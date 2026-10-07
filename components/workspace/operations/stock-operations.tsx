@@ -2,13 +2,11 @@
 import { useRef, useState } from "react";
 import { TransferQueue } from "./transfer-queue";
 import { useDemoStore } from "../demo-store";
-import { CodeScanner } from "./code-scanner";
 import { transports } from "@/lib/routing";
 export function StockOperations() {
   const { stock, runAction, warehouseOptions } = useDemoStore();
   const submission = useRef<{ signature: string; key: string } | null>(null);
   const [mode, setMode] = useState("stockEntry"),
-    [code, setCode] = useState(""),
     [busy, setBusy] = useState(false),
     [message, setMessage] = useState("");
   async function submit(e: React.FormEvent<HTMLFormElement>) {
@@ -23,7 +21,6 @@ export function StockOperations() {
         code: d.get("part"),
         warehouse: d.get("warehouse"),
         quantity: Number(d.get("quantity")),
-        qrCode: code,
         reason: d.get("reason"),
         dueDate: d.get("dueDate"),
         supplier: d.get("supplier"),
@@ -44,7 +41,6 @@ export function StockOperations() {
       setMessage("Operação registrada no Neon.");
       submission.current = null;
       f.reset();
-      setCode("");
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "Falha na operação.");
     } finally {
@@ -144,15 +140,6 @@ export function StockOperations() {
                 </label>
               </>
             )}
-            <CodeScanner onCode={setCode} />
-            <label>
-              Código lido
-              <input
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                required
-              />
-            </label>
           </>
         )}
         {mode === "confirmInbound" && (

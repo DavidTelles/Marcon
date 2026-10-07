@@ -23,6 +23,7 @@
     "test:pcp": "node scripts/test-pcp.mjs",
     "test:pcp:ui": "node scripts/test-pcp.mjs --ui",
     "test:pcp:embedded": "node scripts/test-pcp.mjs --ui --embedded",
+    "test:qr": "node scripts/test-integrated-logistics.mjs --ui --qr --embedded",
     "test:request-origin": "node --experimental-strip-types --test scripts/request-origin.test.mjs",
     "start": "node scripts/run-with-backend.mjs start",
     "start:next": "next start",

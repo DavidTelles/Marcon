@@ -246,7 +246,7 @@ export function TransferQueue({
           {selected?.code} · {selected?.quantity} unidades · {selected?.source}{" "}
           → {selected?.destination}. Confirme somente após a conferência física.
         </p>
-        <CodeScanner onCode={setCode} />
+        <CodeScanner expectedCode={selected?.code} onCode={setCode} onInvalid={() => setCode("")} />
         <label>
           Código conferido
           <input value={code} onChange={(e) => setCode(e.target.value)} />

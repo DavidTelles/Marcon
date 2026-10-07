@@ -543,7 +543,7 @@ export async function converseJames(
         .map((v) => v.slice(0, 400))
     : [];
   const navigationMatch = casual.match(
-    /^(?:abra|abrir|acesse|acessar)(?: a| o)? (catalogo|estoque|requisicoes|transferencias|rotas|recomendacoes|compra|mapa|perfil|historico|funcionarios|devolucoes|nova|dashboard|pcp)$/,
+    /^(?:abra|abrir|acesse|acessar)(?: a| o)? (catalogo|estoque|requisicoes|transferencias|rotas|recomendacoes|compra|mapa|perfil|historico|funcionarios|devolucoes|nova|dashboard)$/,
   );
   const operation = explicitOperation(message);
   let reportState: JamesReportContext | undefined = reportContext(
@@ -620,7 +620,6 @@ export async function converseJames(
                         "perfil",
                         "historico",
                         "requisicoes",
-                        "pcp",
                         ...(permitted(user, "request") ? ["nova"] : []),
                         ...(user.role !== "funcionario" ? ["dashboard"] : []),
                         ...(permitted(user, "stock")
@@ -913,10 +912,6 @@ export async function converseJames(
       if (target === "dashboard" && user.role === "funcionario")
         throw new ActionError("Use o histórico das suas requisições.", 403);
       const destinations: Record<string, [string, string]> = {
-        pcp: [
-          pathFor(user.role, "pcp"),
-          "PCP: recebimentos, qualidade, requisições e consumíveis. Diga clique em seguido do nome completo do botão, preencha o campo e confirme formulário para executar pela tela.",
-        ],
         perfil: [
           "/profile",
           "Dados de acesso e biometria são alterados na tela segura. Não dite sua senha para o assistente.",

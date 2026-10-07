@@ -1,6 +1,10 @@
 # PCP, fotos e etiquetas Marcon
 
-O menu **PCP e etiquetas** está disponível ao administrador e ao almoxarife. Funcionários e líderes podem criar e consultar suas requisições no menu PCP; conferência, qualidade, estoque e vínculo de etiquetas exigem permissão de estoque.
+O menu e as telas de requisição PCP foram removidos dos quatro perfis. Links antigos de PCP redirecionam para a tela inicial do perfil. Os contratos abaixo permanecem documentados para os registros e serviços existentes.
+
+A leitura de QR fica na pesquisa de peças (botão de pesquisa no cabeçalho, disponível nos quatro perfis) e na conferência da entrega, incluindo saída/recebimento de transferências. Cadastro e movimentação de estoque não abrem o leitor. A pesquisa aceita câmera, imagem e QR/ID digitado, consulta o código exato e mostra apenas os saldos autorizados; não movimenta estoque. Na entrega, a etiqueta deve identificar a peça do pedido e a quantidade deve coincidir com a reserva.
+
+Execute `npm run test:qr` para validar o build de produção com banco temporário isolado, os quatro perfis, câmera simulada, imagens em diferentes orientações, erros de etiqueta e entrega com baixa única. Evidências ficam em `.validation/qr`.
 
 ## Fotos e Vercel
 
@@ -14,9 +18,9 @@ Nesta cópia preparada para hospedagem, o Next.js precisa de `DATABASE_URL`, `SE
 
 A migração adiciona os IDs impressos 129, 120, 127, 173, 7988, 17940, 1794, 1796, 1795 e 5746, com descrições legíveis na foto enviada. Ela não cria saldo, preço ou foto para esses produtos. Confirme no cadastro eventuais sufixos de modelo que não estavam legíveis na foto.
 
-Os números impressos identificam o produto; não provam qual texto está codificado dentro do QR antigo. Se o QR contiver outro valor, selecione o produto em **PCP e etiquetas**, abra **Vincular o QR da etiqueta deste produto**, leia uma etiqueta, confira código/modelo, marque a confirmação e salve. O conteúdo é preservado exatamente, inclusive maiúsculas, e não pode pertencer a outro produto. URLs codificadas são tratadas como identificadores, sem acessar sites externos.
+Os números impressos identificam o produto; não provam qual texto está codificado dentro do QR antigo. O identificador da etiqueta pode ser informado no cadastro de estoque, com confirmação do produto. O conteúdo é preservado exatamente, inclusive maiúsculas, e não pode pertencer a outro produto. URLs codificadas são tratadas como identificadores, sem acessar sites externos.
 
-Depois do vínculo, a leitura consulta o produto e o saldo permitido ao usuário. Um código desconhecido ou ambíguo não preenche uma operação. O cadastro de estoque também aceita leitura direta para preencher seu campo QR. **Abrir QR para impressão** gera SVG com o conteúdo atualmente vinculado, margem branca de quatro módulos e correção de erros. Imprima com bom contraste e preserve a margem branca.
+Depois do vínculo, a leitura consulta o produto e o saldo permitido ao usuário. Um código desconhecido, ambíguo ou de outra peça da entrega não preenche a operação. O endpoint de etiqueta gera SVG com o conteúdo atualmente vinculado, margem branca de quatro módulos e correção de erros. Imprima com bom contraste e preserve a margem branca.
 
 A câmera usa HTTPS ou localhost, câmera traseira preferencial, leitura em quatro orientações e tentativa de contraste invertido. A leitura de arquivo aceita uma etiqueta por imagem. Há alternativa por digitação/leitor USB. A validação de origem nas rotas de leitor, PCP, importação e estoque considera o Host recebido, para não confundir um alias legítimo com a URL interna normalizada pelo Next.js; origens externas continuam bloqueadas. Permissão da câmera, iluminação, foco e integridade da impressão continuam necessários; os testes usam imagens geradas e uma câmera simulada, não o aparelho físico do usuário nem a folha original anexada.
 
@@ -50,7 +54,7 @@ Todas as alterações exigem `requestKey` único de 16 a 64 caracteres. Repetir 
 | GET `/estoque/{itemId}/saldo?armazem=aguardando-qualidade` | Quantidade contada em custódia de recebimento; disponível zero |
 | GET `/estoque/{itemId}/historico-transferencias` | Transferências e lotes liberados ao almoxarifado |
 
-O cadastro de estoque oferece o tipo Matéria-prima, Componente, Embalagem ou Consumível. O administrador configura o armazém físico de produção no menu PCP: pode classificar um armazém existente ou cadastrar outro. POST `/api/pcp/armazens` recebe `codigo`, `nome`, `tipo: "almoxarifado"` ou `"producao"`; PATCH `/api/pcp/armazens/{id}` recebe `tipo`. GET lista IDs e tipos. A classificação exige concluir as operações pendentes; o armazém central permanece como almoxarifado. Funcionários/líderes precisam de um armazém de origem vinculado ao seu bloco. Vínculo de QR: PATCH `/api/pcp/produtos/{id}/qr`, com `qrCode` e `confirmado: true`.
+O cadastro de estoque oferece o tipo Matéria-prima, Componente, Embalagem ou Consumível. O serviço legado permite ao administrador classificar ou cadastrar armazéns físicos de produção por API. POST `/api/pcp/armazens` recebe `codigo`, `nome`, `tipo: "almoxarifado"` ou `"producao"`; PATCH `/api/pcp/armazens/{id}` recebe `tipo`. GET lista IDs e tipos. A classificação exige concluir as operações pendentes; o armazém central permanece como almoxarifado. Funcionários/líderes precisam de um armazém de origem vinculado ao seu bloco. Vínculo de QR: PATCH `/api/pcp/produtos/{id}/qr`, com `qrCode` e `confirmado: true`.
 
 O lote aguardando qualidade permanece em custódia no documento de recebimento, separado do saldo disponível de `inventory`. Sua entrada física aprovada gera um movimento de entrada. Requisições de produção usam o mesmo livro de transferências e movimentos do restante da aplicação; sua reserva também é descontada das demais consultas e operações. Consumíveis geram apenas uma saída. As operações são atômicas e auditadas.
 

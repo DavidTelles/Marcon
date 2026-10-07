@@ -753,10 +753,14 @@ try {
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
     await page.goto(`${base}/admin/pcp`);
-    await page.getByRole("heading", { name: "Produto e etiqueta" }).waitFor();
-    const select = page.getByLabel("Produto", { exact: true });
-    await select.selectOption(String(part));
-    await page.getByText("QR-PNEU-8-EXATO", { exact: true }).waitFor();
+    await expect(page).toHaveURL(`${base}/admin/dashboard`);
+    await expect(page.getByText(/PCP/i)).toHaveCount(0);
+    await page
+      .getByRole("button", { name: "Pesquisar peça por QR ou ID", exact: true })
+      .click();
+    const result = page
+      .getByRole("region", { name: "Peça encontrada" })
+      .getByRole("heading");
     const label = await context.request.get(`${base}/api/items/${part}/label`);
     assert.equal(label.status(), 200);
     const { data: qrData, info: qrInfo } = await sharp(await label.body())
@@ -793,7 +797,7 @@ try {
       mimeType: "image/png",
       buffer: png,
     });
-    await expect(select).toHaveValue(String(otherPart), { timeout: 30000 });
+    await expect(result).toContainText("1796", { timeout: 30000 });
     const cameraPng = await QRCode.toBuffer("QR-PNEU-8-EXATO", {
       width: 360,
       margin: 4,
@@ -828,48 +832,13 @@ try {
       .getByRole("button", { name: "Escanear QR / barras", exact: true })
       .first()
       .click();
-    await expect(select).toHaveValue(String(part), { timeout: 30000 });
+    await expect(result).toContainText("1794", { timeout: 30000 });
     await page.waitForFunction(() =>
       window.pcpTestCamera?.stream
         .getTracks()
         .every((t) => t.readyState === "ended"),
     );
     await page.evaluate(() => clearInterval(window.pcpTestCamera.timer));
-    await page
-      .locator("details")
-      .filter({ hasText: "Vincular o QR da etiqueta" })
-      .locator("summary")
-      .click();
-    const raw = await QRCode.toBuffer("ETIQUETA-FISICA-8", {
-      width: 320,
-      margin: 4,
-      maskPattern: 1,
-    });
-    await page.locator('details input[type="file"]').setInputFiles({
-      name: "nova-etiqueta.png",
-      mimeType: "image/png",
-      buffer: raw,
-    });
-    await page.getByLabel("Conteúdo exato lido").waitFor();
-    await page.waitForFunction(
-      () =>
-        document.querySelector(
-          'details input:not([type="checkbox"]):not([type="file"])',
-        )?.value === "ETIQUETA-FISICA-8",
-    );
-    await page.getByRole("checkbox").check();
-    await page
-      .getByRole("button", { name: "Salvar vínculo", exact: true })
-      .click();
-    await page.getByText("ETIQUETA-FISICA-8", { exact: true }).waitFor();
-    assert.equal(
-      (
-        await api("post", "/api/products/resolve-code", {
-          code: "ETIQUETA-FISICA-8",
-        })
-      ).material.code,
-      "1794",
-    );
     await page.screenshot({
       path: ".validation/pcp/desktop.png",
       fullPage: true,
@@ -888,7 +857,7 @@ try {
     );
     assert.deepEqual(errors, []);
     pass(
-      "Navegador real: imagem, câmera simulada, encerramento dos tracks, vínculo QR persistido, etiqueta SVG e tela móvel",
+      "Navegador real: PCP redirecionado, pesquisa por imagem e câmera simulada, encerramento dos tracks, etiqueta SVG e tela móvel",
     );
   }
   await mkdir(".validation/pcp", { recursive: true });

@@ -1,4 +1,4 @@
-import Workspace from "@/components/workspace/workspace";
+import { redirect } from "next/navigation";
 export default function Page() {
-  return <Workspace role="lider" page="pcp" />;
+  redirect("/department-head/dashboard");
 }

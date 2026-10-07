@@ -12,7 +12,6 @@ import {
 } from "lucide-react";
 import { StockOperations } from "../operations/stock-operations";
 import { MaterialImport } from "../operations/material-import";
-import { CodeScanner } from "../operations/code-scanner";
 import { heading, badge } from "../ui";
 import { useDemoStore } from "../demo-store";
 import type { Part } from "@/lib/demo-data";
@@ -565,14 +564,10 @@ export function StockScreen({
                 defaultValue={editing?.qrCode ?? editing?.code}
                 required
                 maxLength={128}
-                placeholder="Valor lido ao escanear o QR"
+                placeholder="Identificador da etiqueta da peça"
               />
-              <small>Leia a etiqueta e confirme o produto antes de salvar o vínculo.</small>
+              <small>Informe o identificador e confirme o produto antes de salvar o vínculo.</small>
             </label>
-            <CodeScanner raw onCode={(value) => {
-              const input = document.querySelector<HTMLInputElement>('form input[name="qrCode"]');
-              if (input) input.value = value;
-            }} />
             <label>Tipo de material
               <select name="materialKind" defaultValue={editing?.materialKind ?? "componente"}>
                 <option value="materia-prima">Matéria-prima</option>

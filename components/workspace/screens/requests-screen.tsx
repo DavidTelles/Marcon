@@ -5,6 +5,7 @@ import { CheckCircle2, ScanLine } from "lucide-react";
 import { heading, badge } from "../ui";
 import type { Request } from "@/lib/demo-data";
 import type { Role, Page } from "@/lib/workspace-routes";
+import { CodeScanner } from "../operations/code-scanner";
 
 type Props = {
   role: Role;
@@ -278,6 +279,7 @@ export function RequestsScreen({
                 </small>
               </span>
             </label>
+            <CodeScanner expectedCode={selected.code} onCode={setQrCode} onInvalid={() => setQrCode("")} />
             <label className="scan-input">
               QR / ID da embalagem
               <input

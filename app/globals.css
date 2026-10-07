@@ -240,6 +240,17 @@ select:focus-visible {
   color: var(--subtle);
   white-space: nowrap;
 }
+.workspace-piece-lookup {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.topbar > .dashboard-dialog {
+  white-space: normal;
+}
+.code-scanner > form {
+  flex: 1 1 100%;
+  min-width: 0;
+}
 .workspace-profile {
   color: var(--blue);
   font-size: 13px;
