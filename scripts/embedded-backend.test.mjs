@@ -68,6 +68,11 @@ test("every protected endpoint rejects missing, invalid and expired tokens", asy
     ["GET", "/api/parts/consumption"],
     ["GET", "/api/industrial-links"],
     ["POST", "/api/industrial-links"],
+    ["GET", "/api/products/1794"],
+    ["GET", "/api/pcp/armazens"],
+    ["POST", "/api/pcp/recebimentos"],
+    ["PATCH", "/api/pcp/recebimentos/1/conferencia"],
+    ["POST", "/estoque/transferencias"],
   ]) {
     for (const token of [undefined, "invalid", expired])
       assert.equal(
@@ -134,9 +139,23 @@ test("embedded transport preserves the Express JSON size limit", async () => {
     (
       await embeddedRequest("/login", {
         method: "POST",
-        body: { login: "test", password: "x".repeat(1024 * 1024) },
+        body: { login: "test", password: "x".repeat(2 * 1024 * 1024) },
       })
     ).status,
     413,
+  );
+});
+
+test("embedded transport accepts the base64 expansion of a 1 MB photo", async () => {
+  const image = `data:image/jpeg;base64,${Buffer.alloc(999000).toString("base64")}`;
+  assert.ok(Buffer.byteLength(JSON.stringify({ image })) > 1024 * 1024);
+  const result = await embeddedRequest("/api/workspace/actions", {
+    method: "POST",
+    body: { image },
+  });
+  assert.equal(
+    result.status,
+    401,
+    "The request reaches authentication instead of failing at the old 1 MB boundary",
   );
 });

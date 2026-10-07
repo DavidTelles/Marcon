@@ -9,6 +9,10 @@ const delivery_planning_1 = require("./delivery-planning");
 async function transferAction(c, actor, a) {
     if (a.type === "transfer") {
         const p = await (0, stock_ledger_1.partLock)(c, a.code), source = await (0, stock_ledger_1.place)(c, a.from ?? "Central"), dest = await (0, stock_ledger_1.place)(c, a.to);
+        if (p.material_kind === "consumivel")
+            throw new permissions_1.ActionError("Consumíveis usam baixa direta, sem transferência.", 422);
+        if ((source.pcp_kind && source.pcp_kind !== "almoxarifado") || (dest.pcp_kind && dest.pcp_kind !== "almoxarifado"))
+            throw new permissions_1.ActionError("Use o fluxo PCP para transferir entre qualidade, almoxarifado e produção.", 422);
         const q = (0, permissions_1.integer)(a.quantity), note = (0, permissions_1.reason)(a.reason), key = (0, permissions_1.text)(a.requestKey, 64);
         if (!/^[a-zA-Z0-9-]{16,64}$/.test(key))
             throw new permissions_1.ActionError("Identificador de solicitação ausente. Atualize e tente novamente.");
@@ -68,6 +72,11 @@ async function transferAction(c, actor, a) {
     if (!ref)
         throw new permissions_1.ActionError("Transferência inexistente.", 404);
     const p = await (0, stock_ledger_1.partLock)(c, null, ref.part_id);
+    if (p.material_kind === "consumivel")
+        throw new permissions_1.ActionError("Consumíveis usam baixa direta, sem transferência.", 422);
+    const pcp = await (0, stock_ledger_1.first)(c, "SELECT id,status FROM pcp_requests WHERE transfer_id=? FOR UPDATE", [id]);
+    if (pcp && (a.type === "cancelTransfer" || pcp.status !== "Liberada"))
+        throw new permissions_1.ActionError("Transferência vinculada à requisição PCP liberada; cancelamento não permitido neste fluxo.", 409);
     const t = await (0, stock_ledger_1.first)(c, "SELECT * FROM stock_transfers WHERE id=? FOR UPDATE", [id]);
     const dispatch = a.type === "dispatchTransfer";
     if (a.type === "cancelTransfer") {
@@ -101,6 +110,8 @@ async function transferAction(c, actor, a) {
         (0, stock_ledger_1.capacity)(b, Number(b.quantity) + q);
         await c.execute("UPDATE inventory SET quantity=quantity+? WHERE part_id=? AND warehouse_id=?", [q, p.id, warehouse]);
         await c.execute("UPDATE stock_transfers SET status='Recebida',received_by=?,received_at=UTC_TIMESTAMP(3) WHERE id=?", [actor, id]);
+        if (pcp)
+            await c.execute("UPDATE pcp_requests SET status='Transferida',updated_at=NOW() WHERE id=?", [pcp.id]);
     }
     await (0, stock_ledger_1.movement)(c, actor, Number(p.id), warehouse, dispatch ? "transferencia_saida" : "transferencia_entrada", q, String(t.reason), null, null, null, id);
     const planned = await (0, stock_ledger_1.first)(c, "SELECT details FROM audit_log WHERE entity_type='transfer' AND entity_id=? AND action='request' ORDER BY id DESC LIMIT 1", [id]);

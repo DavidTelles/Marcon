@@ -1,5 +1,7 @@
 # Verificação do Marco — 05/10/2026 (São Paulo)
 
+> Registro histórico do Ollama. A conversa atual foi migrada para [Groq](marco-groq.md); as medições abaixo não descrevem o provedor atual. Use `npm run marco:doctor`, `npm run marco:benchmark` e `npm run test:marco:integration` para validar a Groq.
+
 Ambiente: Windows, Node 24.16.0, Edge em modo headless, Ollama 0.35.1, modelo já instalado `qwen3.5:0.8b`, 873.44M parâmetros, Q8_0. `/api/show` informou completion, vision, tools e thinking. Visão não foi integrada; áudio usa os serviços de voz existentes ou APIs do navegador.
 
 | Verificação | Resultado |

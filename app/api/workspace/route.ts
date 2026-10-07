@@ -8,6 +8,7 @@ import {
 } from "@/lib/backend-client";
 import { workspaceSnapshot } from "@/lib/workspace-db";
 import { ActionError, executeWorkspaceAction } from "@/lib/workspace-actions";
+import { sameOrigin } from "@/lib/request-origin";
 
 export const runtime = "nodejs";
 const unavailable = () =>
@@ -63,7 +64,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  if (request.headers.get("origin") !== request.nextUrl.origin)
+  if (!sameOrigin(request))
     return NextResponse.json(
       { error: "Origem não autorizada." },
       { status: 403 },

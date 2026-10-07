@@ -62,6 +62,8 @@ async function saveProduct(actor, body, existing) {
       qrCode: body.qr_code ?? existing?.qr_code ?? body.sku ?? body.code,
       name: body.name ?? existing?.name, location: body.location ?? body.corridor ?? existing?.location,
       unit: body.unit ?? existing?.unit ?? 'un', category: body.category ?? existing?.category ?? 'Peças',
+      materialKind: body.material_kind ?? existing?.material_kind ?? 'componente',
+      image: body.image, imageSource: body.image_source, imageUsage: body.image_usage, imageConfirmed: body.image_confirmed,
       description: body.description ?? existing?.description ?? '',
       packSize: body.pack_size ?? existing?.pack_size ?? 1,
       minimum: body.min_quantity ?? existing?.min_quantity ?? 1,

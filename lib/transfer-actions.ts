@@ -26,6 +26,9 @@ export async function transferAction(
     const p = await partLock(c, a.code),
       source = await place(c, a.from ?? "Central"),
       dest = await place(c, a.to);
+    if (p.material_kind === "consumivel") throw new ActionError("Consumíveis usam baixa direta, sem transferência.", 422);
+    if ((source.pcp_kind && source.pcp_kind !== "almoxarifado") || (dest.pcp_kind && dest.pcp_kind !== "almoxarifado"))
+      throw new ActionError("Use o fluxo PCP para transferir entre qualidade, almoxarifado e produção.", 422);
     const q = integer(a.quantity),
       note = reason(a.reason),
       key = text(a.requestKey, 64);
@@ -92,6 +95,9 @@ export async function transferAction(
   ]);
   if (!ref) throw new ActionError("Transferência inexistente.", 404);
   const p = await partLock(c, null, ref.part_id);
+  if (p.material_kind === "consumivel") throw new ActionError("Consumíveis usam baixa direta, sem transferência.", 422);
+  const pcp = await first(c, "SELECT id,status FROM pcp_requests WHERE transfer_id=? FOR UPDATE", [id]);
+  if (pcp && (a.type === "cancelTransfer" || pcp.status !== "Liberada")) throw new ActionError("Transferência vinculada à requisição PCP liberada; cancelamento não permitido neste fluxo.", 409);
   const t = await first(
     c,
     "SELECT * FROM stock_transfers WHERE id=? FOR UPDATE",
@@ -159,6 +165,7 @@ export async function transferAction(
       "UPDATE stock_transfers SET status='Recebida',received_by=?,received_at=UTC_TIMESTAMP(3) WHERE id=?",
       [actor, id],
     );
+    if (pcp) await c.execute("UPDATE pcp_requests SET status='Transferida',updated_at=NOW() WHERE id=?", [pcp.id]);
   }
   await movement(
     c,

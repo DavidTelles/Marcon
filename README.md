@@ -34,6 +34,8 @@ Em **Settings → Environment Variables**, configure para **Production** (e **Pr
 | `DATABASE_URL` | URL PostgreSQL real do Neon, a mesma usada pela aplicação local |
 | `SESSION_SECRET` | Segredo aleatório de pelo menos 32 caracteres |
 | `JWT_SECRET` | Outro segredo aleatório de pelo menos 32 caracteres |
+| `GROQ_API_KEY` | Chave da Groq, somente no servidor, para a conversa do Marco |
+| `GROQ_MODEL` | `openai/gpt-oss-120b` |
 
 Use os segredos válidos do `.env` local se quiser manter a configuração compartilhada. Não use os valores de exemplo. O `.env` local não é enviado ao deploy e nenhuma dessas variáveis deve ter o prefixo `NEXT_PUBLIC_`. Não defina `PORT=3001` no projeto Next da Vercel. `CORS_ORIGIN` não é necessário no modo integrado, pois o navegador acessa as rotas do próprio site.
 
@@ -55,7 +57,7 @@ npm run check:hosting -- --url https://marcon-ten.vercel.app
 
 Para um backend hospedado separadamente, use `BACKEND_URL=https://seu-backend.example.com` (URL base sem `/api` ou `/login`) e o mesmo banco. Não aponte essa variável para o próprio frontend: isso chamaria suas páginas em vez da API Express. URLs locais e HTTP são rejeitadas na Vercel com uma mensagem de configuração.
 
-O cadastro e o login facial hospedados chamam o serviço Python autenticado de `face/`, publicado como segundo projeto da Vercel. Configure `FACE_SERVICE_URL` e o mesmo `FACE_SERVICE_TOKEN` nos projetos conforme [configuração e validação facial](docs/facial-deployment.md). O login por senha funciona sem esse serviço. O assistente Marco requer a ponte HTTPS descrita em [docs/marco-ollama.md](docs/marco-ollama.md).
+O cadastro e o login facial hospedados chamam o serviço Python autenticado de `face/`, publicado como segundo projeto da Vercel. Configure `FACE_SERVICE_URL` e o mesmo `FACE_SERVICE_TOKEN` nos projetos conforme [configuração e validação facial](docs/facial-deployment.md). O login por senha funciona sem esse serviço. O assistente Marco usa a API Groq diretamente no servidor, conforme [configuração do Marco](docs/marco-groq.md).
 
 ## Comandos
 
@@ -74,4 +76,6 @@ A instalação também pode ser feita separadamente com `npm ci` e `npm ci --pre
 
 Os fluxos de solicitações, retirada, entrega, materiais do bloco, reposição e planta estão descritos em [Fluxo integrado de materiais](docs/enterprise-workflow.md). O acesso operacional exige o banco e o backend, sem login automático de demonstração.
 
-O assistente Marco usa Ollama local, com comandos validados, voz e ponte autenticada para acesso pela Vercel. Consulte [configuração e cobertura](docs/marco-ollama.md) e [testes e medições](docs/marco-tests.md). Comece por `npm run marco:doctor`.
+As fotos para deploy, vínculo de QR por câmera e as rotas de recebimento, qualidade, produção e consumíveis estão em [PCP e etiquetas](docs/pcp-etiquetas.md). Após atualizar, aplique `npm run db:migrate` antes de iniciar a aplicação.
+
+O assistente Marco usa a API Groq no servidor, com comandos validados e confirmações para alterações. Configure `GROQ_API_KEY` e `GROQ_MODEL` no `.env` e na Vercel. Consulte [configuração e cobertura](docs/marco-groq.md). Comece por `npm run marco:doctor`.

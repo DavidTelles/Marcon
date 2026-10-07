@@ -153,6 +153,7 @@ async function workspaceSnapshot(user, catalogOnly = false) {
         approvedAliases,
         code: String(p.code),
         qrCode: String(p.qr_code),
+        materialKind: String(p.material_kind || 'componente'),
         quantity: loc.reduce((s, b) => s + b.quantity, 0),
         reserved: loc.reduce((s, b) => s + (b.reserved ?? 0), 0),
         available: loc.reduce((s, b) => s + (b.available ?? 0), 0),

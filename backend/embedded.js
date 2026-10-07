@@ -10,6 +10,8 @@ const { errorHandler } = require("./src/middlewares/errorHandler");
 const { ActionError } = require("./src/workspace/permissions");
 const AppError = require("./src/utils/AppError");
 const { partsConsumption } = require("./src/workspace/parts-consumption");
+const { pcpOperation } = require("./src/workspace/pcp");
+const { success } = require("./src/utils/response");
 const {
   industrialLinks,
   configureIndustrialLink,
@@ -75,17 +77,57 @@ async function embeddedRequest(path, { method = "GET", body, token } = {}) {
   )
     return { status: 400, body: { error: "Rota inválida." } };
   const url = new URL(path, "http://marcon.internal");
-  const handlers = routes.get(`${method} ${url.pathname}`);
+  let handlers = routes.get(`${method} ${url.pathname}`);
+  let params = {};
+  if (!handlers && method === "GET") {
+    const product = url.pathname.match(/^\/api\/products\/(\d+)$/);
+    if (product) {
+      params = { id: product[1] };
+      handlers = [authenticate, catalog.getProduct];
+    }
+  }
+  if (
+    !handlers &&
+    ["GET", "POST", "PATCH"].includes(method) &&
+    (url.pathname.startsWith("/api/pcp/") ||
+      /^\/(?:recebimentos|requisicoes|pedidos-compra|estoque|consumiveis)(?:\/|$)/.test(
+        url.pathname,
+      ))
+  ) {
+    handlers = [
+      authenticate,
+      async (req, res) => {
+        try {
+          const path = url.pathname
+            .replace(/^\/(?:api\/pcp\/)?/, "")
+            .split("/")
+            .filter(Boolean);
+          const data = await pcpOperation(
+            req.user,
+            method,
+            path,
+            req.body,
+            url.searchParams,
+          );
+          success(res, method === "POST" ? 201 : 200, data);
+        } catch (error) {
+          if (error instanceof ActionError)
+            throw new AppError(error.status, error.message);
+          throw error;
+        }
+      },
+    ];
+  }
   if (!handlers)
     return { status: 404, body: { error: "Rota não encontrada." } };
   // Match the HTTP JSON boundary; prevent controllers from changing caller data.
   const serialized = body === undefined ? undefined : JSON.stringify(body);
-  if (serialized && Buffer.byteLength(serialized) > 1024 * 1024)
-    return { status: 413, body: { error: "Dados excedem o limite de 1 MB." } };
+  if (serialized && Buffer.byteLength(serialized) > 2 * 1024 * 1024)
+    return { status: 413, body: { error: "Dados excedem o limite de 2 MB." } };
   const req = {
     body: serialized === undefined ? undefined : JSON.parse(serialized),
     query: Object.fromEntries(url.searchParams),
-    params: {},
+    params,
     headers: token ? { authorization: `Bearer ${token}` } : {},
   };
   const result = { status: 200, body: null };

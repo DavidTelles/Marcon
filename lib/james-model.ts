@@ -1,4 +1,4 @@
-import { ollamaChat } from "./marco-ollama.mjs";
+import { groqChat, GroqError } from "./marco-groq.mjs";
 import { ActionError } from "./permissions";
 import { parseJamesOperation, type JamesOperation } from "./james-operations";
 import { beginJamesForm } from "./james-forms";
@@ -50,7 +50,7 @@ Comandos explícitos disponíveis na aplicação: abra estoque/catalogo/requisic
   ];
   let content: string;
   try {
-    ({ content } = await ollamaChat(messages, signal));
+    ({ content } = await groqChat(messages, signal));
   } catch (error) {
     if (
       error instanceof Error &&
@@ -59,12 +59,12 @@ Comandos explícitos disponíveis na aplicação: abra estoque/catalogo/requisic
       throw error;
     if (error instanceof TypeError && /fetch|network/i.test(error.message))
       throw new ActionError(
-        "Ollama sem conexão. Verifique se o PC está ligado e se Ollama e a ponte estão ativos.",
+        "Groq sem conexão. Verifique a conexão do servidor e tente novamente.",
         503,
       );
     throw new ActionError(
-      error instanceof Error ? error.message : "Ollama indisponível.",
-      503,
+      error instanceof Error ? error.message : "Groq indisponível.",
+      error instanceof GroqError ? error.status : 503,
     );
   }
   const plan = parseJamesPlan(content);

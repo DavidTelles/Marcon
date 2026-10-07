@@ -1,55 +1,45 @@
 import nextEnv from "@next/env";
-import { ollamaConfig } from "../lib/marco-ollama.mjs";
+import {
+  groqConfig,
+  GROQ_BASE_URL,
+  groqStatusError,
+} from "../lib/marco-groq.mjs";
 nextEnv.loadEnvConfig(process.cwd(), true, { info() {}, error() {} });
-const config = ollamaConfig();
-if (config.bridge) {
-  const response = await fetch(config.url + "/health", {
-    headers: { Authorization: `Bearer ${config.token}` },
+try {
+  const config = groqConfig();
+  const response = await fetch(`${GROQ_BASE_URL}/models`, {
+    headers: { Authorization: `Bearer ${config.apiKey}` },
     redirect: "error",
     signal: AbortSignal.timeout(10000),
+    cache: "no-store",
   });
-  if (!response.ok) throw new Error(`Ponte indisponível (${response.status}).`);
-  console.log(JSON.stringify(await response.json(), null, 2));
-} else {
-  const get = async (path) => {
-    const response = await fetch(config.url + path, {
-      signal: AbortSignal.timeout(10000),
-    });
-    if (!response.ok)
-      throw new Error(`Ollama indisponível (${response.status}).`);
-    return response.json();
-  };
-  const [version, tags, running] = await Promise.all([
-    get("/api/version"),
-    get("/api/tags"),
-    get("/api/ps"),
-  ]);
-  if (!tags.models?.some((model) => model.name === config.model))
-    throw new Error(
-      `Modelo ${config.model} não instalado. Nenhum download foi iniciado.`,
-    );
-  const response = await fetch(config.url + "/api/show", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model: config.model }),
-    signal: AbortSignal.timeout(10000),
-  });
-  if (!response.ok) throw new Error("Não foi possível inspecionar o modelo.");
-  const show = await response.json();
+  if (!response.ok) throw groqStatusError(response.status);
+  const models = await response.json();
+  if (
+    !models.data?.some(
+      (model) => model.id === config.model && model.active !== false,
+    )
+  )
+    throw new Error("GROQ_MODEL não está disponível para esta credencial.");
   console.log(
     JSON.stringify(
       {
-        ollama: version.version,
+        provider: "groq",
         model: config.model,
-        capabilities: show.capabilities,
-        parameters: show.details?.parameter_size,
-        quantization: show.details?.quantization_level,
-        loaded: running.models?.some((model) => model.name === config.model),
+        configured: true,
+        available: true,
         execution:
-          "Intenções validadas; chamadas de ferramentas do modelo desativadas após avaliação.",
+          "Conversa via Groq; operações usam validação e confirmação no servidor.",
       },
       null,
       2,
     ),
   );
+} catch (error) {
+  console.error(
+    error.name === "TypeError"
+      ? "Não foi possível conectar à Groq."
+      : error.message,
+  );
+  process.exitCode = 1;
 }

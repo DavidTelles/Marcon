@@ -12,6 +12,7 @@ function map(row) {
     description: row.description || null,
     unit: row.unit || 'un',
     category: row.category || 'Peças',
+    material_kind: row.material_kind || 'componente',
     min_quantity: row.minimum_total,
     pack_size: row.pack_size,
     lead_days: row.lead_days,
@@ -37,7 +38,8 @@ async function list() {
 
 async function findById(id) {
   const numericId = /^\d+$/.test(String(id)) && Number.isSafeInteger(Number(id)) ? Number(id) : null;
-  const rows = await query(`${BASE} WHERE p.id = ? OR p.code = ?`, [numericId, String(id)]);
+  // Numeric resource IDs must never collide with a different product's printed code.
+  const rows = await query(`${BASE} WHERE ${numericId === null ? 'p.code' : 'p.id'} = ?`, [numericId ?? String(id)]);
   return map(rows[0]);
 }
 

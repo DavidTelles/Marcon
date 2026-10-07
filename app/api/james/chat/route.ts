@@ -6,9 +6,11 @@ import { confirmJames, converseJames } from "@/lib/james-actions";
 import { marcoBody } from "@/lib/marco-body";
 import {
   marcoTelemetry,
-  ollamaConfig,
+  groqConfig,
+  DEFAULT_GROQ_MODEL,
   type MarcoMetrics,
-} from "@/lib/marco-ollama.mjs";
+} from "@/lib/marco-groq.mjs";
+import { sameOrigin } from "@/lib/request-origin";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 const active = new Set<string>();
@@ -35,7 +37,7 @@ export async function GET() {
     let configured = true,
       configurationError: string | undefined;
     try {
-      ollamaConfig();
+      groqConfig();
     } catch (error) {
       configured = false;
       configurationError =
@@ -45,8 +47,8 @@ export async function GET() {
       authenticated: true,
       userId: user.id,
       role: user.role,
-      provider: "ollama",
-      model: process.env.MARCO_OLLAMA_MODEL || "qwen3.5:0.8b",
+      provider: "groq",
+      model: process.env.GROQ_MODEL || DEFAULT_GROQ_MODEL,
       providerConfigured: configured,
       configurationError,
     });
@@ -60,8 +62,7 @@ export async function POST(request: NextRequest) {
     const user = await currentUser();
     if (!user)
       return json({ error: "Sua sessão terminou. Faça login novamente." }, 401);
-    if (request.headers.get("origin") !== request.nextUrl.origin)
-      return json({ error: "Origem inválida." }, 403);
+    if (!sameOrigin(request)) return json({ error: "Origem inválida." }, 403);
     if (!databaseEnabled())
       throw new ActionError(
         "Marco precisa do banco para consultar dados reais.",

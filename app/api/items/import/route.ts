@@ -4,6 +4,7 @@ import { ActionError, demand } from "@/lib/permissions";
 import { previewMaterials, importMaterials } from "@/lib/material-import";
 import { getPool } from "@/lib/db";
 import { rows } from "@/lib/stock-ledger";
+import { sameOrigin } from "@/lib/request-origin";
 export const runtime = "nodejs";
 export async function GET() {
   try {
@@ -16,7 +17,7 @@ export async function GET() {
 }
 export async function POST(request: NextRequest) {
   try {
-    if (request.headers.get("origin") !== request.nextUrl.origin) throw new ActionError("Origem não autorizada.", 403);
+    if (!sameOrigin(request)) throw new ActionError("Origem não autorizada.", 403);
     const user = await currentUser();
     if (!user) throw new ActionError("Faça login.", 401);
     demand(user, "stock");
