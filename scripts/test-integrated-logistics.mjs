@@ -1043,10 +1043,10 @@ try {
         const streamResponse = await post(page.request, { message: "abra estoque", cart: [] }, { headers: { origin, accept: "application/x-ndjson" } });
         assert.equal(streamResponse.status(), 200);
         const events = (await streamResponse.text()).trim().split("\n").map(line => JSON.parse(line)); assert.equal(events[0].type, "status"); assert.ok(events.find(event => event.type === "result")?.data.navigate);
-        // Real local Ollama through the authenticated production route: no business mutation.
+        // Real Groq through the authenticated production route: no business mutation.
         const modelResponse = await post(page.request, { message: "Explique em uma frase o que é um almoxarifado", cart: [] });
         assert.equal(modelResponse.status(), 200, await modelResponse.text());
-        const modelData = await modelResponse.json(); assert.ok(modelData.reply); assert.ok(modelData.metrics.modelFirstMs >= 0); assert.ok(!modelData.operationCompleted);
+        const modelData = await modelResponse.json(); assert.ok(modelData.reply); assert.equal(modelData.source, "groq"); assert.ok(modelData.metrics.modelFirstMs >= 0); assert.ok(!modelData.operationCompleted);
         // Request confirmation must bind to the exact reviewed cart on the server too.
         const cartPreviewResponse = await post(workerContext.request, { message: "quero 2 unidades de TEST-PART", cart: [] });
         assert.equal(cartPreviewResponse.status(), 200, await cartPreviewResponse.text());
@@ -1066,9 +1066,9 @@ try {
         assert.deepEqual((await requestRetry.json()).result.ids, savedRequest.result.ids);
         check("Marco request: real cart proposal, cart confirmation, request review, changed cart rejected, saved request and idempotent replay");
         await workerContext.close();
-        check("Marco real HTTP/Neon/Ollama: authorization, record existence, exact signed confirmation, changed state rejection, persistent idempotency and streaming");
+        check("Marco real HTTP/Neon/Groq: authorization, record existence, exact signed confirmation, changed state rejection, persistent idempotency and streaming");
         await mkdir(".validation/marco", { recursive: true });
-        await writeFile(".validation/marco/integration.json", JSON.stringify({ date: new Date().toISOString(), actionMetrics: executedData.metrics, modelMetrics: modelData.metrics, reply: modelData.reply, tested: "Production Next route, signed session/JWT, isolated real PostgreSQL, local Ollama" }, null, 2));
+        await writeFile(".validation/marco/integration.json", JSON.stringify({ date: new Date().toISOString(), actionMetrics: executedData.metrics, modelMetrics: modelData.metrics, reply: modelData.reply, tested: "Production Next route, signed session/JWT, isolated real PostgreSQL, Groq" }, null, 2));
       }
 
       if (process.argv.includes("--marco")) {

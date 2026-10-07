@@ -1,5 +1,7 @@
 # Marco com Ollama
 
+> Configuração histórica. O Marco atual usa [Groq](marco-groq.md) e não depende de Ollama, ponte ou túnel.
+
 Implementação em Next.js 16 / React 19, Express e PostgreSQL Neon. O nome exibido é Marco; arquivos e rotas `james` permanecem para compatibilidade. Alterações anteriores do workspace foram preservadas. O modelo não recebe senha, JWT, token da ponte ou acesso livre ao banco.
 
 ## Desenvolvimento local

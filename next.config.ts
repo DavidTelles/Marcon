@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  async rewrites() {
+    return ["recebimentos", "requisicoes", "pedidos-compra", "estoque", "consumiveis"].map((prefix) => ({ source: `/${prefix}/:path*`, destination: `/api/pcp/${prefix}/:path*` }));
+  },
   ...(process.env.MARCON_DISABLE_BUILD_CACHE === "1"
     ? {
         experimental: {

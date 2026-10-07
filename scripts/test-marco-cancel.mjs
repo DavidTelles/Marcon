@@ -1,10 +1,9 @@
 import assert from "node:assert/strict";
 import { mkdir, writeFile } from "node:fs/promises";
 import nextEnv from "@next/env";
-import { ollamaChat, ollamaConfig } from "../lib/marco-ollama.mjs";
+import { groqChat, groqConfig } from "../lib/marco-groq.mjs";
 nextEnv.loadEnvConfig(process.cwd(), true, { info() {}, error() {} });
-const config = ollamaConfig();
-if (config.bridge) throw new Error("Este teste requer o Ollama real local.");
+const config = groqConfig();
 const messages = [
   {
     role: "system",
@@ -25,7 +24,7 @@ for (const type of ["cancel", "timeout"]) {
     type === "cancel" ? setTimeout(() => controller.abort(), 100) : null;
   let name;
   try {
-    await ollamaChat(messages, controller.signal, {
+    await groqChat(messages, controller.signal, {
       ...config,
       timeout: type === "timeout" ? 100 : 45000,
     });
@@ -41,7 +40,7 @@ for (const type of ["cancel", "timeout"]) {
     "O cancelamento do cliente demorou mais que o esperado.",
   );
   checks.push({ type, name, elapsedMs });
-  console.log(`PASS real Ollama ${type}: ${elapsedMs} ms`);
+  console.log(`PASS real Groq ${type}: ${elapsedMs} ms`);
 }
 await mkdir(".validation/marco", { recursive: true });
 await writeFile(

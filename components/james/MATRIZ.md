@@ -1,6 +1,6 @@
 # Cobertura histórica — revisão de 27/09/2026
 
-Este documento registra o estado anterior. Para o Marco com Ollama, veja [cobertura atual](../../docs/marco-ollama.md) e [validação atual](../../docs/marco-tests.md). Resultados históricos com outros provedores não validam a implementação atual.
+Este documento registra o estado anterior. Para o Marco com Groq, veja [configuração e cobertura atual](../../docs/marco-groq.md). Resultados históricos com outros provedores não validam a implementação atual.
 
 F = funcionário; L = líder (somente seu bloco); M = almoxarife; A = admin.
 “Passou” abaixo significa o caminho indicado de API/banco ou texto. **Nenhuma linha certifica reconhecimento com microfone físico**: esse estágio depende de dispositivo/permissão. Transcrições controladas verificam somente o ciclo da interface.

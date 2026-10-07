@@ -95,9 +95,13 @@ export async function executeInventoryAction(
         throw new ActionError("Dados inválidos.");
       const code = text(d.code, 64).toUpperCase(),
         name = text(d.name, 160),
-        qr = typeof d.qrCode === "string" && d.qrCode.length <= 128 && !d.qrCode.includes("\0") ? d.qrCode : "";
+        qr = typeof d.qrCode === "string" && d.qrCode.trim().length > 0 && d.qrCode.length <= 128 && !d.qrCode.includes("\0") ? d.qrCode : "";
       if (!code || !name || !qr || !text(d.location, 80))
         throw new ActionError("Preencha código, nome, QR e localização.");
+      // Codes and QR payloads share one namespace, including across columns.
+      await c.execute("SELECT pg_advisory_xact_lock(hashtext('marcon-product-identifiers'))");
+      const collision = await first(c, "SELECT id FROM parts WHERE (code IN (?,?) OR qr_code IN (?,?)) AND id<>? LIMIT 1", [code, qr, code, qr, d.id ?? 0]);
+      if (collision) throw new ActionError("ID ou QR já vinculado a outro produto.", 409);
       const cost = Number(d.estimatedCost);
       if (!Number.isFinite(cost) || cost < 0 || cost > 9999999999)
         throw new ActionError("Custo inválido.");
@@ -125,6 +129,8 @@ export async function executeInventoryAction(
         d.image.length <= 1_500_000
           ? d.image
           : null;
+      if (d.image !== undefined && d.image !== null && d.image !== "" && !image)
+        throw new ActionError("Foto inválida: use PNG, JPEG ou WebP de até 1 MB.", 422);
       let pId = id;
       if (image && (!text(d.imageSource,1000) || !text(d.imageUsage,1000) || d.imageConfirmed !== true)) throw new ActionError("Confirme a peça fotografada, a origem e as condições de uso da fotografia.",422);
       if (id) {
@@ -185,6 +191,12 @@ export async function executeInventoryAction(
         pId = r.insertId;
       }
       await c.execute("UPDATE parts SET pack_verified=TRUE WHERE id=?",[pId]);
+      if (d.materialKind !== undefined) {
+        if (!["materia-prima", "componente", "embalagem", "consumivel"].includes(String(d.materialKind))) throw new ActionError("Tipo de material inválido.", 422);
+        const activePcp = await first(c, "SELECT id FROM pcp_requests WHERE part_id=? AND status NOT IN ('Transferida','Baixada') LIMIT 1", [pId]);
+        if (activePcp && id && d.materialKind !== (await first(c, "SELECT material_kind FROM parts WHERE id=?", [pId])).material_kind) throw new ActionError("Conclua as requisições PCP antes de alterar o tipo do material.", 409);
+        await c.execute("UPDATE parts SET material_kind=? WHERE id=?", [d.materialKind, pId]);
+      }
       if (image) await c.execute("UPDATE parts SET image_source=?,image_usage=?,image_verified_at=UTC_TIMESTAMP(3),image_verified_by=? WHERE id=?",[text(d.imageSource,1000),text(d.imageUsage,1000),actorId,pId]);
       await c.execute(
         "INSERT IGNORE INTO inventory(part_id,warehouse_id) VALUES(?,?)",

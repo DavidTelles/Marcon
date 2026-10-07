@@ -68,6 +68,7 @@ export async function importMaterials(user: Account, preview: Awaited<ReturnType
   return transaction(async (c) => {
     const actor = await first(c, "SELECT id FROM users WHERE employee_no=? AND active=TRUE FOR UPDATE", [user.id]);
     if (!actor) throw new ActionError("Sessão inválida.", 401);
+    await c.execute("SELECT pg_advisory_xact_lock(hashtext('marcon-product-identifiers'))");
     await c.execute("SELECT pg_advisory_xact_lock(hashtext(?))", [preview.hash]);
     const previous = await first(c, "SELECT id,mapping FROM material_import_runs WHERE file_hash=?", [preview.hash]);
     const mapping = { columns: preview.mapping, sheet: preview.sheet, headerRow: preview.headerRow, parcelColumns: preview.parcelColumns };
@@ -90,6 +91,7 @@ export async function importMaterials(user: Account, preview: Awaited<ReturnType
         // No location, price, movement, monthly period or purchase receipt is inferred.
         const minimum = numberSafe(v.minimum), pack = numberSafe(v.pack), lead = numberSafe(v.lead);
         if ([minimum,pack,lead].some((n) => n !== null && !Number.isSafeInteger(n)) || pack === 0) problems.push("Parâmetro incompatível com cadastro inteiro; registro preservado para revisão.");
+        else if (await first(c, "SELECT id FROM parts WHERE qr_code=? LIMIT 1", [v.code])) problems.push("Código já vinculado como QR de outro produto; revise o vínculo antes de importar.");
         else { material = await insert(c, "INSERT INTO parts(code,qr_code,name,description,category,unit,location,minimum_total,pack_size,pack_verified,lead_days,reference_unit_price) VALUES(?,?,?,?,?,?,'',?,?,?,?,NULL) RETURNING id", [v.code, v.code, v.description, v.description, v.group, v.unit, minimum ?? 0, pack ?? 1, pack !== null ? 1 : 0, lead ?? 0]); created++; }
         if (!v.pack) problems.push("Embalagem não informada; conversão por caixa deve ser configurada antes do uso.");
       }

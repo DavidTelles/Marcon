@@ -37,4 +37,6 @@ A instalação também pode ser feita separadamente com `npm ci` e `npm ci --pre
 
 Os fluxos de solicitações, retirada, entrega, materiais do bloco, reposição e planta estão descritos em [Fluxo integrado de materiais](docs/enterprise-workflow.md). O acesso operacional exige o banco e o backend, sem login automático de demonstração.
 
-O assistente Marco usa Ollama local, com comandos validados, voz e ponte autenticada para acesso pela Vercel. Consulte [configuração e cobertura](docs/marco-ollama.md) e [testes e medições](docs/marco-tests.md). Comece por `npm run marco:doctor`.
+As fotos para deploy, vínculo de QR por câmera e as rotas de recebimento, qualidade, produção e consumíveis estão em [PCP e etiquetas](docs/pcp-etiquetas.md). Após atualizar, aplique `npm run db:migrate` antes de iniciar a aplicação.
+
+O assistente Marco usa a API Groq no servidor, com comandos validados e confirmações para alterações. Configure `GROQ_API_KEY` e `GROQ_MODEL` no `.env` e na Vercel. Consulte [configuração e cobertura](docs/marco-groq.md). Comece por `npm run marco:doctor`.

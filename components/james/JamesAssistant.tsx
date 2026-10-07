@@ -9,11 +9,11 @@ import type { JamesCart } from "@/lib/james-actions";
 import type { JamesReportContext } from "@/lib/james-reports";
 import { marcoUICommand } from "@/lib/marco-ui";
 import { readMarcoReply } from "@/lib/marco-stream";
-import type { MarcoMetrics } from "@/lib/marco-ollama.mjs";
+import type { MarcoMetrics } from "@/lib/marco-groq.mjs";
 import styles from "./JamesAssistant.module.css";
 import { useJamesPet, type Dock } from "./useJamesPet";
 type Reply = {
-  source?: "ollama";
+  source?: "groq";
   metrics?: MarcoMetrics;
   reply?: string;
   error?: string;
@@ -882,7 +882,7 @@ export default function JamesAssistant({ userId }: { userId: string }) {
                   >
                     {m.user || (
                       <>
-                        {m.answer?.source === "ollama" && (
+                        {m.answer?.source === "groq" && (
                           <small>
                             Resposta do modelo · nenhuma operação executada
                             nesta mensagem
@@ -1081,8 +1081,8 @@ export default function JamesAssistant({ userId }: { userId: string }) {
               )}
               {!providerConfigured && (
                 <p role="alert" className={styles.error}>
-                  Conversa com IA indisponível: verifique MARCO_OLLAMA_URL e a
-                  configuração da ponte no servidor.
+                  Conversa com IA indisponível: verifique a configuração da Groq
+                  no servidor.
                 </p>
               )}
               {voice.transcript && (
@@ -1290,10 +1290,10 @@ export default function JamesAssistant({ userId }: { userId: string }) {
                   Ler respostas em áudio
                 </label>
                 <details className={styles.privacy}>
-                  <summary>Privacidade · Ollama no seu PC · voz</summary>
+                  <summary>Privacidade · Groq · voz</summary>
                   <small>
                     Seu comando em texto e os itens do carrinho são processados
-                    pelo Ollama no computador configurado. O modelo não
+                    pela API Groq, um serviço externo. O modelo não
                     transcreve áudio. Quando configurada, a transcrição local
                     usa o servidor MARCON; áudio bruto não é guardado após o
                     processamento. A leitura usa Piper local quando configurado

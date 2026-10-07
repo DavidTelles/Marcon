@@ -117,6 +117,7 @@ export type Part = {
   name: string;
   code: string;
   qrCode?: string;
+  materialKind?: "materia-prima" | "componente" | "embalagem" | "consumivel";
   quantity: number;
   packSize: number;
   minimum: number;

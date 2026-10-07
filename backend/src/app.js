@@ -13,12 +13,14 @@ const stockRoutes = require('./routes/stock.routes');
 const requestRoutes = require('./routes/request.routes');
 const dashboardRoutes = require('./routes/dashboard.routes');
 const workspaceRoutes = require('./routes/workspace.routes');
+const pcpRoutes = require('./routes/pcp.routes');
 
 function createApp() {
   const app = express();
   app.use(helmet());
   app.use(cors({ origin: env.corsOrigin === '*' ? true : env.corsOrigin.split(','), credentials: true }));
-  app.use(express.json({ limit: '1mb' }));
+  // A 1 MB photo becomes ~1.34 MB when encoded as base64 in the JSON form.
+  app.use(express.json({ limit: '2mb' }));
 
   setupSwagger(app);
   app.use('/health', healthRouter);
@@ -28,6 +30,7 @@ function createApp() {
   app.use(requestRoutes);
   app.use(dashboardRoutes);
   app.use(workspaceRoutes);
+  app.use(pcpRoutes);
 
   app.get('/admin', authenticate, authorize(ROLES.ADMIN), (req, res) => {
     res.json({ ok: true, area: 'admin', user: req.user });

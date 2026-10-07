@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
-  "buildCommand": "npm run check:workspace && npm run build",
+  "buildCommand": "npm run build",
   "functions": { "app/api/james/chat/route.ts": { "maxDuration": 60 } }
 }

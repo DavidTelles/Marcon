@@ -724,7 +724,7 @@ export async function converseJames(
       };
     }
     if (step.action === "chat")
-      return { reply: step.answer, source: "ollama" as const, cart, updatedAt: new Date().toISOString() };
+      return { reply: step.answer, source: "groq" as const, cart, updatedAt: new Date().toISOString() };
     if (step.action === "operation") {
       if (
         step.operation?.reason &&

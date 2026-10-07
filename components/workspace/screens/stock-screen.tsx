@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { StockOperations } from "../operations/stock-operations";
 import { MaterialImport } from "../operations/material-import";
+import { CodeScanner } from "../operations/code-scanner";
 import { heading, badge } from "../ui";
 import { useDemoStore } from "../demo-store";
 import type { Part } from "@/lib/demo-data";
@@ -203,6 +204,7 @@ export function StockScreen({
             imageConfirmed: data.get("imageConfirmed") === "on",
             unit: data.get("unit"),
             category: data.get("category"),
+            materialKind: data.get("materialKind"),
             criticality: Number(data.get("criticality") || 1),
             aisle: data.get("aisle"),
             shelf: data.get("shelf"),
@@ -562,10 +564,22 @@ export function StockScreen({
                 name="qrCode"
                 defaultValue={editing?.qrCode ?? editing?.code}
                 required
-                maxLength={80}
+                maxLength={128}
                 placeholder="Valor lido ao escanear o QR"
               />
-              <small>Cadastre o ID gravado no QR da embalagem.</small>
+              <small>Leia a etiqueta e confirme o produto antes de salvar o vínculo.</small>
+            </label>
+            <CodeScanner raw onCode={(value) => {
+              const input = document.querySelector<HTMLInputElement>('form input[name="qrCode"]');
+              if (input) input.value = value;
+            }} />
+            <label>Tipo de material
+              <select name="materialKind" defaultValue={editing?.materialKind ?? "componente"}>
+                <option value="materia-prima">Matéria-prima</option>
+                <option value="componente">Componente</option>
+                <option value="embalagem">Embalagem</option>
+                <option value="consumivel">Consumível</option>
+              </select>
             </label>
             <label>
               Foto {editing && "(opcional ao editar)"}

@@ -57,6 +57,13 @@
       "when": 1791234100000,
       "tag": "0007_stock_recommendations",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791334042194,
+      "tag": "0008_pcp",
+      "breakpoints": true
     }
   ]
 }

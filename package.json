@@ -13,6 +13,11 @@
     "dev": "node scripts/run-with-backend.mjs dev",
     "dev:next": "next dev",
     "build": "next build",
+    "prebuild": "npm run check:workspace && npm run check:assets",
+    "check:assets": "node scripts/check-product-assets.mjs",
+    "test:pcp": "node scripts/test-pcp.mjs",
+    "test:pcp:ui": "node scripts/test-pcp.mjs --ui",
+    "test:request-origin": "node --experimental-strip-types --test scripts/request-origin.test.mjs",
     "start": "node scripts/run-with-backend.mjs start",
     "start:next": "next start",
     "lint": "eslint",
@@ -34,11 +39,14 @@
     "format": "prettier --write app/login app/globals.css tests playwright.config.ts",
     "format:check": "prettier --check app/login app/globals.css tests playwright.config.ts"
   },
-  "engines": { "node": ">=22.12" },
+  "engines": {
+    "node": ">=22.12"
+  },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
     "@tesseract.js-data/por": "^1.0.0",
     "@zxing/browser": "^0.2.1",
+    "@zxing/library": "^0.23.0",
     "drizzle-kit": "^0.31.11",
     "drizzle-orm": "^0.45.3",
     "exceljs": "^4.4.0",
@@ -46,6 +54,7 @@
     "next": "16.3.6",
     "openai": "^7.23.0",
     "pdf-lib": "^1.17.1",
+    "qrcode": "^1.5.4",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "sharp": "^0.35.4",
@@ -56,6 +65,7 @@
     "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",

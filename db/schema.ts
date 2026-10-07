@@ -43,6 +43,7 @@ export const sectors = pgTable("sectors", {
   branchId: ref("branch_id", () => branches), blockId: ref("block_id", () => blocks),
 }, (t) => [uniqueIndex("sectors_branch_block_code").on(t.branchId,t.blockId,t.code), uniqueIndex("sectors_id_branch_block").on(t.id,t.branchId,t.blockId)]);
 export const warehouses = pgTable("warehouses", {
+  pcpKind: varchar("pcp_kind", { length: 24 }).notNull().default("almoxarifado"),
   id: id(), code: varchar("code", { length: 30 }).notNull().unique(),
   branchId: bigint("branch_id", { mode: "number" }).references(() => branches.id),
   name: varchar("name", { length: 80 }).notNull().unique(),
@@ -50,6 +51,7 @@ export const warehouses = pgTable("warehouses", {
   isCentral: smallint("is_central").notNull().default(0),
   active: smallint("active").notNull().default(1),
 }, (t) => [
+  check("warehouses_pcp_kind_check", sql`${t.pcpKind} IN ('almoxarifado','producao','aguardando-qualidade')`),
   uniqueIndex("uq_warehouse_central").on(t.isCentral).where(sql`${t.isCentral} = 1`),
 ]);
 
@@ -71,6 +73,7 @@ export const users = pgTable("users", {
 ]);
 
 export const parts = pgTable("parts", {
+  materialKind: varchar("material_kind", { length: 24 }).notNull().default("componente"),
   packVerified: smallint("pack_verified").notNull().default(1),
   id: id(), code: varchar("code", { length: 64 }).notNull().unique(),
   qrCode: varchar("qr_code", { length: 128 }).notNull().unique(),
@@ -85,7 +88,7 @@ export const parts = pgTable("parts", {
   description: text("description"), purpose: varchar("purpose", { length: 500 }), material: varchar("material", { length: 120 }),
   dimensions: varchar("dimensions", { length: 120 }), approvedAliases: jsonb("approved_aliases"),
   createdAt: createdAt(), updatedAt: updatedAt(),
-});
+}, (t) => [check("parts_material_kind_check", sql`${t.materialKind} IN ('materia-prima','componente','embalagem','consumivel')`)]);
 
 export const inventory = pgTable("inventory", {
   partId: ref("part_id", () => parts), warehouseId: ref("warehouse_id", () => warehouses), quantity: integer("quantity").notNull().default(0),
@@ -126,6 +129,23 @@ export const stockTransfers = pgTable("stock_transfers", {
   shippedAt: timestamp("shipped_at", { mode: "string", precision: 3 }),
   receivedAt: timestamp("received_at", { mode: "string", precision: 3 }),
 });
+
+export const pcpReceipts = pgTable("pcp_receipts", {
+  id: id(), partId: ref("part_id", () => parts), invoice: varchar("invoice", { length: 190 }).notNull(), lot: varchar("lot", { length: 120 }).notNull(),
+  invoiceQuantity: integer("invoice_quantity").notNull(), invoiceWeight: decimal("invoice_weight", { precision: 20, scale: 6, mode: "number" }),
+  countedQuantity: integer("counted_quantity"), countedWeight: decimal("counted_weight", { precision: 20, scale: 6, mode: "number" }),
+  status: varchar("status", { length: 32 }).notNull().default("Aguardando conferência"), qualityNote: text("quality_note"), totusReference: varchar("totus_reference", { length: 190 }),
+  transferredTo: bigint("transferred_to", { mode: "number" }).references(() => warehouses.id), actorId: ref("actor_id", () => users), createdAt: createdAt(), updatedAt: updatedAt(),
+}, (t) => [index("idx_pcp_receipts_part").on(t.partId,t.status), check("pcp_receipts_invoice_quantity_check", sql`${t.invoiceQuantity}>0`), check("pcp_receipts_invoice_weight_check", sql`${t.invoiceWeight}>0`), check("pcp_receipts_counted_quantity_check", sql`${t.countedQuantity}>=0`), check("pcp_receipts_counted_weight_check", sql`${t.countedWeight}>=0`), check("pcp_receipts_status_check", sql`${t.status} IN ('Aguardando conferência','Pendente','Aguardando qualidade','Aprovado','Reprovado','Transferido')`)]);
+export const pcpRequests = pgTable("pcp_requests", {
+  id: id(), partId: ref("part_id", () => parts), requesterId: ref("requester_id", () => users), sourceWarehouseId: ref("source_warehouse_id", () => warehouses),
+  destinationWarehouseId: bigint("destination_warehouse_id", { mode: "number" }).references(() => warehouses.id), quantity: integer("quantity").notNull(), pickedQuantity: integer("picked_quantity"),
+  costCenter: varchar("cost_center", { length: 120 }).notNull(), productionOrder: varchar("production_order", { length: 120 }), consumable: smallint("consumable").notNull().default(0),
+  status: varchar("status", { length: 24 }).notNull().default("Pendente"), transferId: bigint("transfer_id", { mode: "number" }).unique().references(() => stockTransfers.id), createdAt: createdAt(), updatedAt: updatedAt(),
+}, (t) => [index("idx_pcp_requests_actor").on(t.requesterId,t.status), check("pcp_requests_quantity_check", sql`${t.quantity}>0`), check("pcp_requests_picked_quantity_check", sql`${t.pickedQuantity}>0`), check("pcp_requests_consumable_check", sql`${t.consumable} IN (0,1)`), check("pcp_requests_status_check", sql`${t.status} IN ('Pendente','Separada','Liberada','Transferida','Baixada')`)]);
+export const pcpOrders = pgTable("pcp_orders", {
+  id: id(), requestId: ref("request_id", () => pcpRequests).unique(), partId: ref("part_id", () => parts), quantity: integer("quantity").notNull(), reference: varchar("reference", { length: 190 }).notNull(), actorId: ref("actor_id", () => users), createdAt: createdAt(),
+}, (t) => [check("pcp_orders_quantity_check", sql`${t.quantity}>0`)]);
 
 export const returnRecords = pgTable("return_records", {
   id: id(), partId: ref("part_id", () => parts), blockId: ref("block_id", () => blocks), warehouseId: ref("warehouse_id", () => warehouses),
