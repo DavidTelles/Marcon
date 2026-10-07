@@ -1,6 +1,16 @@
 # Marco com Groq
 
-A conversa do Marco usa `POST https://api.groq.com/openai/v1/chat/completions`, autenticado exclusivamente no servidor. O modelo padrão é `openai/gpt-oss-120b`, servido pela Groq. A integração usa streaming SSE e modo JSON; a resposta ainda passa pelo contrato de conversa do Marco. O modelo não executa operações: estoque, cadastros e requisições continuam usando permissões, formulários e confirmação existentes.
+A interpretação do Marco usa `POST https://api.groq.com/openai/v1/chat/completions`, autenticado exclusivamente no servidor. O modelo padrão é `openai/gpt-oss-120b`, servido pela Groq. A integração usa streaming SSE e modo JSON. Pedidos naturais geram tarefas estruturadas: o servidor consulta o catálogo, navega, prepara o carrinho, inicia formulários ou prepara operações. Estoque, cadastros e requisições usam as APIs oficiais, as permissões da conta e confirmação antes da gravação. A conversa do modelo nunca serve como comprovante de execução.
+
+## Controle do site por voz
+
+Ative a escuta e diga “Marco” seguido do pedido. Exemplos: “Você pode me levar ao estoque?”, “Quais itens estão disponíveis?”, “Quantas unidades do código 1794 estão disponíveis?”, “Coloque três unidades do código 1794 no meu carrinho” e “Pode enviar minha requisição?”. O carrinho mostra material e quantidade antes de “sim”; a requisição mostra resumo antes de “confirmar requisição”. Aprovações, ajustes, entradas, transferências e cadastros mostram resumo antes de “confirmar ação”. O servidor rejeita falta de permissão, dados alterados depois do resumo, argumentos inventados e duplicação da mesma confirmação.
+
+Pedidos de cadastro ou operações incompletas iniciam uma tarefa guiada. O Marco pergunta os campos necessários, aceita correções e prepara o resumo. Várias operações diferentes devem ser realizadas uma por vez. Uma consulta de saldo usa os dados atuais autorizados do sistema, sem números inventados pela conversa.
+
+Para operar formulários da tela, use “preencha Quantidade com três”, “selecione Almoxarifado como nome completo”, “marque rótulo da opção”, “salvar” ou “clique em nome completo do botão”, e depois “confirmar formulário”. O controle usa apenas campos e botões visíveis identificados pelo rótulo. No PCP, botões repetidos podem ser identificados com o registro: “clique em Conferir do recebimento 12” (use o rótulo exato mostrado). A confirmação expira se a tela ou os campos mudam. “Ler resultados” e “ler erros” consultam as mensagens reais da tela. “Abra PCP” abre a rotina do perfil atual, inclusive seus formulários de recebimento, qualidade e consumíveis.
+
+A gravação continua condicionada às regras do processo. Quantidades físicas, QR lido, peso e aprovação de qualidade devem corresponder à conferência real. Senhas, arquivos, biometria e uso físico de câmera/microfone dependem dos controles e permissões do dispositivo. Os testes de eventos de fala verificam a execução pela aplicação, sem certificar a precisão de um microfone físico.
 
 ## Configuração
 

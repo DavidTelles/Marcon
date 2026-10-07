@@ -497,7 +497,12 @@ export function PcpScreen({ role }: { role: Role }) {
           <h2>Recebimentos e qualidade</h2>
           {!receipts.length && <p>Nenhum recebimento registrado.</p>}
           {receipts.map((r) => (
-            <article key={r.id} className={styles.row}>
+            <article
+              key={r.id}
+              className={styles.row}
+              data-marco-record-kind="recebimento"
+              data-marco-record-id={r.id}
+            >
               <h3>
                 #{r.id} · {r.code} · {r.name}
               </h3>
@@ -616,7 +621,12 @@ export function PcpScreen({ role }: { role: Role }) {
         )}
         {!requests.length && <p>Nenhuma requisição registrada.</p>}
         {requests.map((r) => (
-          <article key={r.id} className={styles.row}>
+          <article
+            key={r.id}
+            className={styles.row}
+            data-marco-record-kind="requisicao"
+            data-marco-record-id={r.id}
+          >
             <h3>
               #{r.id} · {r.code} · {r.name}
             </h3>
@@ -724,7 +734,12 @@ export function PcpScreen({ role }: { role: Role }) {
           <p>Nenhuma requisição de consumível registrada.</p>
         )}
         {consumables.map((r) => (
-          <article key={r.id} className={styles.row}>
+          <article
+            key={r.id}
+            className={styles.row}
+            data-marco-record-kind="consumivel"
+            data-marco-record-id={r.id}
+          >
             <h3>
               #{r.id} · {r.code} · {r.name}
             </h3>

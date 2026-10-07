@@ -5,6 +5,14 @@ import { commandText, quantityWords } from "./james-commands";
 type Field = keyof Omit<JamesOperation, "name">;
 export type JamesForm = { operation: JamesOperation; field?: Field };
 const schemas: Partial<Record<JamesOperation["name"], Field[]>> = {
+  approve: ["id"],
+  analyze: ["id"],
+  editRequest: ["id", "quantity"],
+  deleteRequest: ["id"],
+  requestCancellation: ["id", "reason"],
+  confirmReceipt: ["id"],
+  planRoute: ["id"],
+  cancelTransfer: ["id", "reason"],
   updateUser: [
     "employeeNo",
     "personName",
@@ -69,6 +77,7 @@ const schemas: Partial<Record<JamesOperation["name"], Field[]>> = {
   dispatchTransfer: ["id", "quantity", "qrCode"],
   receiveTransfer: ["id", "quantity", "qrCode"],
 };
+export const jamesForms = Object.keys(schemas) as JamesOperation["name"][];
 export function beginJamesForm(name: unknown): JamesForm {
   if (typeof name !== "string" || !Object.hasOwn(schemas, name))
     throw new ActionError("Formulário indisponível.", 422);
@@ -173,12 +182,34 @@ export function advanceJamesForm(form: JamesForm, message?: string) {
         throw new ActionError("Diga ativo ou inativo.", 422);
       operation.active = commandText(v) === "ativo";
     } else if (f === "dueDate") {
-      const months = ["janeiro","fevereiro","marco","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
+      const months = [
+        "janeiro",
+        "fevereiro",
+        "marco",
+        "abril",
+        "maio",
+        "junho",
+        "julho",
+        "agosto",
+        "setembro",
+        "outubro",
+        "novembro",
+        "dezembro",
+      ];
       const day = commandText(v).match(/^(\d{1,2}) de ([a-z]+) de (\d{4})$/);
       const numeric = v.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-      operation.dueDate = day && months.includes(day[2]) ? `${day[3]}-${String(months.indexOf(day[2])+1).padStart(2,"0")}-${day[1].padStart(2,"0")}` : numeric ? `${numeric[3]}-${numeric[2]}-${numeric[1]}` : v;
+      operation.dueDate =
+        day && months.includes(day[2])
+          ? `${day[3]}-${String(months.indexOf(day[2]) + 1).padStart(2, "0")}-${day[1].padStart(2, "0")}`
+          : numeric
+            ? `${numeric[3]}-${numeric[2]}-${numeric[1]}`
+            : v;
     } else if (f === "email") {
-      operation.email = v.toLowerCase().replace(/\s+arroba\s+/g,"@").replace(/\s+ponto\s+/g,".").replace(/\s/g,"");
+      operation.email = v
+        .toLowerCase()
+        .replace(/\s+arroba\s+/g, "@")
+        .replace(/\s+ponto\s+/g, ".")
+        .replace(/\s/g, "");
     } else if (f === "role") {
       const role = [
         "Administrador",

@@ -385,7 +385,12 @@ export default function JamesAssistant({ userId }: { userId: string }) {
       setState(reviewRef.current ? "confirming" : "idle");
       return;
     }
-    if (localCommand === "confirmar formulario") {
+    if (
+      localCommand === "confirmar formulario" ||
+      (uiConfirmation.current &&
+        !reviewRef.current &&
+        ["confirmar acao", "sim"].includes(localCommand))
+    ) {
       const reply =
         uiConfirmation.current?.() ||
         "Não há formulário aguardando confirmação.";
@@ -1293,9 +1298,9 @@ export default function JamesAssistant({ userId }: { userId: string }) {
                   <summary>Privacidade · Groq · voz</summary>
                   <small>
                     Seu comando em texto e os itens do carrinho são processados
-                    pela API Groq, um serviço externo. O modelo não
-                    transcreve áudio. Quando configurada, a transcrição local
-                    usa o servidor MARCON; áudio bruto não é guardado após o
+                    pela API Groq, um serviço externo. O modelo não transcreve
+                    áudio. Quando configurada, a transcrição local usa o
+                    servidor MARCON; áudio bruto não é guardado após o
                     processamento. A leitura usa Piper local quando configurado
                     ou a síntese do navegador, cujo processamento depende da voz
                     escolhida. Após ativar, a escuta continua ao recolher Marco

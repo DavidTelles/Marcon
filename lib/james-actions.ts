@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual, randomUUID } from "node:crypto";
 import type { Account } from "./accounts";
-import { ActionError, can, demand, integer } from "./permissions";
+import { ActionError, can, demand, integer, permitted } from "./permissions";
 import { workspaceSnapshot } from "./workspace-db";
 import { executeWorkspaceAction } from "./workspace-actions";
 import { dashboardReport } from "./dashboard-report";
@@ -16,6 +16,7 @@ import {
   startJamesForm,
   beginJamesForm,
   type JamesForm,
+  jamesForms,
 } from "./james-forms";
 import {
   reportContext,
@@ -37,6 +38,8 @@ import {
   executeJamesOperation,
   type JamesOperation,
   parseJamesOperation,
+  jamesOperations,
+  jamesOperationPermission,
 } from "./james-operations";
 export type JamesCart = {
   code: string;
@@ -198,8 +201,14 @@ export async function confirmJames(
   )
     throw new ActionError("Confirme explicitamente o resumo exibido.", 400);
   const t = readTicket(user, token, "request");
-  if (!Array.isArray(currentCart) || JSON.stringify(currentCart) !== JSON.stringify(t.entries))
-    throw new ActionError("O carrinho mudou. Revise a requisição antes de confirmar.", 409);
+  if (
+    !Array.isArray(currentCart) ||
+    JSON.stringify(currentCart) !== JSON.stringify(t.entries)
+  )
+    throw new ActionError(
+      "O carrinho mudou. Revise a requisição antes de confirmar.",
+      409,
+    );
   const result = await executeWorkspaceAction(user, {
     type: "createRequests",
     entries: t.entries,
@@ -290,12 +299,7 @@ export async function converseJames(
   if (startingForm || input.formToken) {
     const saved: JamesForm =
       startingForm || readTicket(user, input.formToken, "form").form;
-    demand(
-      user,
-      ["updateUser", "toggleUser"].includes(saved.operation.name)
-        ? "people"
-        : "stock",
-    );
+    demand(user, jamesOperationPermission(saved.operation.name));
     const next = advanceJamesForm(saved, startingForm ? undefined : message);
     const formToken = ticket(user, cart, undefined, undefined, undefined, next);
     if (next.field)
@@ -538,14 +542,18 @@ export async function converseJames(
         .filter((v) => typeof v === "string")
         .map((v) => v.slice(0, 400))
     : [];
-  const navigationMatch = simple.match(/^(?:abra|abrir|acesse|acessar)(?: a| o)? (catalogo|estoque|requisicoes|transferencias|rotas|recomendacoes|compra|mapa|perfil|historico|funcionarios|devolucoes|nova|dashboard)$/);
+  const navigationMatch = casual.match(
+    /^(?:abra|abrir|acesse|acessar)(?: a| o)? (catalogo|estoque|requisicoes|transferencias|rotas|recomendacoes|compra|mapa|perfil|historico|funcionarios|devolucoes|nova|dashboard|pcp)$/,
+  );
   const operation = explicitOperation(message);
   let reportState: JamesReportContext | undefined = reportContext(
     input.reportContext,
   );
   const steps =
     continuation ??
-    (navigationMatch ? [{ action: "navigate" as const, view: navigationMatch[1] }] : undefined) ??
+    (navigationMatch
+      ? [{ action: "navigate" as const, view: navigationMatch[1] }]
+      : undefined) ??
     (operation
       ? [
           {
@@ -592,64 +600,58 @@ export async function converseJames(
                           ? input.page.slice(0, 180)
                           : "",
                       role: user.role,
-                      operations:
-                        user.role === "funcionario"
+                      warehouses: [
+                        ...new Set(
+                          stock.flatMap((part) =>
+                            (part.locations || []).map(
+                              (location) => location.warehouse,
+                            ),
+                          ),
+                        ),
+                      ].slice(0, 60),
+                      operations: jamesOperations.filter((name) =>
+                        permitted(user, jamesOperationPermission(name)),
+                      ),
+                      forms: jamesForms.filter((name) =>
+                        permitted(user, jamesOperationPermission(name)),
+                      ),
+                      destinations: [
+                        "catalogo",
+                        "perfil",
+                        "historico",
+                        "requisicoes",
+                        "pcp",
+                        ...(permitted(user, "request") ? ["nova"] : []),
+                        ...(user.role !== "funcionario" ? ["dashboard"] : []),
+                        ...(permitted(user, "stock")
+                          ? ["estoque", "transferencias", "rotas", "devolucoes"]
+                          : []),
+                        ...(permitted(user, "planning")
+                          ? ["compra", "recomendacoes"]
+                          : []),
+                        ...(permitted(user, "map") ? ["mapa"] : []),
+                        ...(permitted(user, "people") ? ["funcionarios"] : []),
+                      ],
+                      capabilities: [
+                        "find",
+                        "requests",
+                        "export",
+                        "navigate",
+                        "help",
+                        "form",
+                        "operation",
+                        ...(user.role !== "funcionario" ? ["dashboard"] : []),
+                        ...(permitted(user, "request")
                           ? [
-                              "editRequest",
-                              "deleteRequest",
-                              "requestCancellation",
-                              "confirmReceipt",
+                              "cart",
+                              "add",
+                              "set",
+                              "remove",
+                              "review",
+                              "justify",
                             ]
-                          : user.role === "lider"
-                            ? ["approve", "analyze"]
-                            : user.role === "admin"
-                              ? [
-                                  "approve",
-                                  "analyze",
-                                  "transfer",
-                                  "cancelTransfer",
-                                  "planRoute",
-                                  "stockEntry",
-                                  "adjustStock",
-                                ]
-                              : [
-                                  "transfer",
-                                  "cancelTransfer",
-                                  "planRoute",
-                                  "stockEntry",
-                                  "adjustStock",
-                                ],
-                      capabilities: can(user.role, "request")
-                        ? [
-                            "find",
-                            "cart",
-                            "add",
-                            "set",
-                            "remove",
-                            "review",
-                            "requests",
-                            "export",
-                            "navigate",
-                          ]
-                        : can(user.role, "planning")
-                          ? [
-                              "find",
-                              "requests",
-                              "dashboard",
-                              "export",
-                              "navigate",
-                              "compra",
-                              "recomendacoes",
-                              "rotas",
-                              "transferencias",
-                            ]
-                          : [
-                              "find",
-                              "requests",
-                              "dashboard do próprio bloco",
-                              "export",
-                              "navigate",
-                            ],
+                          : []),
+                      ],
                       today: new Date().toISOString().slice(0, 10),
                       cart: describe(),
                       history,
@@ -710,12 +712,7 @@ export async function converseJames(
     signal.throwIfAborted();
     if (step.action === "form") {
       const form = advanceJamesForm(beginJamesForm(step.view));
-      demand(
-        user,
-        ["updateUser", "toggleUser"].includes(form.operation.name)
-          ? "people"
-          : "stock",
-      );
+      demand(user, jamesOperationPermission(form.operation.name));
       return {
         cart,
         formToken: ticket(user, cart, undefined, undefined, undefined, form),
@@ -724,7 +721,12 @@ export async function converseJames(
       };
     }
     if (step.action === "chat")
-      return { reply: step.answer, source: "groq" as const, cart, updatedAt: new Date().toISOString() };
+      return {
+        reply: step.answer,
+        source: "groq" as const,
+        cart,
+        updatedAt: new Date().toISOString(),
+      };
     if (step.action === "operation") {
       if (
         step.operation?.reason &&
@@ -770,13 +772,16 @@ export async function converseJames(
       );
       const compatible = new Set(ranked.map((result) => result.part.code));
       const verifiedExact = exact.filter((part) => compatible.has(part.code));
-      let matches = verifiedExact.length
-        ? verifiedExact
-        : ranked.length
-          ? ranked.map((result) => result.part)
-          : exact.length
-            ? []
-            : catalogMatches(stock, step.query || "");
+      let matches =
+        step.action === "find" && !step.query?.trim()
+          ? stock.filter((part) => (part.available ?? part.quantity) > 0)
+          : verifiedExact.length
+            ? verifiedExact
+            : ranked.length
+              ? ranked.map((result) => result.part)
+              : exact.length
+                ? []
+                : catalogMatches(stock, step.query || "");
       if (["set", "remove"].includes(step.action))
         matches = matches.filter((p) => cart.some((e) => e.code === p.code));
       if (step.action === "find") {
@@ -908,6 +913,10 @@ export async function converseJames(
       if (target === "dashboard" && user.role === "funcionario")
         throw new ActionError("Use o histórico das suas requisições.", 403);
       const destinations: Record<string, [string, string]> = {
+        pcp: [
+          pathFor(user.role, "pcp"),
+          "PCP: recebimentos, qualidade, requisições e consumíveis. Diga clique em seguido do nome completo do botão, preencha o campo e confirme formulário para executar pela tela.",
+        ],
         perfil: [
           "/profile",
           "Dados de acesso e biometria são alterados na tela segura. Não dite sua senha para o assistente.",
@@ -987,7 +996,10 @@ export async function converseJames(
           : user.role === "lider"
             ? "bloco"
             : "geral");
-      if (["pecas", "por-peca"].includes(view) || (user.role === "lider" && view === "bloco")) {
+      if (
+        ["pecas", "por-peca"].includes(view) ||
+        (user.role === "lider" && view === "bloco")
+      ) {
         const query = new URLSearchParams(step.filters);
         if (user.role === "lider") query.set("dashboard", "bloco");
         const report = await backendFetch<unknown>(
@@ -1271,7 +1283,10 @@ export async function converseJames(
     exportHref,
     records,
     reportContext: reportState,
-    navigate: !!href && /\b(?:abra|abrir|acesse)\b/.test(normalize(message)),
+    navigate:
+      !!href &&
+      (steps.some((step) => step.action === "navigate") ||
+        /\b(?:abra|abrir|acesse)\b/.test(normalize(message))),
     updatedAt: new Date().toISOString(),
   };
 }
