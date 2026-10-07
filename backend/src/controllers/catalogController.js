@@ -13,8 +13,10 @@ const resolveCode = asyncHandler(async (req, res) => {
   const raw = req.body?.code;
   if (typeof raw !== 'string' || !raw.length || raw.length > 1024 || raw.includes('\0'))
     throw new AppError(400, 'Conteúdo do código inválido');
-  // Exact, stored identifiers only. Never fetch a URL or infer a printed number.
-  const [parts] = await getPool().execute('SELECT id,code,name,unit FROM parts WHERE active=TRUE AND (code=? OR qr_code=?) LIMIT 2', [raw, raw]);
+  // Label printers append CR/LF. Preserve the original payload and match only
+  // registered identifiers, including its transport terminator-free form.
+  const identifier = raw.replace(/[\r\n]+$/, '');
+  const [parts] = await getPool().execute('SELECT id,code,name,unit FROM parts WHERE active=TRUE AND (code=? OR qr_code=? OR code=? OR qr_code=?) LIMIT 2', [raw, raw, identifier, identifier]);
   if (!parts.length) throw new AppError(404, 'Código desconhecido; confirme o vínculo no cadastro');
   if (parts.length !== 1) throw new AppError(409, 'Código ambíguo; revise os vínculos antes de continuar');
   const part = parts[0];

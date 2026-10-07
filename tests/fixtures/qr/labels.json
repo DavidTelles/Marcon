@@ -1,0 +1,15 @@
+{
+  "sha256": "cc973f6dd74ad9779e4e55b77018acd157aa05c3533dab4b96fb816e3a1b36f2",
+  "labels": [
+    { "id": "129", "payload": "129\r\n", "left": 100, "top": 85, "width": 150, "height": 150 },
+    { "id": "120", "payload": "128\r\n", "left": 685, "top": 85, "width": 150, "height": 150 },
+    { "id": "127", "payload": "127\r\n", "left": 98, "top": 375, "width": 150, "height": 150 },
+    { "id": "173", "payload": "173\r\n", "left": 690, "top": 375, "width": 150, "height": 150 },
+    { "id": "7988", "payload": "7988\r\n", "left": 98, "top": 677, "width": 150, "height": 150 },
+    { "id": "17940", "payload": "17940\r\n", "left": 695, "top": 675, "width": 150, "height": 150 },
+    { "id": "1794", "payload": "1794\r\n", "left": 93, "top": 976, "width": 150, "height": 150 },
+    { "id": "1796", "payload": "1796\r\n", "left": 695, "top": 970, "width": 150, "height": 150 },
+    { "id": "1795", "payload": "1795\r\n", "left": 103, "top": 1285, "width": 140, "height": 140 },
+    { "id": "5746", "payload": "5746\r\n", "left": 698, "top": 1276, "width": 150, "height": 150 }
+  ]
+}

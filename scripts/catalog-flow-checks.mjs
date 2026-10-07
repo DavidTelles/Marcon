@@ -8,8 +8,9 @@ export async function prepareCatalogFixture(domainDb) {
     const [before] = await db.query(
       "SELECT part_id,warehouse_id,quantity FROM inventory ORDER BY part_id,warehouse_id",
     );
+    const [existingParts] = await db.query("SELECT code FROM parts");
     const first = await importPartsCatalog(db, items);
-    assert.equal(first.added, items.length);
+    assert.equal(first.added, items.filter((item) => !existingParts.some((part) => part.code === item.code)).length);
     const [imported] = await db.query(
       "SELECT part_id,warehouse_id,quantity FROM inventory ORDER BY part_id,warehouse_id",
     );
@@ -100,6 +101,8 @@ export async function checkCatalogWorkflow({
       });
       await photo.scrollIntoViewIfNeeded();
       await photo.waitFor({ state: "visible" });
+      if (item.photoKind === "reference")
+        await photo.locator("..").getByText("Imagem de referência", { exact: true }).waitFor({ state: "visible" });
       try {
         await page.waitForFunction(
           (path) => {
@@ -257,7 +260,9 @@ export async function checkCatalogWorkflow({
     await page.getByRole("heading", { name: "Meu histórico", exact: true }).waitFor();
     await page.getByRole("heading", { name: "Chave combinada 13 mm", exact: true }).waitFor();
     assert.equal(await page.getByRole("heading", { name: "Rolamento 6201 ZZ", exact: true }).count(), 0);
-    await page.getByRole("button", { name: "Ver entrega", exact: true }).click();
+    await page.locator("article").filter({
+      has: page.getByRole("heading", { name: "Chave combinada 13 mm", exact: true }),
+    }).getByRole("button", { name: "Ver entrega", exact: true }).click();
     await page.getByRole("dialog", { name: /^Requisição #/ }).waitFor();
     assert.equal(await page.evaluate(() => getComputedStyle(document.body).position), "fixed");
     await page.getByRole("button", { name: /^Fechar Requisição #/ }).click();

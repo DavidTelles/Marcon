@@ -18,8 +18,9 @@
 |---|---|---|
 | Importador transacional e repetível | verificado | `node scripts/test-marcon-integrity.mjs`: 48 linhas **sintéticas**, filiais 0101/0102 separadas, conflito 600/450, rollback, nenhuma baixa fictícia |
 | Importação dos 48 registros reais | não testado | `rodizios.xlsx` não localizado; **zero linhas originais importadas** |
-| QR → API → saldo e permissões | verificado | API Express/JWT/repositórios com PostgreSQL persistido: código exato, saldo por bloco, desconhecido 404, ambiguidade 409; 120 não resolve para 128 |
-| QR originais, fotografias e PDF | não testado | `fig01.jpeg` e `rotas-pcp-marcon (1).pdf` não localizados; não há vínculo confirmado ou reprodução da planta |
+| QR → API → saldo e permissões | verificado | API Express/JWT/repositórios com PostgreSQL persistido: identificador cadastrado, terminadores CR/LF, saldo por bloco, desconhecido 404, ambiguidade 409; QR 128 vinculado ao ID 120 após decodificação da foto original |
+| QR originais | verificado | Foto e dez recortes em `tests/fixtures/qr`; payloads e limites em `docs/qr-labels.md`; câmera física ainda precisa de teste no dispositivo |
+| Fotografias e PDF | parcial | 21 fotos e referências locais documentadas em `docs/catalog-photos.md`; peça 17940 sem modelo/foto confirmados; PDF da planta não localizado |
 | Isolamento de histórico | verificado | Chamadas diretas à API: funcionário, líder, líder sem vínculo e exclusão por almoxarife |
 | Dashboard e exportações | verificado | `scripts/test-parts-consumption.mjs`: 31 un separados de 80 kg; P1 11 un/3 retiradas; devoluções 3 un; origens, tabelas, gráficos, PDF/XLSX e limites UTC reconciliados. Líder: 3+2=5 un no bloco autorizado |
 | Transferência e conciliação | verificado | API oficial: abertura não sobrescreve operação; repetição recusada; transferência 90+50=140 conservada; dupla saída/recebimento recusados; excedente 20 não distribuído duas vezes |

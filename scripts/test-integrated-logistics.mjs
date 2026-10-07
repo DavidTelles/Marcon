@@ -1061,7 +1061,7 @@ try {
       if (process.argv.includes("--qr")) {
         const { checkQrWorkflow } = await import("./qr-flow-checks.mjs");
         await checkQrWorkflow({ browser, origin, sql, action, insert, part, near, far, testPassword });
-        check("PCP removed in all four roles; QR lookup by image, camera and ID respects scope; delivery rejects mismatched QR and quantity and records stock once");
+        check("PCP removed in all four roles; original ten labels decode by image and controlled video; whole sheet selection, QR 128 to ID 120, scoped lookup, mismatched delivery rejection and single stock deduction verified");
       }
       if (catalogFixture) {
         const { checkCatalogWorkflow } = await import("./catalog-flow-checks.mjs");

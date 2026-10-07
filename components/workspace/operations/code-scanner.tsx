@@ -32,6 +32,7 @@ export function CodeScanner({
   const [reading, setReading] = useState(false);
   const [manual, setManual] = useState("");
   const [confirmed, setConfirmed] = useState("");
+  const [choices, setChoices] = useState<{ value: string; label: string }[]>([]);
   const resolving = useRef(false);
   const request = useRef<AbortController | null>(null);
   const decoding = useRef(false);
@@ -67,8 +68,21 @@ export function CodeScanner({
         if (!context) return decode(canvas);
         context.translate(rotated.width / 2, rotated.height / 2);
         context.rotate((turn * Math.PI) / 2);
-        context.filter = orientation >= 4 ? "invert(1)" : "none";
         context.drawImage(canvas, -canvas.width / 2, -canvas.height / 2);
+        if (orientation >= 4) {
+          const image = context.getImageData(0, 0, rotated.width, rotated.height);
+          let min = 255, max = 0;
+          for (let i = 0; i < image.data.length; i += 4) {
+            const p = (image.data[i] + 2 * image.data[i + 1] + image.data[i + 2]) / 4;
+            min = Math.min(min, p); max = Math.max(max, p);
+          }
+          for (let i = 0; i < image.data.length; i += 4) {
+            const p = (image.data[i] + 2 * image.data[i + 1] + image.data[i + 2]) / 4;
+            image.data[i] = image.data[i + 1] = image.data[i + 2] =
+              (p - min) * 255 / Math.max(1, max - min) < 180 ? 0 : 255;
+          }
+          context.putImageData(image, 0, 0);
+        }
         return decode(rotated);
       };
     }
@@ -121,6 +135,8 @@ export function CodeScanner({
   }
   async function readImage(file: File | undefined) {
     if (!file || reading || decoding.current) return;
+    close();
+    setChoices([]);
     setConfirmed("");
     onInvalid?.();
     if (!file.type.startsWith("image/") || file.size > 10_000_000) {
@@ -143,6 +159,38 @@ export function CodeScanner({
       const scale = Math.min(1, 2400 / Math.max(picture.width, picture.height));
       const w = Math.round(picture.width * scale),
         h = Math.round(picture.height * scale);
+      canvas.width = w; canvas.height = h;
+      context.drawImage(picture, 0, 0, w, h);
+      const image = context.getImageData(0, 0, w, h);
+      const pixels = new Uint8ClampedArray(w * h);
+      for (let i = 0; i < pixels.length; i++)
+        pixels[i] = (image.data[i * 4] + 2 * image.data[i * 4 + 1] + image.data[i * 4 + 2]) / 4;
+      const { decodeQrLabels } = await import("@/lib/qr-image");
+      const values = await decodeQrLabels(pixels, w, h, async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        if (id !== generation.current) throw new Error("Leitura cancelada");
+      });
+      if (id !== generation.current) return;
+      if (values.length > 1) {
+        const controller = new AbortController();
+        request.current = controller;
+        const options = await Promise.all(values.map(async (value) => {
+          const response = await fetch("/api/items/resolve", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code: value }), signal: controller.signal,
+          });
+          const data = await response.json();
+          return { value, label: response.ok
+            ? `ID ${data.material.code} · ${data.material.name}`
+            : `QR ${value.replace(/[\r\n]+$/, "")} · código não cadastrado` };
+        }));
+        if (id === generation.current && !controller.signal.aborted) setChoices(options);
+        return;
+      }
+      if (values.length === 1) {
+        await acceptCode(values[0]);
+        return;
+      }
       let value: string | undefined;
       // Try both polarities and every orientation; the printed sheet may be rotated.
       for (const inverted of [false, true]) {
@@ -171,7 +219,7 @@ export function CodeScanner({
         );
     } finally {
       decoding.current = false;
-      setReading(false);
+      if (id === generation.current) setReading(false);
       URL.revokeObjectURL(local);
     }
   }
@@ -208,6 +256,7 @@ export function CodeScanner({
     setActive(true);
     setError("");
     setConfirmed("");
+    setChoices([]);
     onInvalid?.();
     try {
       if (!window.isSecureContext)
@@ -265,6 +314,8 @@ export function CodeScanner({
               required
               onChange={(event) => {
                 setManual(event.target.value);
+                close();
+                setChoices([]);
                 request.current?.abort();
                 setConfirmed("");
                 setError("");
@@ -280,7 +331,7 @@ export function CodeScanner({
       <button
         type="button"
         className="button secondary"
-        disabled={reading}
+        disabled={reading && !active}
         onClick={() => (active ? close() : void start())}
       >
         {active ? "Fechar câmera" : "Escanear QR / barras"}
@@ -299,9 +350,21 @@ export function CodeScanner({
         />
       </label>
       <small>
-        Use uma imagem de uma única etiqueta. Confirme o material retornado
-        antes de continuar.
+        Aponte para uma etiqueta. Em fotos com várias etiquetas, escolha a peça
+        encontrada antes de continuar.
       </small>
+      {choices.length > 1 && (
+        <div role="group" aria-label="Peças encontradas na imagem">
+          <p>Foram encontrados {choices.length} QR Codes. Escolha a peça:</p>
+          {choices.map((choice) => (
+            <button type="button" className="button secondary" key={choice.value}
+              disabled={reading} style={{ whiteSpace: "normal", overflowWrap: "anywhere", maxWidth: "100%" }}
+              onClick={() => { setChoices([]); void acceptCode(choice.value); }}>
+              {choice.label}
+            </button>
+          ))}
+        </div>
+      )}
       {reading && <p role="status">Confirmando material e saldo autorizado…</p>}
       {confirmed && <p role="status">{confirmed}</p>}
       <video

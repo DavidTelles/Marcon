@@ -106,7 +106,8 @@ export async function place(c: PoolConnection, value: unknown) {
 export function scan(p: Row, code: unknown) {
   if (
     ![p.code, p.qr_code].some(
-      (v) => typeof code === "string" && String(v) === code,
+      (v) => typeof code === "string" && typeof v === "string" &&
+        v.replace(/[\r\n]+$/, "") === code.replace(/[\r\n]+$/, ""),
     )
   )
     throw new ActionError("Código lido não corresponde à peça.", 422);

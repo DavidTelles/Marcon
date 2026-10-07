@@ -68,7 +68,8 @@ async function place(c, value) {
     return w;
 }
 function scan(p, code) {
-    if (![p.code, p.qr_code].some((v) => typeof code === "string" && String(v) === code))
+    if (![p.code, p.qr_code].some((v) => typeof code === "string" && typeof v === "string" &&
+        v.replace(/[\r\n]+$/, "") === code.replace(/[\r\n]+$/, "")))
         throw new permissions_1.ActionError("Código lido não corresponde à peça.", 422);
 }
 function capacity(row, quantity) {

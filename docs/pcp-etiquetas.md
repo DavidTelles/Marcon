@@ -8,7 +8,7 @@ Execute `npm run test:qr` para validar o build de produção com banco temporár
 
 ## Fotos e Vercel
 
-As 12 fotos do catálogo desta cópia estão em `public/parts` e foram preservadas na integração das alterações. `manifest.json` registra os caminhos, fontes e condições de uso de `data/parts-catalog.json`. `npm run build` verifica que todas as fotos existem e são WebP válidos antes de compilar. Inclua essa pasta no commit/deploy.
+As 21 fotos do catálogo desta cópia estão em `public/parts`. As nove novas referências de peças das etiquetas estão identificadas como referências de modelos similares; veja `docs/catalog-photos.md`. `manifest.json` registra os caminhos, fontes e condições de uso de `data/parts-catalog.json`. `npm run build` verifica que todas as fotos existem e são WebP válidos antes de compilar. Inclua essa pasta no commit/deploy.
 
 Fotos novas são persistidas no Neon pelo cadastro de estoque, em PNG/JPEG/WebP, até 1 MB por foto. O backend aceita 2 MB de JSON para acomodar a expansão base64. Fotos inválidas ou endereços temporários `blob:` são rejeitados. O cadastro solicita a confirmação do produto, origem e condições de uso. O frontend e o backend publicados precisam apontar para o mesmo banco; arquivos em `public` acompanham o deploy, dados do banco não são copiados pelo deploy.
 
@@ -20,9 +20,11 @@ A migração adiciona os IDs impressos 129, 120, 127, 173, 7988, 17940, 1794, 17
 
 Os números impressos identificam o produto; não provam qual texto está codificado dentro do QR antigo. O identificador da etiqueta pode ser informado no cadastro de estoque, com confirmação do produto. O conteúdo é preservado exatamente, inclusive maiúsculas, e não pode pertencer a outro produto. URLs codificadas são tratadas como identificadores, sem acessar sites externos.
 
+A foto original foi decodificada em 07/10/2026: os dez QR Codes incluem CR/LF ao final e a etiqueta do ID 120 codifica 128. Esse QR foi vinculado à peça 120. Os conteúdos, a foto e os testes estão documentados em `docs/qr-labels.md`; os terminadores de impressão são tratados na resolução autenticada.
+
 Depois do vínculo, a leitura consulta o produto e o saldo permitido ao usuário. Um código desconhecido, ambíguo ou de outra peça da entrega não preenche a operação. O endpoint de etiqueta gera SVG com o conteúdo atualmente vinculado, margem branca de quatro módulos e correção de erros. Imprima com bom contraste e preserve a margem branca.
 
-A câmera usa HTTPS ou localhost, câmera traseira preferencial, leitura em quatro orientações e tentativa de contraste invertido. A leitura de arquivo aceita uma etiqueta por imagem. Há alternativa por digitação/leitor USB. A validação de origem nas rotas de leitor, PCP, importação e estoque considera o Host recebido, para não confundir um alias legítimo com a URL interna normalizada pelo Next.js; origens externas continuam bloqueadas. Permissão da câmera, iluminação, foco e integridade da impressão continuam necessários; os testes usam imagens geradas e uma câmera simulada, não o aparelho físico do usuário nem a folha original anexada.
+A câmera usa HTTPS ou localhost, câmera traseira preferencial, leitura em quatro orientações e tratamento de baixo contraste. A leitura de arquivo aceita várias etiquetas e apresenta as peças para escolha. Há alternativa por digitação/leitor USB. A validação de origem considera o Host recebido; origens externas continuam bloqueadas. Permissão da câmera, iluminação, foco e integridade da impressão continuam necessários. Os testes usam também a folha original e seus dez recortes, inclusive no fluxo de vídeo controlado. O aparelho físico do usuário não foi testado.
 
 ## API da empresa
 
