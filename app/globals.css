@@ -6,6 +6,25 @@
 .decision-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; margin: 20px 0; }
 .decision-card { min-width: 0; padding: clamp(16px, 3vw, 24px); border: 1px solid var(--line); border-radius: 18px; background: var(--white); overflow-wrap: anywhere; }
 .decision-card h3, .decision-card h4 { margin: 12px 0 6px; font-size: 1.2rem; }
+.purchase-card { align-self: start; }
+.purchase-card > summary { display: grid; gap: 8px; list-style: none; cursor: pointer; }
+.purchase-card > summary::-webkit-details-marker { display: none; }
+.purchase-card > summary:focus-visible { outline: 3px solid var(--bright); outline-offset: 6px; border-radius: 8px; }
+.purchase-card > summary .dashboard-badge { justify-self: start; }
+.purchase-card > summary h3 { margin: 4px 0; }
+.purchase-code { color: var(--subtle); }
+.purchase-total { display: grid; gap: 6px; padding: 14px; margin: 4px 0; background: var(--canvas); border-radius: 12px; }
+.purchase-total strong { font-size: 1.7rem; color: var(--blue); }
+.purchase-toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; color: var(--blue); }
+.purchase-hide, .purchase-card[open] .purchase-show { display: none; }
+.purchase-card[open] .purchase-hide { display: inline; }
+.purchase-card[open] .purchase-toggle > span:last-child { transform: rotate(180deg); }
+.purchase-details { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 8px; }
+.purchase-warehouses { display: grid; gap: 14px; margin: 16px 0; }
+.purchase-warehouse { min-width: 0; border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+.purchase-warehouse-heading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+.purchase-warehouse-heading h4 { margin: 0; font-size: 1rem; }
+.purchase-warehouse-heading strong { color: var(--blue); }
 .decision-destinations { display: grid; gap: 24px; margin-top: 24px; }
 .decision-destination { min-width: 0; }
 .decision-destination-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 16px; border-left: 4px solid var(--blue); border-radius: 12px; background: var(--canvas); }

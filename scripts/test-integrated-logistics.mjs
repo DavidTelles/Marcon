@@ -1091,6 +1091,10 @@ try {
         await checkRecommendationCards({ page, origin, sql, part, near, far });
         check("Intuitive receiving-warehouse recommendations show consumption, safe capacity, before/after balances and published Dijkstra route; responsive review never moves stock");
       }
+      if (process.argv.includes("--purchases")) {
+        const { checkPurchaseCards } = await import("./purchase-ui-checks.mjs");
+        await checkPurchaseCards({ page, origin, sql, insert, near, far });
+      }
       if (process.argv.includes("--marco")) {
         const post = (context, body, extra = {}) => context.post(origin + "/api/james/chat", { headers: { origin }, data: body, timeout: 60000, ...extra });
         const workerContext = await browser.newContext();

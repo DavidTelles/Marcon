@@ -527,11 +527,35 @@ export async function dashboardReport(
     a.row.warehouse.localeCompare(b.row.warehouse, "pt-BR") ||
     Number(b.row.available < b.row.configuredMinimum) - Number(a.row.available < a.row.configuredMinimum) ||
     a.row.item.localeCompare(b.row.item, "pt-BR") || (a.transfer?.from ?? "").localeCompare(b.transfer?.from ?? "", "pt-BR"));
+  // Group before pagination so one material includes every matching warehouse.
+  // A row can occur in both a transfer and a purchase proposal: count it once.
+  const purchaseGroups = new Map<string, {
+    code: string; item: string; unit: string; quantity: number; rows: typeof rows;
+  }>();
+  if (q.get("planning") === "purchase") for (const { row } of decisionCards) {
+    const key = JSON.stringify([row.code, row.unit]);
+    let group = purchaseGroups.get(key);
+    if (!group) {
+      group = { code: row.code, item: row.item, unit: row.unit, quantity: 0, rows: [] };
+      purchaseGroups.set(key, group);
+    }
+    if (!group.rows.some(r => r.warehouse === row.warehouse)) {
+      group.rows.push(row);
+      group.quantity += row.buy;
+    }
+  }
+  const groupedPurchases = [...purchaseGroups.values()];
+  for (const group of groupedPurchases) group.rows.sort((a, b) =>
+    b.buy - a.buy || a.warehouse.localeCompare(b.warehouse, "pt-BR"));
+  const pageStart = (decisionPage - 1) * f.pageSize;
+  const pageEnd = decisionPage * f.pageSize;
+  const purchaseMode = q.get("planning") === "purchase";
   return {
     decisions: {
       filter: decision,
       page: decisionPage,
-      total: decisionCards.length,
+      total: purchaseMode ? groupedPurchases.length : decisionCards.length,
+      purchaseGroups: groupedPurchases.slice(pageStart, pageEnd),
       cards: decisionCards.slice(
         (decisionPage - 1) * f.pageSize,
         decisionPage * f.pageSize,
