@@ -141,7 +141,7 @@ export default function LoginForm({ children, demoMode = false }: { children?: R
             <button className={styles.alternativeButton} type="button" disabled={demoMode || isBusy || !identity.trim() || !password} onClick={() => { setCameraActive(true); }} aria-describedby="camera-access-note">
               <ScanFace size={20} aria-hidden="true" /><span>Entrar com reconhecimento facial</span>
             </button>
-            <p id="camera-access-note" className={styles.accessNote}>{demoMode ? "Acesso facial disponível com Neon configurado." : "Informe e-mail ou matrícula. Cadastre seu rosto no perfil após entrar com senha."}</p>
+            <p id="camera-access-note" className={styles.accessNote}>{demoMode ? "Acesso facial disponível com Neon configurado." : "Informe e-mail ou matrícula e senha. Cadastre seu rosto no perfil após entrar com senha."}</p>
 
           </div>
         </>

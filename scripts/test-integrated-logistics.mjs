@@ -1014,7 +1014,8 @@ try {
           ...process.env,
           BACKEND_URL: process.argv.includes("--embedded") ? "embedded" : `http://127.0.0.1:${apiServer.address().port}`,
           ...(process.argv.includes("--embedded") ? { VERCEL: facialFixture ? "" : "1" } : {}),
-          ...(facialFixture ? { FACE_SERVICE_URL: facialFixture.url, FACE_SERVICE_TOKEN: facialFixture.token } : {}),
+          ...(facialFixture ? { FACE_ENGINE: "remote", FACE_SERVICE_URL: facialFixture.url, FACE_SERVICE_TOKEN: facialFixture.token } : {}),
+          ...(process.argv.includes("--face-node") ? { FACE_ENGINE: "node", VERCEL: "1", FACE_SERVICE_URL: "", FACE_SERVICE_TOKEN: "", FACE_PYTHON: "" } : {}),
           OPENAI_API_KEY: "",
         },
         windowsHide: true,
@@ -1072,6 +1073,12 @@ try {
         const { FACE_MODEL, FACE_CONSENT } = require("../lib/face-policy.ts");
         await checkFacialWorkflow({ page, browser, origin, password: testPassword, sql, model: FACE_MODEL, consent: FACE_CONSENT });
         check("Profile verifies password before camera, interrupted capture retries and encrypts enrollment; facial login issues both sessions for all four roles; wrong password, mismatch, replay and deleted enrollment fail (controlled provider and video, not physical biometric validation)");
+      }
+      if (process.argv.includes("--face-node")) {
+        const { FACE_MODEL, FACE_CONSENT } = require("../lib/face-policy.ts");
+        const { checkNodeFacialWorkflow } = await import("./facial-node-flow-checks.mjs");
+        await checkNodeFacialWorkflow({ page, browser, origin, password: testPassword, sql, model: FACE_MODEL, consent: FACE_CONSENT });
+        check("Real Node YuNet/SFace with VERCEL=1 and no FACE service/Python configuration: five challenged photos, encrypted enrollment, four-role login, both sessions, wrong password, replay and deletion (synthetic perspective fixtures)");
       }
       if (process.argv.includes("--marco")) {
         const post = (context, body, extra = {}) => context.post(origin + "/api/james/chat", { headers: { origin }, data: body, timeout: 60000, ...extra });
@@ -1365,6 +1372,6 @@ await writeFile(
   JSON.stringify(evidence, null, 2),
 );
 await writeFile(
-  `.validation/integrated-logistics/evidence-${process.argv.includes("--catalog") ? "catalog" : process.argv.includes("--face") ? "facial" : "serverless"}.json`,
+  `.validation/integrated-logistics/evidence-${process.argv.includes("--catalog") ? "catalog" : process.argv.includes("--face-node") ? "facial-node" : process.argv.includes("--face") ? "facial" : "serverless"}.json`,
   JSON.stringify(evidence, null, 2),
 );

@@ -38,6 +38,14 @@ if (args.includes("--url")) {
       `backend: ${data.backend || "unknown"}`,
       data.backend === "connected",
     );
+    if (args.includes("--face")) {
+      const face = await fetch(new URL("/api/login/face?health=1", value), {
+        cache: "no-store", redirect: "error", signal: AbortSignal.timeout(30000),
+      });
+      const result = await face.json();
+      report(`facial HTTP ${face.status}; modelos carregados na hospedagem`,
+        face.ok && result.status === "ok" && result.model === "opencv-yunet-sface-2023mar-v1" && result.dimensions === 128);
+    }
   } catch {
     report("Não foi possível verificar /health da URL informada", false);
   }

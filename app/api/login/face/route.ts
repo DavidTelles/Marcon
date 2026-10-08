@@ -99,8 +99,14 @@ async function readBody(
   }
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    // Read-only readiness probe for the deployed model runtime. It never
+    // returns enrollment, user information, captures or biometric vectors.
+    if (request.nextUrl.searchParams.get("health") === "1") {
+      await checkFaceService();
+      return json({ status: "ok", model: FACE_MODEL, dimensions: 128 });
+    }
     if (!databaseEnabled())
       return fail("Configure o Neon para usar o acesso facial.", 503);
     const user = await currentUser();
@@ -114,6 +120,8 @@ export async function GET() {
       compatible: rows[0]?.model_version === FACE_MODEL && rows[0]?.consent_version === FACE_CONSENT,
     });
   } catch {
+    if (request.nextUrl.searchParams.get("health") === "1")
+      return json({ status: "unavailable" }, 503);
     return fail("Não foi possível consultar o cadastro facial.", 503);
   }
 }

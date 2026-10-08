@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { existsSync } from "node:fs";
 import { FACE_COUNT, FACE_MODEL, validEmbedding } from "./face-policy";
 import { faceServiceRequest } from "./face-service.mjs";
+import { faceEngine, checkNodeFaceEngine, extractNodeFaces } from "./face-node.mjs";
 
 export class FaceProcessingError extends Error {
   constructor(
@@ -14,8 +15,13 @@ export class FaceProcessingError extends Error {
 }
 
 export async function checkFaceService() {
-  if (!process.env.FACE_SERVICE_URL && !process.env.VERCEL) return;
-  const health = await faceServiceRequest("/health", undefined);
+  // Vercel has Node, not a local Python interpreter. The bundled CPU models
+  // are the default; a separate Python service is an explicit optional override.
+  const engine = faceEngine();
+  if (engine === "python") return;
+  const health = engine === "remote"
+    ? await faceServiceRequest("/health", undefined)
+    : await checkNodeFaceEngine();
   if (health?.status !== "ok" || health.model !== FACE_MODEL || health.dimensions !== 128)
     throw new FaceProcessingError("Serviço facial incompatível. Verifique os modelos do servidor.");
 }
@@ -24,7 +30,8 @@ export async function extractFaces(
   images: string[],
   poses: string[] = Array(FACE_COUNT).fill("center"),
 ): Promise<number[][]> {
-  if (process.env.FACE_SERVICE_URL || process.env.VERCEL) {
+  const engine = faceEngine();
+  if (engine === "remote") {
     const result = await faceServiceRequest("/extract", {
       model: FACE_MODEL,
       images,
@@ -39,6 +46,8 @@ export async function extractFaces(
       throw new FaceProcessingError("Resposta do serviço facial inválida.");
     return result.embeddings;
   }
+  if (engine === "node")
+    return extractNodeFaces(images, poses);
   const localPython = join(
     process.cwd(),
     "face",

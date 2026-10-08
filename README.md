@@ -57,7 +57,7 @@ npm run check:hosting -- --url https://marcon-ten.vercel.app
 
 Para um backend hospedado separadamente, use `BACKEND_URL=https://seu-backend.example.com` (URL base sem `/api` ou `/login`) e o mesmo banco. Não aponte essa variável para o próprio frontend: isso chamaria suas páginas em vez da API Express. URLs locais e HTTP são rejeitadas na Vercel com uma mensagem de configuração.
 
-O cadastro e o login facial hospedados chamam o serviço Python autenticado de `face/`, publicado como segundo projeto da Vercel. Configure `FACE_SERVICE_URL` e o mesmo `FACE_SERVICE_TOKEN` nos projetos conforme [configuração e validação facial](docs/facial-deployment.md). O login por senha funciona sem esse serviço. O assistente Marco usa a API Groq diretamente no servidor, conforme [configuração do Marco](docs/marco-groq.md).
+O cadastro e o login facial executam os modelos YuNet/SFace na própria função Node da Vercel, sem exigir um serviço Python separado ou variáveis `FACE_*`. A senha continua obrigatória no cadastro e no login facial. Consulte a [configuração e validação facial](docs/facial-deployment.md). O assistente Marco usa a API Groq diretamente no servidor, conforme [configuração do Marco](docs/marco-groq.md).
 
 ## Comandos
 
@@ -72,7 +72,7 @@ O catálogo inclui fotografias de produto locais e oito peças adicionais. Execu
 - `npm run test:logistics:ui`: inclui navegador, sessão, vínculos, exportações e publicação; execute `npm run build` antes.
 - `npm run test:login-routes`: verifica login dos quatro perfis, cookies, logout e rotas com os serviços em execução; requer `TEST_PASSWORD` ou `SEED_PASSWORD` das contas de teste.
 
-A instalação também pode ser feita separadamente com `npm ci` e `npm ci --prefix backend`. O reconhecimento facial requer Python e os pacotes listados em `face/requirements.txt`. Consulte [APP.md](APP.md) para detalhes da interface.
+A instalação também pode ser feita separadamente com `npm ci` e `npm ci --prefix backend`. O reconhecimento facial usa os modelos incluídos no repositório e ONNX Runtime Node em CPU. Python é opcional para comparar resultados com o protótipo OpenCV ou executar o serviço alternativo. Consulte [APP.md](APP.md) para detalhes da interface.
 
 Os fluxos de solicitações, retirada, entrega, materiais do bloco, reposição e planta estão descritos em [Fluxo integrado de materiais](docs/enterprise-workflow.md). O acesso operacional exige o banco e o backend, sem login automático de demonstração.
 

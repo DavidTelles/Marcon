@@ -1,71 +1,75 @@
 # Cadastro e login facial hospedados
 
-O projeto Next.js executa o backend e acessa o Neon com `BACKEND_URL=embedded`. A extração facial usa Python e OpenCV; para hospedá-la, publique a pasta `face/` como um segundo projeto da Vercel, no mesmo repositório. O navegador envia a captura ao Next, que chama esse serviço autenticado. O serviço Python devolve vetores e não acessa o banco nem cria sessões.
+O cadastro e o login facial usam os modelos YuNet/SFace de `face/models/` na
+própria função Node do Next/Vercel, com ONNX Runtime em CPU e Sharp. Não exigem
+Python, segundo projeto ou variáveis `FACE_SERVICE_URL`/`FACE_SERVICE_TOKEN`.
+Preservam o modelo, vetores de 128 dimensões, limiar 0,363 e dados criptografados.
 
-## Configurar os dois projetos
+## Publicação
 
-Primeiro, confirme o projeto principal com `npm run check:hosting -- --url https://marcon-ten.vercel.app`. O resultado esperado é HTTP 200 e banco/backend conectados. Configure `DATABASE_URL`, `SESSION_SECRET`, `JWT_SECRET` e `BACKEND_URL=embedded` no painel e faça o deploy deste código. O arquivo `.env` local não configura automaticamente a Vercel.
+Configure `DATABASE_URL`, `SESSION_SECRET`, `JWT_SECRET` e `BACKEND_URL=embedded`
+no projeto Vercel. Essas configurações gerais continuam necessárias; o arquivo
+`.env` local não configura automaticamente a hospedagem. Não altere
+`SESSION_SECRET`: ele também protege os cadastros faciais existentes.
 
-Crie o projeto facial a partir do mesmo repositório:
+`vercel.json` instala somente CPU e reserva até 60 segundos para a API.
+`next.config.ts` inclui os modelos e binários Linux x64 na rota facial, excluindo
+outras plataformas e bibliotecas GPU. Os modelos são carregados uma vez por
+instância. Câmeras com outras proporções são enquadradas sem distorção e os
+pontos faciais voltam às coordenadas originais antes do alinhamento SFace.
 
-1. Se o repositório começar em `Marcon/package.json`, use **Root Directory = face**. Se ele contiver uma pasta `Marcon/`, use **Marcon/face**.
-2. Use o framework **FastAPI**. A pasta contém `app.py`, `requirements.txt`, `.python-version`, `vercel.json` e os dois modelos em `models/`; preserve todos no deploy. Não copie o build command Next.js para esse projeto.
-3. Configure `FACE_SERVICE_TOKEN` com o token aleatório de pelo menos 32 caracteres do `.env` local. Esse serviço não precisa de `DATABASE_URL`, `JWT_SECRET` ou `SESSION_SECRET`.
-4. Publique e copie a URL HTTPS de produção do projeto facial.
+O motor padrão é `node`, mesmo se houver configurações antigas `FACE_SERVICE_*`.
+Somente `FACE_ENGINE=remote` seleciona o serviço Python separado. Um endereço
+antigo ou incompleto não impede o motor padrão de funcionar.
 
-No projeto principal, configure e faça outro deploy:
+## Uso e validação
 
-| Variável                     | Valor                                                                                                               |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `FACE_SERVICE_URL`           | URL HTTPS base do projeto facial, sem `/health` ou `/extract`                                                       |
-| `FACE_SERVICE_TOKEN`         | Exatamente o mesmo token do projeto facial                                                                          |
-| `FACE_SERVICE_BYPASS_SECRET` | Somente se Deployment Protection bloquear a chamada entre projetos: segredo de bypass configurado no projeto facial |
+Entre com senha e abra **Editar perfil → Reconhecimento facial**. Confirme
+novamente a senha e o consentimento antes de permitir a câmera. Siga as posições,
+saia e teste o acesso facial com a mesma conta e senha. A câmera exige HTTPS e
+permissão no navegador. Capturas sem rosto, com vários rostos, rosto distante,
+posição divergente ou quadros repetidos são recusadas.
 
-Mantenha essas variáveis apenas no servidor, sem `NEXT_PUBLIC_`. O token continua obrigatório mesmo quando a proteção de deployment permitir o acesso. Não defina `FACE_PYTHON` no Next hospedado; essa opção escolhe o interpretador apenas no desenvolvimento local.
-
-## Verificar o deploy
-
-Configure também a URL e o token no `.env` local e execute:
+As fotos não são gravadas pelo código da aplicação; apenas os vetores são
+guardados criptografados no Neon. Cadastros anteriores a `server-face-v2` exigem
+novo cadastro e consentimento. Cadastros compatíveis são preservados. Trocar o
+segredo de sessão exige recadastro. A senha permanece obrigatória: resistência
+a fotos e vídeos não foi validada com pessoas autorizadas e câmera física.
 
 ```bash
 npm run check:face
-npm run check:hosting -- --url https://marcon-ten.vercel.app
+npm run check:hosting -- --url https://marcon-ten.vercel.app --face
+npm run test:face:node
+npm run build
+node scripts/test-integrated-logistics.mjs --ui --embedded --face-node
+node scripts/test-integrated-logistics.mjs --ui --embedded --face
 ```
 
-`check:face` faz uma chamada autenticada ao `/health` do Python, carrega os modelos reais e verifica o identificador do modelo e suas 128 dimensões. Não imprime credenciais. Uma consulta sem token a esse endpoint retorna 401.
+`check:face` carrega os modelos e executa uma inferência CPU de aquecimento.
+O endpoint `/api/login/face?health=1` confirma essa inferência na hospedagem e
+retorna somente disponibilidade, modelo e dimensões, sem dados de usuários.
+`test:face:node` faz inferência real e testa capturas válidas, enquadramento
+640×480, poses e recusas. Para comparar com o protótipo OpenCV, instale o
+ambiente Python opcional e execute `npm run test:face:node -- --compare-python`.
 
-No site publicado, entre com senha, abra o perfil e faça o cadastro facial com a câmera. Depois, saia e teste o login facial com a mesma conta. O login facial também exige a senha. O Next verifica o desafio, compara os vetores e cria tanto a sessão da interface quanto o token do backend. Confirme acesso ao painel e às operações após o login.
+`--face-node` testa as rotas do build de produção com `VERCEL=1`, sem serviço
+facial externo ou Python: cadastro criptografado, cinco posições solicitadas,
+login dos quatro perfis, ambas as sessões, senha incorreta, recusa de repetição
+do desafio e exclusão. Usa imagens sintéticas com perspectiva. `--face` usa
+câmera e provedor controlados para testar a interface, senha antes da câmera,
+interrupção, nova tentativa e redirecionamento. Ambos usam schema Neon temporário
+e removem apenas esse schema ao terminar. Não alteram contas públicas e não
+comprovam identidade ou resistência a fotos/vídeos no domínio publicado.
 
-Em **Editar perfil → Reconhecimento facial**, informe a senha atual e confirme o consentimento.
-O botão de cadastro verifica a senha no servidor antes de abrir a câmera; uma senha incorreta
-não inicia a captura nem altera o rosto cadastrado. Substituir ou excluir o cadastro também exige
-a senha. Quando o administrador cadastra o rosto de um funcionário, confirma sua própria senha.
-Uma captura interrompida ao sair da página libera a câmera e permite iniciar uma nova tentativa.
-As imagens preservam a proporção do vídeo para evitar distorção entre câmeras diferentes.
-Quando usa um serviço facial HTTP, o Next confirma sua disponibilidade e o modelo antes de
-abrir a câmera. Falta de configuração ou indisponibilidade não inicia uma captura que não
-poderia ser processada.
+## Motores opcionais
 
-Cadastros anteriores à política `server-face-v2` precisam de novo cadastro para registrar o consentimento de processamento no serviço. As fotografias não são gravadas pelo código da aplicação; os vetores são criptografados no Neon com chave derivada de `SESSION_SECRET`. Alterar esse segredo exige novo cadastro facial.
+Para Python local, prepare `face/.venv`, instale `face/requirements-dev.txt` e
+selecione `FACE_ENGINE=python`; `FACE_PYTHON` pode escolher outro interpretador.
+Esse motor local não é aceito na Vercel.
 
-## Testes disponíveis e alcance
-
-```bash
-npm run test:hosting
-npm run test:logistics -- --ui --embedded
-npm run test:logistics -- --ui --embedded --face
-python -m pip install -r face/requirements-dev.txt
-python scripts/test-face-python.py
-python face/tests/test_service.py
-npm run test:face:http
-```
-
-Use o interpretador configurado em `FACE_PYTHON` no lugar de `python`, se necessário. Os testes de integração criam e removem apenas um schema temporário, sem alterar registros existentes no schema público. Faça `npm run build` antes dos testes que usam `--ui`.
-
-Os testes verificam conexão Neon por HTTP, transações, login, operações, cadastro facial, vetores criptografados, emissão das duas sessões, recusa de vetor divergente, exclusão e desafio de uso único. O teste de fluxo facial usa um provedor controlado e câmera simulada no navegador, incluindo o redirecionamento ao painel; os testes Python e HTTP usam os modelos reais e uma imagem sintética. Isso não substitui a validação com pessoas autorizadas e câmera real no domínio publicado. A resistência a fotos e vídeos ainda não foi validada; por esse motivo, a senha permanece obrigatória.
-
-O fluxo integrado cobre também senha incorreta sem pedido de câmera, cadastro pela tela de
-perfil, interrupção e retomada, layout em 320 px, senha incorreta na exclusão e login facial
-nos quatro perfis. Os testes usam apenas um schema temporário. Para desenvolvimento local,
-`python -m venv face/.venv` seguido da instalação de `face/requirements-dev.txt` prepara o
-interpretador encontrado automaticamente pelo Next; esse ambiente não acompanha o deploy.
+Para o serviço separado, publique `face/` como FastAPI e configure
+`FACE_SERVICE_TOKEN` aleatório de pelo menos 32 caracteres nesse serviço.
+No Next, selecione `FACE_ENGINE=remote`, `FACE_SERVICE_URL` HTTPS e o mesmo token.
+`FACE_SERVICE_BYPASS_SECRET` é opcional se a proteção de deployment exigir bypass.
+Todas essas variáveis são de servidor, sem `NEXT_PUBLIC_`. O serviço exige token
+também no `/health`. `npm run check:face` verifica a conexão nesse modo.
