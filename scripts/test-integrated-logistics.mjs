@@ -1071,7 +1071,7 @@ try {
       if (facialFixture) {
         const { FACE_MODEL, FACE_CONSENT } = require("../lib/face-policy.ts");
         await checkFacialWorkflow({ page, browser, origin, password: testPassword, sql, model: FACE_MODEL, consent: FACE_CONSENT });
-        check("Facial registration stores encrypted vectors; browser camera login reaches the dashboard with both sessions; mismatch, replay and deleted enrollment fail (controlled provider and simulated camera, not physical biometric validation)");
+        check("Profile verifies password before camera, interrupted capture retries and encrypts enrollment; facial login issues both sessions for all four roles; wrong password, mismatch, replay and deleted enrollment fail (controlled provider and video, not physical biometric validation)");
       }
       if (process.argv.includes("--marco")) {
         const post = (context, body, extra = {}) => context.post(origin + "/api/james/chat", { headers: { origin }, data: body, timeout: 60000, ...extra });

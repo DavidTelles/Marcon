@@ -1,6 +1,6 @@
 "use client";
-import { useEffect, useState } from "react";
-import { faceRequest } from "@/lib/face-client";
+import { useEffect, useRef, useState } from "react";
+import { faceRequest, startFaceRegistration, type FaceChallenge } from "@/lib/face-client";
 import { FaceCapture } from "@/app/components/face/face-capture";
 import styles from "@/app/components/face/face.module.css";
 
@@ -8,7 +8,8 @@ export function FaceRegister() {
   const [enrolled, setEnrolled] = useState<boolean | null>(null);
   const [password, setPassword] = useState("");
   const [consent, setConsent] = useState(false);
-  const [capture, setCapture] = useState(false);
+  const [capture, setCapture] = useState<FaceChallenge | null>(null);
+  const operation = useRef<AbortController | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -28,14 +29,35 @@ export function FaceRegister() {
       .catch((e) => {
         if (!c.signal.aborted) setError(e.message);
       });
-    return () => c.abort();
+    return () => { c.abort(); operation.current?.abort(); };
   }, []);
+  async function register() {
+    if (busy || operation.current || !password || !consent) return;
+    const controller = new AbortController();
+    operation.current = controller;
+    setBusy(true); setError(""); setMessage("");
+    try {
+      const challenge = await startFaceRegistration(password, controller.signal);
+      if (!controller.signal.aborted) setCapture(challenge);
+    } catch (cause) {
+      if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : "Não foi possível verificar a senha.");
+    } finally {
+      if (operation.current === controller) {
+        operation.current = null;
+        if (!controller.signal.aborted) setBusy(false);
+      }
+    }
+  }
   async function remove() {
+    if (busy || operation.current || !password) return;
+    const controller = new AbortController();
+    operation.current = controller;
     setBusy(true);
     setError("");
     setMessage("");
     try {
-      await faceRequest({ action: "delete", password });
+      await faceRequest({ action: "delete", password }, controller.signal);
+      if (controller.signal.aborted) return;
       setEnrolled(false);
       setPassword("");
       setConsent(false);
@@ -43,16 +65,23 @@ export function FaceRegister() {
         "Cadastro facial excluído. Você pode cadastrar novamente quando quiser.",
       );
     } catch (cause) {
-      setError(
+      if (!controller.signal.aborted) setError(
         cause instanceof Error ? cause.message : "Não foi possível excluir.",
       );
     } finally {
-      setBusy(false);
+      if (operation.current === controller) {
+        operation.current = null;
+        if (!controller.signal.aborted) setBusy(false);
+      }
     }
   }
   return (
     <section className={styles.card} aria-labelledby="face-register-heading">
       <h2 id="face-register-heading">Reconhecimento facial</h2>
+      <p>
+        Confirme sua senha atual para autorizar o cadastro. A câmera abre somente
+        depois que a senha for verificada.
+      </p>
       <p>
         {enrolled === null
           ? "Consultando cadastro…"
@@ -74,6 +103,7 @@ export function FaceRegister() {
               type="password"
               autoComplete="current-password"
               maxLength={1024}
+              disabled={busy}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
@@ -82,6 +112,7 @@ export function FaceRegister() {
             <input
               type="checkbox"
               checked={consent}
+              disabled={busy}
               onChange={(e) => setConsent(e.target.checked)}
             />
             Autorizo o processamento das fotos e o armazenamento dos meus dados
@@ -92,13 +123,9 @@ export function FaceRegister() {
             <button
               type="button"
               disabled={busy || !password || !consent}
-              onClick={() => {
-                setError("");
-                setMessage("");
-                setCapture(true);
-              }}
+              onClick={() => void register()}
             >
-              {enrolled ? "Cadastrar rosto novamente" : "Cadastrar rosto"}
+              {busy ? "Verificando senha…" : enrolled ? "Cadastrar rosto novamente" : "Cadastrar rosto"}
             </button>
             {enrolled && (
               <button
@@ -116,9 +143,10 @@ export function FaceRegister() {
         <FaceCapture
           purpose="register"
           password={password}
-          onCancel={() => setCapture(false)}
+          initialChallenge={capture}
+          onCancel={() => { setCapture(null); setPassword(""); }}
           onDone={() => {
-            setCapture(false);
+            setCapture(null);
             setEnrolled(true);
             setPassword("");
             setConsent(false);

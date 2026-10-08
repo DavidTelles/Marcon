@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { faceRequest } from "@/lib/face-client";
+import { faceRequest, validChallenge, type FaceChallenge } from "@/lib/face-client";
 import { FACE_CONSENT, FACE_COUNT, FACE_MODEL } from "@/lib/face-policy";
 import { roleLanding } from "@/lib/workspace-routes";
 import styles from "./face.module.css";
@@ -22,6 +22,7 @@ export function FaceCapture({
   identity,
   password,
   adminTarget,
+  initialChallenge,
   onDone,
   onCancel,
 }: {
@@ -29,6 +30,7 @@ export function FaceCapture({
   identity?: string;
   password?: string;
   adminTarget?: string;
+  initialChallenge?: FaceChallenge;
   onDone: () => void;
   onCancel: () => void;
 }) {
@@ -42,6 +44,7 @@ export function FaceCapture({
   const [error, setError] = useState("");
   const [progress, setProgress] = useState(0);
   const initialStart = useRef(start);
+  const prepared = useRef(initialChallenge);
 
   function stop() {
     operation.current?.abort();
@@ -53,7 +56,11 @@ export function FaceCapture({
   useEffect(() => {
     const startTimer = window.setTimeout(() => void initialStart.current(), 0);
     const hide = () => {
-      if (document.hidden) stop();
+      if (document.hidden && operation.current && !operation.current.signal.aborted) {
+        stop();
+        setBusy(false);
+        setError("Captura interrompida ao sair da página. Tente novamente para iniciar uma nova verificação.");
+      }
     };
     document.addEventListener("visibilitychange", hide);
     window.addEventListener("pagehide", stop);
@@ -66,7 +73,7 @@ export function FaceCapture({
   }, []);
 
   async function start() {
-    if (busy) return;
+    if (operation.current && !operation.current.signal.aborted) return;
     stop();
     const controller = new AbortController();
     operation.current = controller;
@@ -77,7 +84,9 @@ export function FaceCapture({
     try {
       if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia)
         throw new Error("A câmera exige localhost ou HTTPS.");
-      const challenge = await faceRequest<{ model: string; poses: string[] }>(
+      const previous = prepared.current;
+      prepared.current = undefined;
+      const challenge = previous ?? await faceRequest<FaceChallenge>(
         {
           action: "start",
           purpose,
@@ -88,8 +97,8 @@ export function FaceCapture({
         },
         signal,
       );
-      if (challenge.model !== FACE_MODEL)
-        throw new Error("Modelo facial atualizado. Recarregue a página.");
+      if (!validChallenge(challenge))
+        throw new Error("Desafio facial inválido. Inicie novamente.");
       setStatus("Autorize a câmera para continuar.");
       const media = await navigator.mediaDevices.getUserMedia({
         audio: false,
@@ -116,8 +125,17 @@ export function FaceCapture({
         if (!["center", "left", "right"].includes(pose)) throw new Error("Desafio facial inválido. Inicie novamente.");
         setStatus(`${pose === "center" ? "Olhe de frente" : pose === "left" ? "Vire um pouco o rosto para sua direita" : "Vire um pouco o rosto para sua esquerda"}. Foto ${i + 1} de ${FACE_COUNT}.`);
         await new Promise<void>((resolve) => setTimeout(resolve, 2500));
-        if (signal.aborted || !video.current?.videoWidth) return;
-        canvas.getContext("2d")!.drawImage(video.current, 0, 0, 640, 480);
+        if (signal.aborted) return;
+        if (!video.current?.videoWidth || !video.current.videoHeight)
+          throw new Error("A câmera não enviou imagens. Verifique a conexão e tente novamente.");
+        const context = canvas.getContext("2d");
+        if (!context) throw new Error("Não foi possível capturar a imagem da câmera.");
+        const sourceWidth = video.current.videoWidth, sourceHeight = video.current.videoHeight;
+        const scale = Math.min(640 / sourceWidth, 480 / sourceHeight);
+        const w = sourceWidth * scale, h = sourceHeight * scale;
+        context.fillStyle = "black";
+        context.fillRect(0, 0, 640, 480);
+        context.drawImage(video.current, (640 - w) / 2, (480 - h) / 2, w, h);
         images.push(canvas.toDataURL("image/jpeg", 0.75).split(",")[1]);
         setProgress(images.length / FACE_COUNT);
       }

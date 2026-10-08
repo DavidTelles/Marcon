@@ -13,6 +13,13 @@ export class FaceProcessingError extends Error {
   }
 }
 
+export async function checkFaceService() {
+  if (!process.env.FACE_SERVICE_URL && !process.env.VERCEL) return;
+  const health = await faceServiceRequest("/health", undefined);
+  if (health?.status !== "ok" || health.model !== FACE_MODEL || health.dimensions !== 128)
+    throw new FaceProcessingError("Serviço facial incompatível. Verifique os modelos do servidor.");
+}
+
 export async function extractFaces(
   images: string[],
   poses: string[] = Array(FACE_COUNT).fill("center"),

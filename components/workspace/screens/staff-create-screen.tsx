@@ -56,6 +56,7 @@ export function StaffCreateScreen() {
     [savedId, setSavedId] = useState(""),
     [face, setFace] = useState(false),
     [faceDone, setFaceDone] = useState(false),
+    [facePassword, setFacePassword] = useState(""),
     [consent, setConsent] = useState(false),
     [dirty, setDirty] = useState(false);
   useEffect(() => {
@@ -200,14 +201,21 @@ export function StaffCreateScreen() {
             <FaceCapture
               purpose="register"
               adminTarget={savedId}
-              onCancel={() => setFace(false)}
+              password={facePassword}
+              onCancel={() => { setFace(false); setFacePassword(""); }}
               onDone={() => {
                 setFace(false);
                 setFaceDone(true);
+                setFacePassword("");
               }}
             />
           ) : (
             <>
+              <label>
+                Sua senha de administrador para autorizar o cadastro facial
+                <input type="password" autoComplete="current-password" maxLength={1024}
+                  value={facePassword} onChange={(event) => setFacePassword(event.target.value)} />
+              </label>
               <label className="staff-consent">
                 <input
                   type="checkbox"
@@ -221,7 +229,7 @@ export function StaffCreateScreen() {
               <div className="staff-form-actions">
                 <button
                   className="button primary"
-                  disabled={!consent}
+                  disabled={!consent || !facePassword}
                   onClick={() => setFace(true)}
                 >
                   Iniciar cadastro facial

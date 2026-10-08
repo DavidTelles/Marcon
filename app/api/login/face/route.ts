@@ -6,8 +6,9 @@ import { databaseEnabled, getPool, transaction } from "@/lib/db";
 import { verifyPassword } from "@/lib/password";
 import { roleLanding, type Role } from "@/lib/workspace-routes";
 import { decryptFace, encryptFace } from "@/lib/face-crypto";
-import { extractFaces } from "@/lib/face-python";
+import { checkFaceService, extractFaces } from "@/lib/face-python";
 import { apiTokenCookie, backendFetch } from "@/lib/backend-client";
+import { sameOrigin } from "@/lib/request-origin";
 import {
   FACE_CONSENT,
   FACE_COUNT,
@@ -119,7 +120,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    if (request.headers.get("origin") !== request.nextUrl.origin)
+    if (!sameOrigin(request))
       return fail("Origem não autorizada.", 403);
     if (!databaseEnabled())
       return fail("Configure o Neon para usar o acesso facial.", 503);
@@ -166,14 +167,16 @@ export async function POST(request: NextRequest) {
           "Acesso facial indisponível para esta conta. Entre com senha.",
           401,
         );
-      if (!managing && (typeof body.password !== "string" || !await verifyPassword(body.password, account.password_hash)))
+      if (!managing && (typeof body.password !== "string" || body.password.length > 1024 || !verifyPassword(body.password, account.password_hash)))
         return fail("Confirme a senha: a prova de vida facial ainda não foi validada contra foto e vídeo.", 401);
+      const [actors] = adminTarget ? await getPool().execute<UserRow[]>(
+        "SELECT id,password_hash FROM users WHERE employee_no=? AND active=TRUE LIMIT 1", [user!.id],
+      ) : [rows];
       if (
         managing &&
-        !adminTarget &&
         (typeof body.password !== "string" ||
           body.password.length > 1024 ||
-          !verifyPassword(body.password, account.password_hash))
+          !actors[0] || !verifyPassword(body.password, actors[0].password_hash))
       )
         return fail("Senha atual incorreta.", 401);
       if (registering && body.consent !== FACE_CONSENT)
@@ -217,6 +220,7 @@ export async function POST(request: NextRequest) {
             401,
           );
       }
+      await checkFaceService();
       const turns = randomBytes(1)[0] % 2 ? ["left", "right"] : ["right", "left"];
       const poses = ["center", turns[0], "center", turns[1], "center"];
       const token = randomBytes(32).toString("base64url");

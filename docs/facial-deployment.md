@@ -36,6 +36,16 @@ npm run check:hosting -- --url https://marcon-ten.vercel.app
 
 No site publicado, entre com senha, abra o perfil e faça o cadastro facial com a câmera. Depois, saia e teste o login facial com a mesma conta. O login facial também exige a senha. O Next verifica o desafio, compara os vetores e cria tanto a sessão da interface quanto o token do backend. Confirme acesso ao painel e às operações após o login.
 
+Em **Editar perfil → Reconhecimento facial**, informe a senha atual e confirme o consentimento.
+O botão de cadastro verifica a senha no servidor antes de abrir a câmera; uma senha incorreta
+não inicia a captura nem altera o rosto cadastrado. Substituir ou excluir o cadastro também exige
+a senha. Quando o administrador cadastra o rosto de um funcionário, confirma sua própria senha.
+Uma captura interrompida ao sair da página libera a câmera e permite iniciar uma nova tentativa.
+As imagens preservam a proporção do vídeo para evitar distorção entre câmeras diferentes.
+Quando usa um serviço facial HTTP, o Next confirma sua disponibilidade e o modelo antes de
+abrir a câmera. Falta de configuração ou indisponibilidade não inicia uma captura que não
+poderia ser processada.
+
 Cadastros anteriores à política `server-face-v2` precisam de novo cadastro para registrar o consentimento de processamento no serviço. As fotografias não são gravadas pelo código da aplicação; os vetores são criptografados no Neon com chave derivada de `SESSION_SECRET`. Alterar esse segredo exige novo cadastro facial.
 
 ## Testes disponíveis e alcance
@@ -53,3 +63,9 @@ npm run test:face:http
 Use o interpretador configurado em `FACE_PYTHON` no lugar de `python`, se necessário. Os testes de integração criam e removem apenas um schema temporário, sem alterar registros existentes no schema público. Faça `npm run build` antes dos testes que usam `--ui`.
 
 Os testes verificam conexão Neon por HTTP, transações, login, operações, cadastro facial, vetores criptografados, emissão das duas sessões, recusa de vetor divergente, exclusão e desafio de uso único. O teste de fluxo facial usa um provedor controlado e câmera simulada no navegador, incluindo o redirecionamento ao painel; os testes Python e HTTP usam os modelos reais e uma imagem sintética. Isso não substitui a validação com pessoas autorizadas e câmera real no domínio publicado. A resistência a fotos e vídeos ainda não foi validada; por esse motivo, a senha permanece obrigatória.
+
+O fluxo integrado cobre também senha incorreta sem pedido de câmera, cadastro pela tela de
+perfil, interrupção e retomada, layout em 320 px, senha incorreta na exclusão e login facial
+nos quatro perfis. Os testes usam apenas um schema temporário. Para desenvolvimento local,
+`python -m venv face/.venv` seguido da instalação de `face/requirements-dev.txt` prepara o
+interpretador encontrado automaticamente pelo Next; esse ambiente não acompanha o deploy.
