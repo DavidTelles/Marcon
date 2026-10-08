@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import sharp from "sharp";
 import { faceEngine, checkNodeFaceEngine, extractNodeFaces } from "../lib/face-node.mjs";
+import { acceptsFacePose } from "../lib/face-capture-policy.mjs";
 
 const images = await Promise.all(Array.from({ length: 5 }, async (_, i) =>
   (await sharp("tests/fixtures/ai-face.jpg").resize(640, 640).linear(1, i * 4)
@@ -65,6 +66,27 @@ test("640x480 camera frames preserve aspect ratio and satisfy both randomized tu
     assert.equal(vectors.length, 5);
     assert.ok(vectors.every((v, i) => vectors.slice(i + 1).every((other) => cosine(v, other) >= 0.363)));
   }
+});
+
+test("automatic login needs only three frontal frames; cannot reduce registration or request turns", async () => {
+  const vectors = await extractNodeFaces(images.slice(0, 3), undefined, "login");
+  assert.equal(vectors.length, 3);
+  for (const [frames, poses, purpose] of [
+    [images, undefined, "login"], [images.slice(0, 3), undefined, "register"],
+    [images.slice(0, 3), Array(3).fill("left"), "login"], [images, undefined, "invalid"],
+  ]) await assert.rejects(extractNodeFaces(frames, poses, purpose), error => error.status === 422);
+  await assert.rejects(extractNodeFaces(Array(3).fill(images[0]), undefined, "login"), /repetidas/);
+});
+
+test("registration accepts gentle turns and relaxed centering, but keeps both direction checks", () => {
+  assert.ok(acceptsFacePose(-0.12, "left"));
+  assert.ok(acceptsFacePose(0.12, "right"));
+  assert.ok(acceptsFacePose(0.30, "center"));
+  assert.equal(acceptsFacePose(0, "left"), false);
+  assert.equal(acceptsFacePose(0, "right"), false);
+  assert.equal(acceptsFacePose(0.12, "left"), false);
+  assert.equal(acceptsFacePose(-0.12, "right"), false);
+  assert.equal(acceptsFacePose(0.40, "center"), false);
 });
 
 test("existing OpenCV enrollments remain compatible with Node SFace vectors", { skip: !process.argv.includes("--compare-python") }, async () => {

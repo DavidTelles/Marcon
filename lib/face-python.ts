@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { join } from "node:path";
 import { existsSync } from "node:fs";
-import { FACE_COUNT, FACE_MODEL, validEmbedding } from "./face-policy";
+import { FACE_MODEL, faceCapturePolicy, validEmbedding, type FacePurpose } from "./face-policy";
 import { faceServiceRequest } from "./face-service.mjs";
 import { faceEngine, checkNodeFaceEngine, extractNodeFaces } from "./face-node.mjs";
 
@@ -28,26 +28,30 @@ export async function checkFaceService() {
 
 export async function extractFaces(
   images: string[],
-  poses: string[] = Array(FACE_COUNT).fill("center"),
+  poses?: string[],
+  purpose: FacePurpose = "register",
 ): Promise<number[][]> {
+  const count = faceCapturePolicy(purpose).count;
+  poses ??= Array(count).fill("center");
   const engine = faceEngine();
   if (engine === "remote") {
     const result = await faceServiceRequest("/extract", {
       model: FACE_MODEL,
       images,
       poses,
+      purpose,
     });
     if (
       result?.model !== FACE_MODEL ||
       !Array.isArray(result.embeddings) ||
-      result.embeddings.length !== FACE_COUNT ||
+      result.embeddings.length !== count ||
       !result.embeddings.every(validEmbedding)
     )
       throw new FaceProcessingError("Resposta do serviço facial inválida.");
     return result.embeddings;
   }
   if (engine === "node")
-    return extractNodeFaces(images, poses);
+    return extractNodeFaces(images, poses, purpose);
   const localPython = join(
     process.cwd(),
     "face",
@@ -106,7 +110,7 @@ export async function extractFaces(
             result.kind === "capture" ? 422 : 503,
           );
         if (
-          result.embeddings.length !== FACE_COUNT ||
+          result.embeddings.length !== count ||
           !result.embeddings.every(validEmbedding)
         )
           throw new FaceProcessingError("Resposta facial inválida.");
@@ -121,6 +125,6 @@ export async function extractFaces(
         );
       }
     });
-    child.stdin.end(JSON.stringify({ images, poses }));
+    child.stdin.end(JSON.stringify({ images, poses, purpose }));
   });
 }

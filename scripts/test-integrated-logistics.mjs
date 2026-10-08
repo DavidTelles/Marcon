@@ -1078,7 +1078,7 @@ try {
         const { FACE_MODEL, FACE_CONSENT } = require("../lib/face-policy.ts");
         const { checkNodeFacialWorkflow } = await import("./facial-node-flow-checks.mjs");
         await checkNodeFacialWorkflow({ page, browser, origin, password: testPassword, sql, model: FACE_MODEL, consent: FACE_CONSENT });
-        check("Real Node YuNet/SFace with VERCEL=1 and no FACE service/Python configuration: five challenged photos, encrypted enrollment, four-role login, both sessions, wrong password, replay and deletion (synthetic perspective fixtures)");
+        check("Real Node YuNet/SFace with VERCEL=1 and no FACE service/Python configuration: five enrollment frames with turns, three automatic frontal login frames, server-bound capture count, encrypted enrollment, four-role login, both sessions, wrong password, replay and deletion (synthetic perspective fixtures)");
       }
       if (process.argv.includes("--marco")) {
         const post = (context, body, extra = {}) => context.post(origin + "/api/james/chat", { headers: { origin }, data: body, timeout: 60000, ...extra });

@@ -37,9 +37,14 @@ def extract(payload):
     if not isinstance(payload, dict):
         raise CaptureError("Dados inválidos.")
     images = payload.get("images")
-    poses = payload.get("poses", ["center"] * 5)
-    if not isinstance(images, list) or len(images) != 5 or not isinstance(poses, list) or len(poses) != 5 or any(p not in ("center", "left", "right") for p in poses):
-        raise CaptureError("São necessárias cinco fotos e posições válidas.")
+    purpose = payload.get("purpose", "register")
+    if purpose not in ("register", "login"):
+        raise CaptureError("Finalidade facial inválida.")
+    count = 3 if purpose == "login" else 5
+    poses = payload.get("poses", ["center"] * count)
+    allowed = ("center",) if purpose == "login" else ("center", "left", "right")
+    if not isinstance(images, list) or len(images) != count or not isinstance(poses, list) or len(poses) != count or any(p not in allowed for p in poses):
+        raise CaptureError("Quantidade de fotos ou posições inválidas.")
     detector, recognizer = engines()
     features = []
     previous = None
@@ -66,10 +71,11 @@ def extract(payload):
         if eye_span < 10:
             raise CaptureError("Olhos não enquadrados. Ajuste a câmera.")
         yaw = (float(face[8]) - (float(face[4]) + float(face[6])) / 2) / eye_span
-        if (pose == "center" and abs(yaw) > 0.22) or (pose == "left" and yaw > -0.18) or (pose == "right" and yaw < 0.18):
-            raise CaptureError("A posição do rosto não corresponde ao desafio. Siga as instruções da captura.")
+        # Kept in sync with lib/face-capture-policy.mjs for the optional engine.
+        if (pose == "center" and abs(yaw) > 0.35) or (pose == "left" and yaw > -0.10) or (pose == "right" and yaw < 0.10):
+            raise CaptureError("A posição do rosto não corresponde ao desafio. Vire levemente para o lado pedido ou olhe de frente.")
         gray = cv2.resize(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), (64, 48)).astype(np.float32)
-        if previous is not None and np.mean(np.abs(gray - previous)) < 0.25:
+        if previous is not None and np.mean(np.abs(gray - previous)) < (0.05 if purpose == "login" else 0.25):
             raise CaptureError("Capturas repetidas. Use novas imagens da câmera.")
         previous = gray
         aligned = recognizer.alignCrop(frame, faces[0])

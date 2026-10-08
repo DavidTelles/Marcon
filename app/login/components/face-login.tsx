@@ -14,7 +14,7 @@ export function FaceLogin({
     <section className={styles.faceTest} aria-labelledby="local-face-title">
       <h2 id="local-face-title">Entrar com reconhecimento facial</h2>
       <p>
-        Use o rosto cadastrado e siga as posições pedidas. A senha é exigida
+        Olhe para a câmera. A captura é automática, sem precisar virar o rosto. A senha é exigida
         como confirmação adicional: a proteção contra foto e vídeo ainda não foi validada.
       </p>
       <FaceCapture

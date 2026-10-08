@@ -17,9 +17,19 @@ export async function checkNodeFacialWorkflow({ page, browser, origin, password,
   }
   const finish = async (request, challenge) => {
     assert.equal(challenge.status(), 200, await challenge.text());
-    const { poses, model: returnedModel } = await challenge.json();
+    const { poses, purpose, model: returnedModel } = await challenge.json();
     assert.equal(returnedModel, model);
-    assert.ok(poses.includes("left") && poses.includes("right"));
+    if (purpose === "register") {
+      assert.equal(poses.length, 5);
+      assert.ok(poses.includes("left") && poses.includes("right"));
+      // A client cannot reduce enrollment to the shorter login policy.
+      const forged = await post(request, { action: "finish", purpose: "login", model, images: samples.center.slice(0, 3) });
+      assert.equal(forged.status(), 422);
+    } else {
+      assert.equal(purpose, "login");
+      assert.deepEqual(poses, ["center", "center", "center"]);
+      assert.equal((await post(request, { action: "finish", model, images: samples.center })).status(), 422);
+    }
     return post(request, { action: "finish", model, images: poses.map((pose, i) => samples[pose][i]) });
   };
   assert.equal((await start(page.request, "register", { password: "incorrect" })).status(), 401);

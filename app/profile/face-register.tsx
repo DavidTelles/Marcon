@@ -87,7 +87,7 @@ export function FaceRegister() {
           ? "Consultando cadastro…"
           : enrolled
             ? "Você possui um rosto cadastrado neste sistema."
-            : "Cadastre seu rosto para entrar usando a câmera do computador."}
+            : "Cadastre seu rosto com movimentos leves para os dois lados. Depois, basta olhar para a câmera no login."}
       </p>
       <p>
         As cinco fotos serão enviadas ao serviço de verificação facial. Apenas

@@ -11,9 +11,9 @@ import { apiTokenCookie, backendFetch } from "@/lib/backend-client";
 import { sameOrigin } from "@/lib/request-origin";
 import {
   FACE_CONSENT,
-  FACE_COUNT,
   FACE_MODEL,
   FACE_TTL,
+  faceCapturePolicy,
   coherentCapture,
   matchesEnrollment,
   validImages,
@@ -230,7 +230,8 @@ export async function POST(request: NextRequest) {
       }
       await checkFaceService();
       const turns = randomBytes(1)[0] % 2 ? ["left", "right"] : ["right", "left"];
-      const poses = ["center", turns[0], "center", turns[1], "center"];
+      const poses = registering ? ["center", turns[0], "center", turns[1], "center"] :
+        Array(faceCapturePolicy("login").count).fill("center");
       const token = randomBytes(32).toString("base64url");
       await getPool().execute(
         "DELETE FROM face_challenges WHERE expires_at < UTC_TIMESTAMP(3)",
@@ -248,7 +249,7 @@ export async function POST(request: NextRequest) {
           account.password_hash,
         ],
       );
-      const response = json({ poses, model: FACE_MODEL, expiresIn: FACE_TTL });
+      const response = json({ purpose: registering ? "register" : "login", poses, model: FACE_MODEL, expiresIn: FACE_TTL });
       response.cookies.set(challengeCookie, token, cookiesFor(request));
       return response;
     }
@@ -263,17 +264,20 @@ export async function POST(request: NextRequest) {
     const challenge = challenges[0];
     if (!challenge)
       return fail("Captura expirada ou já utilizada. Inicie novamente.");
+    if (challenge.purpose !== "register" && challenge.purpose !== "login")
+      return fail("Desafio facial inválido. Inicie novamente.");
+    const count = faceCapturePolicy(challenge.purpose).count;
     const images = body.images;
-    if (body.model !== FACE_MODEL || !validImages(images))
+    if (body.model !== FACE_MODEL || !validImages(images, count))
       return fail(
-        "Captura inválida. Tire cinco fotos com boa iluminação.",
+        "Captura inválida. Inicie novamente com boa iluminação.",
         422,
       );
-    if (new Set(images).size !== FACE_COUNT)
-      return fail("As cinco fotos precisam ser capturas diferentes.", 422);
+    if (new Set(images).size !== count)
+      return fail("As fotos precisam ser capturas diferentes.", 422);
     let samples: number[][];
     try {
-      samples = await extractFaces(images, typeof challenge.poses === "string" ? JSON.parse(challenge.poses) : challenge.poses);
+      samples = await extractFaces(images, typeof challenge.poses === "string" ? JSON.parse(challenge.poses) : challenge.poses, challenge.purpose);
     } catch (error) {
       if ((error as NodeJS.ErrnoException)?.code === "ENOENT")
         return fail(
@@ -287,9 +291,9 @@ export async function POST(request: NextRequest) {
         typeof (error as { status?: number }).status === "number" ? (error as { status: number }).status : 422,
       );
     }
-    if (!coherentCapture(samples))
+    if (!coherentCapture(samples, count))
       return fail(
-        "Os rostos das cinco fotos não coincidem. Tente novamente.",
+        "Os rostos das fotos não coincidem. Tente novamente.",
         422,
       );
     const sessionUser =
@@ -297,7 +301,7 @@ export async function POST(request: NextRequest) {
     const [others] = await getPool().execute<(StoredFace & { user_id: number })[]>(
       "SELECT f.user_id,f.embeddings,f.model_version FROM face_credentials f JOIN users u ON u.id=f.user_id WHERE u.active=1 AND f.user_id<>? AND f.model_version=? LIMIT 10001", [challenge.user_id, FACE_MODEL]);
     if (others.length > 10000) return fail("Cadastro facial excedeu o limite de verificação. Entre com senha.", 503);
-    if (others.some((other) => matchesEnrollment(samples, decryptFace(Number(other.user_id), other.embeddings))))
+    if (others.some((other) => matchesEnrollment(samples, decryptFace(Number(other.user_id), other.embeddings), count)))
       return fail("Identidade facial ambígua. Use a senha e solicite revisão dos cadastros.", 409);
     let loginGrant: string | undefined;
     const response = await transaction(async (c) => {
@@ -345,7 +349,7 @@ export async function POST(request: NextRequest) {
         !stored[0] ||
         stored[0].model_version !== FACE_MODEL ||
         stored[0].consent_version !== FACE_CONSENT ||
-        !matchesEnrollment(samples, decryptFace(user.id, stored[0].embeddings))
+        !matchesEnrollment(samples, decryptFace(user.id, stored[0].embeddings), count)
       )
         return fail(
           "Rosto não confirmado. Tente novamente ou entre com senha.",

@@ -18,6 +18,17 @@ outras plataformas e bibliotecas GPU. Os modelos são carregados uma vez por
 instância. Câmeras com outras proporções são enquadradas sem distorção e os
 pontos faciais voltam às coordenadas originais antes do alinhamento SFace.
 
+O login captura automaticamente três imagens de frente: 800 ms para estabilizar
+a câmera e mais duas capturas a cada 400 ms, total de cerca de 1,6 segundo de
+captura, além de permissão, inicialização e processamento. Não pede giros.
+O cadastro mantém cinco imagens e um movimento leve para cada lado, com cerca
+de 8,4 segundos de captura. A tolerância frontal é 0,35 na razão dos pontos
+faciais; o giro mínimo é 0,10 (antes 0,18). Isso não representa ângulos em graus.
+Rosto único, coerência das imagens, senha e limiar de identidade são preservados.
+A finalidade e a quantidade vêm do desafio armazenado no servidor; o navegador
+não pode transformar um cadastro em login para evitar os movimentos. Cadastros
+existentes de cinco vetores continuam válidos, sem necessidade de recadastro.
+
 O motor padrão é `node`, mesmo se houver configurações antigas `FACE_SERVICE_*`.
 Somente `FACE_ENGINE=remote` seleciona o serviço Python separado. Um endereço
 antigo ou incompleto não impede o motor padrão de funcionar.
@@ -40,6 +51,7 @@ a fotos e vídeos não foi validada com pessoas autorizadas e câmera física.
 npm run check:face
 npm run check:hosting -- --url https://marcon-ten.vercel.app --face
 npm run test:face:node
+npm run test:face:policy
 npm run build
 node scripts/test-integrated-logistics.mjs --ui --embedded --face-node
 node scripts/test-integrated-logistics.mjs --ui --embedded --face
@@ -53,7 +65,8 @@ retorna somente disponibilidade, modelo e dimensões, sem dados de usuários.
 ambiente Python opcional e execute `npm run test:face:node -- --compare-python`.
 
 `--face-node` testa as rotas do build de produção com `VERCEL=1`, sem serviço
-facial externo ou Python: cadastro criptografado, cinco posições solicitadas,
+facial externo ou Python: cadastro criptografado, cinco capturas no cadastro e
+três capturas frontais automáticas no login,
 login dos quatro perfis, ambas as sessões, senha incorreta, recusa de repetição
 do desafio e exclusão. Usa imagens sintéticas com perspectiva. `--face` usa
 câmera e provedor controlados para testar a interface, senha antes da câmera,
@@ -73,3 +86,5 @@ No Next, selecione `FACE_ENGINE=remote`, `FACE_SERVICE_URL` HTTPS e o mesmo toke
 `FACE_SERVICE_BYPASS_SECRET` é opcional se a proteção de deployment exigir bypass.
 Todas essas variáveis são de servidor, sem `NEXT_PUBLIC_`. O serviço exige token
 também no `/health`. `npm run check:face` verifica a conexão nesse modo.
+Ao atualizar os fluxos de captura, publique também o código atualizado de `face/`
+se utilizar esse motor remoto, para manter a regra de três capturas no login.

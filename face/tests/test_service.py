@@ -53,6 +53,14 @@ class FacialServiceTests(unittest.TestCase):
         self.assertTrue(all(len(vector) == 128 for vector in result["embeddings"]))
         self.assertNotIn("token", result)
 
+    def test_automatic_login_accepts_three_frontal_frames_only(self):
+        payload = {"model": MODEL, "purpose": "login", "images": self.images[:3], "poses": ["center"] * 3}
+        response = client.post("/extract", headers=headers, json=payload)
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(len(response.json()["embeddings"]), 3)
+        for invalid in [{**payload, "images": self.images}, {**payload, "poses": ["left"] * 3}, {**payload, "purpose": "register"}]:
+            self.assertEqual(client.post("/extract", headers=headers, json=invalid).status_code, 422)
+
     def test_pose_challenge_and_repeated_frames_are_rejected(self):
         for payload in [self.payload(poses=["left"] * 5), self.payload(images=[self.images[0]] * 5)]:
             response = client.post("/extract", headers=headers, json=payload)

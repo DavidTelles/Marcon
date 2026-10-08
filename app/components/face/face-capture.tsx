@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { faceRequest, validChallenge, type FaceChallenge } from "@/lib/face-client";
-import { FACE_CONSENT, FACE_COUNT, FACE_MODEL } from "@/lib/face-policy";
+import { FACE_CONSENT, FACE_MODEL, captureDelayMs } from "@/lib/face-policy";
 import { roleLanding } from "@/lib/workspace-routes";
 import styles from "./face.module.css";
 
@@ -97,7 +97,7 @@ export function FaceCapture({
         },
         signal,
       );
-      if (!validChallenge(challenge))
+      if (!validChallenge(challenge, purpose))
         throw new Error("Desafio facial inválido. Inicie novamente.");
       setStatus("Autorize a câmera para continuar.");
       const media = await navigator.mediaDevices.getUserMedia({
@@ -119,12 +119,14 @@ export function FaceCapture({
       canvas.width = 640;
       canvas.height = 480;
       const images: string[] = [];
-      for (let i = 0; i < FACE_COUNT; i++) {
+      const count = challenge.poses.length;
+      for (let i = 0; i < count; i++) {
         if (signal.aborted) return;
         const pose = challenge.poses?.[i];
         if (!["center", "left", "right"].includes(pose)) throw new Error("Desafio facial inválido. Inicie novamente.");
-        setStatus(`${pose === "center" ? "Olhe de frente" : pose === "left" ? "Vire um pouco o rosto para sua direita" : "Vire um pouco o rosto para sua esquerda"}. Foto ${i + 1} de ${FACE_COUNT}.`);
-        await new Promise<void>((resolve) => setTimeout(resolve, 2500));
+        setStatus(purpose === "login" ? "Olhe para a câmera. A captura é automática." :
+          `${pose === "center" ? "Olhe de frente" : pose === "left" ? "Vire levemente o rosto para sua direita" : "Vire levemente o rosto para sua esquerda"}. Foto ${i + 1} de ${count}.`);
+        await new Promise<void>((resolve) => setTimeout(resolve, captureDelayMs(purpose, pose, i)));
         if (signal.aborted) return;
         if (!video.current?.videoWidth || !video.current.videoHeight)
           throw new Error("A câmera não enviou imagens. Verifique a conexão e tente novamente.");
@@ -137,11 +139,11 @@ export function FaceCapture({
         context.fillRect(0, 0, 640, 480);
         context.drawImage(video.current, (640 - w) / 2, (480 - h) / 2, w, h);
         images.push(canvas.toDataURL("image/jpeg", 0.75).split(",")[1]);
-        setProgress(images.length / FACE_COUNT);
+        setProgress(images.length / count);
       }
       stream.current?.getTracks().forEach((track) => track.stop());
       stream.current = null;
-      setStatus("Analisando as cinco fotos no servidor…");
+      setStatus(purpose === "login" ? "Verificando seu rosto…" : "Conferindo seu cadastro facial…");
       const result = await faceRequest<{ ok?: boolean; destination?: string }>(
         {
           action: "finish",

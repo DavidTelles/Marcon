@@ -1,9 +1,13 @@
 // OpenCV YuNet + SFace from the supplied Python prototype.
+import { FACE_REGISTER_COUNT, FACE_LOGIN_COUNT } from "./face-capture-policy.mjs";
+export { FACE_LOGIN_COUNT, faceCapturePolicy, captureDelayMs } from "./face-capture-policy.mjs";
+export type FacePurpose = "register" | "login";
 export const FACE_MODEL = "opencv-yunet-sface-2023mar-v1";
 export const FACE_THRESHOLD = 0.363;
 export const FACE_CONSENT = "server-face-v2";
 export const FACE_TTL = 120_000;
-export const FACE_COUNT = 5;
+export const FACE_COUNT = FACE_REGISTER_COUNT;
+const validCount = (count: number) => count === FACE_COUNT || count === FACE_LOGIN_COUNT;
 
 export function validEmbedding(value: unknown): value is number[] {
   return (
@@ -28,10 +32,10 @@ export function similarity(a: number[], b: number[]): number {
   return aa > 0 && bb > 0 ? dot / Math.sqrt(aa * bb) : -1;
 }
 
-export function validImages(value: unknown): value is string[] {
+export function validImages(value: unknown, count = FACE_COUNT): value is string[] {
   return (
     Array.isArray(value) &&
-    value.length === FACE_COUNT &&
+    validCount(count) && value.length === count &&
     value.every(
       (image) =>
         typeof image === "string" &&
@@ -45,9 +49,10 @@ export function validImages(value: unknown): value is string[] {
 export function matchesEnrollment(
   samples: number[][],
   enrolled: number[][],
+  count = FACE_COUNT,
 ): boolean {
   if (
-    samples.length !== FACE_COUNT ||
+    !validCount(count) || samples.length !== count ||
     enrolled.length !== FACE_COUNT ||
     !samples.every(validEmbedding) ||
     !enrolled.every(validEmbedding)
@@ -60,8 +65,8 @@ export function matchesEnrollment(
   );
 }
 
-export function coherentCapture(samples: number[][]): boolean {
-  if (samples.length !== FACE_COUNT || !samples.every(validEmbedding))
+export function coherentCapture(samples: number[][], count = FACE_COUNT): boolean {
+  if (!validCount(count) || samples.length !== count || !samples.every(validEmbedding))
     return false;
   return samples.every((sample, index) =>
     samples

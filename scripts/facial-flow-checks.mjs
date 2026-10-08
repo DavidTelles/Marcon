@@ -55,7 +55,7 @@ export async function startFacialFixtureService() {
     res.end(
       JSON.stringify({
         model: input.model,
-        embeddings: Array.from({ length: 5 }, () => vector),
+        embeddings: Array.from({ length: input.images.length }, () => vector),
       }),
     );
   });
@@ -77,14 +77,15 @@ export async function checkFacialWorkflow({
   model,
   consent,
 }) {
-  const frames = (label) =>
-    Array.from({ length: 5 }, (_, i) =>
+  const pending = new WeakMap();
+  const frames = (label, count = 5) =>
+    Array.from({ length: count }, (_, i) =>
       Buffer.from(`${label}-${i}-`.repeat(300)).toString("base64"),
     );
   const post = (request, data) =>
     request.post(origin + "/api/login/face", { headers: { origin }, data });
-  const start = (request, purpose, extra = {}) =>
-    post(request, {
+  const start = async (request, purpose, extra = {}) => {
+    const response = await post(request, {
       action: "start",
       purpose,
       identity: "test-admin",
@@ -92,8 +93,11 @@ export async function checkFacialWorkflow({
       consent,
       ...extra,
     });
+    if (response.ok()) pending.set(request, await response.json());
+    return response;
+  };
   const finish = (request, label = "same") =>
-    post(request, { action: "finish", model, images: frames(label) });
+    post(request, { action: "finish", model, images: frames(label, pending.get(request)?.poses.length ?? 5) });
   assert.equal(
     (await page.request.get(origin + "/api/login/face")).status(),
     200,
@@ -251,6 +255,24 @@ export async function checkFacialWorkflow({
         };
       });
       await cameraPage.bringToFront();
+      let cameraOpenedAt;
+      let captureMs;
+      const loginRequests = [];
+      await cameraPage.exposeFunction("recordFaceCameraOpened", () => { cameraOpenedAt = Date.now(); });
+      await cameraPage.addInitScript(() => {
+        const getUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+        navigator.mediaDevices.getUserMedia = async (constraints) => {
+          const media = await getUserMedia(constraints);
+          await window.recordFaceCameraOpened();
+          return media;
+        };
+      });
+      cameraPage.on("request", request => {
+        if (!request.url().endsWith("/api/login/face") || request.method() !== "POST") return;
+        const body = request.postDataJSON();
+        loginRequests.push(body);
+        if (body.action === "finish") captureMs = Date.now() - cameraOpenedAt;
+      });
       await cameraPage.goto(origin + "/login");
       await cameraPage.getByLabel("E-mail ou matrícula").fill("test-admin");
       await cameraPage.getByLabel("Senha", { exact: true }).fill(password);
@@ -277,6 +299,10 @@ export async function checkFacialWorkflow({
         sessionNames.includes("marcon_session") &&
           sessionNames.includes("marcon_api_token"),
       );
+      const automaticCapture = loginRequests.find(body => body.action === "finish");
+      assert.equal(automaticCapture.images.length, 3, "Login sends only three automatic frontal frames");
+      assert.ok(captureMs >= 1200 && captureMs < 5000, `Camera capture took ${captureMs}ms; processing/network excluded`);
+      console.log(`PASS: automatic frontal browser login capture in ${captureMs}ms (simulated camera)`);
       assert.equal(
         (await cameraContext.request.get(origin + "/api/workspace")).status(),
         200,
