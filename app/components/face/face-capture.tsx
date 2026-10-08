@@ -37,7 +37,9 @@ export function FaceCapture({
   const video = useRef<HTMLVideoElement>(null);
   const stream = useRef<MediaStream | null>(null);
   const operation = useRef<AbortController | null>(null);
+  const pendingPlayback = useRef<{ resolve: () => void; reject: (cause: Error) => void } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [playbackBlocked, setPlaybackBlocked] = useState(false);
   const [status, setStatus] = useState(
     "A câmera será usada somente durante esta verificação.",
   );
@@ -48,17 +50,22 @@ export function FaceCapture({
 
   function stop() {
     operation.current?.abort();
+    pendingPlayback.current?.reject(new DOMException("Captura cancelada.", "AbortError"));
+    pendingPlayback.current = null;
     stream.current?.getTracks().forEach((track) => track.stop());
     stream.current = null;
     if (video.current) video.current.srcObject = null;
   }
 
   useEffect(() => {
+    // The login form may have been scrolled below the new preview on a phone.
+    video.current?.scrollIntoView({ block: "center" });
     const startTimer = window.setTimeout(() => void initialStart.current(), 0);
     const hide = () => {
       if (document.hidden && operation.current && !operation.current.signal.aborted) {
         stop();
         setBusy(false);
+        setPlaybackBlocked(false);
         setError("Captura interrompida ao sair da página. Tente novamente para iniciar uma nova verificação.");
       }
     };
@@ -72,6 +79,23 @@ export function FaceCapture({
     };
   }, []);
 
+  function resumePlayback() {
+    const pending = pendingPlayback.current;
+    if (!pending || !video.current) return;
+    // Invoke play directly in the tap handler for browsers blocking autoplay.
+    void video.current.play().then(() => {
+      if (pendingPlayback.current !== pending) return;
+      pendingPlayback.current = null;
+      setPlaybackBlocked(false);
+      pending.resolve();
+    }).catch(() => {
+      if (pendingPlayback.current !== pending) return;
+      pendingPlayback.current = null;
+      setPlaybackBlocked(false);
+      pending.reject(new Error("Não foi possível iniciar a prévia da câmera. Tente novamente."));
+    });
+  }
+
   async function start() {
     if (operation.current && !operation.current.signal.aborted) return;
     stop();
@@ -79,6 +103,7 @@ export function FaceCapture({
     operation.current = controller;
     const signal = controller.signal;
     setBusy(true);
+    setPlaybackBlocked(false);
     setError("");
     setProgress(0);
     try {
@@ -113,8 +138,22 @@ export function FaceCapture({
         return;
       }
       stream.current = media;
-      video.current!.srcObject = media;
-      await video.current!.play();
+      const preview = video.current!;
+      preview.muted = true;
+      preview.defaultMuted = true;
+      preview.playsInline = true;
+      preview.srcObject = media;
+      try {
+        await preview.play();
+      } catch (cause) {
+        if (!(cause instanceof Error) || cause.name !== "NotAllowedError") throw cause;
+        if (signal.aborted) return;
+        setStatus("Toque em Ativar prévia da câmera para continuar a captura automática.");
+        setPlaybackBlocked(true);
+        await new Promise<void>((resolve, reject) => {
+          pendingPlayback.current = { resolve, reject };
+        });
+      }
       const canvas = document.createElement("canvas");
       canvas.width = 640;
       canvas.height = 480;
@@ -168,6 +207,7 @@ export function FaceCapture({
       if (operation.current === controller) {
         stop();
         setBusy(false);
+        setPlaybackBlocked(false);
       }
     }
   }
@@ -190,6 +230,11 @@ export function FaceCapture({
         </p>
       )}
       <div className={styles.actions}>
+        {playbackBlocked && (
+          <button type="button" onClick={resumePlayback}>
+            Ativar prévia da câmera
+          </button>
+        )}
         {error && !busy && (
           <button type="button" onClick={() => void start()}>
             Tentar novamente

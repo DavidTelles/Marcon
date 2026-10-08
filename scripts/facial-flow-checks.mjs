@@ -1,20 +1,30 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { randomBytes } from "node:crypto";
-import { expect } from "@playwright/test";
+import { devices, expect } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
 
-async function installCamera(page) {
-  await page.addInitScript(() => {
-    window.faceTest = { calls: 0, tracks: [] };
+async function installCamera(page, options = {}) {
+  await page.addInitScript(({ portrait, denyFirst, blockAutoplay }) => {
+    window.faceTest = { calls: 0, tracks: [], playAttempts: 0 };
+    if (blockAutoplay) {
+      const play = HTMLMediaElement.prototype.play;
+      HTMLMediaElement.prototype.play = function () {
+        if (this.srcObject && window.faceTest.playAttempts++ === 0)
+          return Promise.reject(new DOMException("Autoplay blocked", "NotAllowedError"));
+        return play.call(this);
+      };
+    }
     navigator.mediaDevices.getUserMedia = async () => {
       window.faceTest.calls++;
+      if (denyFirst && window.faceTest.calls === 1)
+        throw new DOMException("Permission denied", "NotAllowedError");
       const canvas = document.createElement("canvas");
-      canvas.width = 640; canvas.height = 480;
+      canvas.width = portrait ? 480 : 640; canvas.height = portrait ? 640 : 480;
       const c = canvas.getContext("2d"); let frame = 0;
       const draw = () => {
         frame++; c.fillStyle = `rgb(${frame % 255},100,150)`;
-        c.fillRect(0, 0, 640, 480); c.fillStyle = "white";
+        c.fillRect(0, 0, canvas.width, canvas.height); c.fillStyle = "white";
         c.font = "64px sans-serif"; c.fillText(`Camera fixture ${frame}`, 20, 240);
       };
       draw(); const timer = setInterval(draw, 100), stream = canvas.captureStream(10);
@@ -23,9 +33,10 @@ async function installCamera(page) {
         const stop = track.stop.bind(track);
         track.stop = () => { clearInterval(timer); stop(); };
       }
+      window.faceTest.openedAt = performance.now();
       return stream;
     };
-  });
+  }, options);
 }
 
 // Controlled extraction provider for persistence/session tests. The Python
@@ -222,93 +233,105 @@ export async function checkFacialWorkflow({
     );
     assert.equal((await start(page.request, "register")).status(), 200);
     assert.equal((await finish(page.request)).status(), 200);
-    const cameraContext = await browser.newContext({ permissions: ["camera"] });
-    try {
-      const cameraPage = await cameraContext.newPage();
-      // Simulate the camera with real video tracks, independent of OS prompts.
-      await cameraPage.addInitScript(() => {
-        navigator.mediaDevices.getUserMedia = async () => {
-          const canvas = document.createElement("canvas");
-          canvas.width = 640;
-          canvas.height = 480;
-          const context = canvas.getContext("2d");
-          let frame = 0;
-          const draw = () => {
-            frame++;
-            context.fillStyle = `rgb(${frame % 255},100,150)`;
-            context.fillRect(0, 0, 640, 480);
-            context.fillStyle = "white";
-            context.font = "64px sans-serif";
-            context.fillText(`Camera fixture ${frame}`, 20, 240);
-          };
-          draw();
-          const timer = setInterval(draw, 100);
-          const stream = canvas.captureStream(10);
-          for (const track of stream.getTracks()) {
-            const stop = track.stop.bind(track);
-            track.stop = () => {
-              clearInterval(timer);
-              stop();
-            };
-          }
-          return stream;
-        };
-      });
-      await cameraPage.bringToFront();
-      let cameraOpenedAt;
-      let captureMs;
-      const loginRequests = [];
-      await cameraPage.exposeFunction("recordFaceCameraOpened", () => { cameraOpenedAt = Date.now(); });
-      await cameraPage.addInitScript(() => {
-        const getUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
-        navigator.mediaDevices.getUserMedia = async (constraints) => {
-          const media = await getUserMedia(constraints);
-          await window.recordFaceCameraOpened();
-          return media;
-        };
-      });
-      cameraPage.on("request", request => {
-        if (!request.url().endsWith("/api/login/face") || request.method() !== "POST") return;
-        const body = request.postDataJSON();
-        loginRequests.push(body);
-        if (body.action === "finish") captureMs = Date.now() - cameraOpenedAt;
-      });
-      await cameraPage.goto(origin + "/login");
-      await cameraPage.getByLabel("E-mail ou matrícula").fill("test-admin");
-      await cameraPage.getByLabel("Senha", { exact: true }).fill(password);
-      await cameraPage
-        .getByRole("button", { name: "Entrar com reconhecimento facial" })
-        .click();
-      await cameraPage
-        .getByLabel("Prévia da câmera")
-        .waitFor({ state: "visible" });
+    for (const [device, cameraOptions] of [
+      ["Pixel 7", { denyFirst: true }],
+      ["iPhone 13", { portrait: true, blockAutoplay: true }],
+    ]) {
+      await sql("DELETE FROM auth_attempts");
+      const cameraContext = await browser.newContext({ ...devices[device], permissions: ["camera"] });
       try {
-        await cameraPage.waitForURL("**/admin/dashboard", { timeout: 45000 });
-      } catch (error) {
-        const alerts = await cameraPage.getByRole("alert").allTextContents();
-        const status = await cameraPage.getByRole("status").allTextContents();
-        throw new Error(
-          `Facial browser capture failed: ${JSON.stringify({ alerts, status })}`,
-          { cause: error },
+        const cameraPage = await cameraContext.newPage();
+        // Simulate the camera with real video tracks, independent of OS prompts.
+        await installCamera(cameraPage, cameraOptions);
+        await cameraPage.bringToFront();
+        let captureMs;
+        const loginRequests = [];
+        await cameraPage.exposeFunction("recordFaceCapture", ms => { captureMs = ms; });
+        await cameraPage.addInitScript(() => {
+          const originalFetch = window.fetch;
+          window.fetch = function (input, init) {
+            if (input === "/api/login/face" && init?.body && JSON.parse(init.body).action === "finish")
+              void window.recordFaceCapture(performance.now() - window.faceTest.openedAt);
+            return originalFetch.call(this, input, init);
+          };
+        });
+        cameraPage.on("request", request => {
+          if (!request.url().endsWith("/api/login/face") || request.method() !== "POST") return;
+          const body = request.postDataJSON();
+          loginRequests.push(body);
+        });
+        await cameraPage.goto(origin + "/login");
+        const facialButton = cameraPage.getByRole("button", { name: "Entrar com reconhecimento facial" });
+        await expect(facialButton).toBeEnabled();
+        await facialButton.tap();
+        await expect(cameraPage.locator("#login-error")).toContainText("Informe e-mail ou matrícula e senha");
+        await expect(cameraPage.getByLabel("E-mail ou matrícula")).toBeFocused();
+        await cameraPage.getByLabel("E-mail ou matrícula").fill("test-admin");
+        await facialButton.tap();
+        await expect(cameraPage.getByLabel("Senha", { exact: true })).toBeFocused();
+        assert.equal(loginRequests.length, 0, "Empty credentials must not request a facial challenge");
+        assert.equal(await cameraPage.evaluate(() => window.faceTest.calls), 0);
+        // Reproduce password managers that update input values without input events.
+        await cameraPage.evaluate(password => {
+          const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+          setValue.call(document.getElementById("identity"), "test-admin");
+          setValue.call(document.getElementById("password"), password);
+        }, password);
+        await facialButton.tap();
+        await cameraPage
+          .getByLabel("Prévia da câmera")
+          .waitFor({ state: "visible" });
+        await expect(cameraPage.getByLabel("Prévia da câmera")).toBeInViewport();
+        if (cameraOptions.denyFirst) {
+          await expect(cameraPage.getByLabel("Captura facial").getByRole("alert")).toContainText("Permita o acesso à câmera");
+          assert.equal(loginRequests.filter(body => body.action === "finish").length, 0);
+          await cameraPage.getByRole("button", { name: "Tentar novamente", exact: true }).tap();
+        }
+        if (cameraOptions.blockAutoplay) {
+          const enablePreview = cameraPage.getByRole("button", { name: "Ativar prévia da câmera", exact: true });
+          await expect(enablePreview).toBeVisible();
+          assert.equal(loginRequests.filter(body => body.action === "finish").length, 0);
+          await cameraPage.getByRole("button", { name: "Cancelar", exact: true }).tap();
+          await expect(cameraPage.getByLabel("E-mail ou matrícula")).toBeFocused();
+          await expect(cameraPage.getByLabel("Senha", { exact: true })).toHaveValue(password);
+          assert.ok(await cameraPage.evaluate(() => window.faceTest.tracks.every(track => track.readyState === "ended")));
+          await cameraPage.evaluate(() => { window.faceTest.playAttempts = 0; });
+          await facialButton.tap();
+          await expect(enablePreview).toBeVisible();
+          await cameraPage.screenshot({ path: `.validation/facial/login-${device.replaceAll(" ", "-")}.png`, fullPage: true });
+          await enablePreview.tap();
+        }
+        try {
+          await cameraPage.waitForURL("**/admin/dashboard", { timeout: 45000 });
+        } catch (error) {
+          const alerts = await cameraPage.getByRole("alert").allTextContents();
+          const status = await cameraPage.getByRole("status").allTextContents();
+          throw new Error(
+            `Facial browser capture failed: ${JSON.stringify({ alerts, status })}`,
+            { cause: error },
+          );
+        }
+        const sessionNames = (await cameraContext.cookies()).map(
+          (cookie) => cookie.name,
         );
+        assert.ok(
+          sessionNames.includes("marcon_session") &&
+            sessionNames.includes("marcon_api_token"),
+        );
+        const automaticCapture = loginRequests.find(body => body.action === "finish");
+        assert.equal(loginRequests[0].identity, "test-admin");
+        assert.equal(loginRequests[0].password, password, "Use the actual autofilled password");
+        assert.equal(loginRequests.filter(body => body.action === "start").length, 2, "Retry/cancel gets a new challenge; activating the preview reuses the verified challenge");
+        assert.equal(automaticCapture.images.length, 3, "Login sends only three automatic frontal frames");
+        assert.ok(captureMs >= 1200 && captureMs < (cameraOptions.blockAutoplay ? 10000 : 5000), `Camera capture took ${captureMs}ms; processing/network excluded`);
+        console.log(`PASS: ${device} touch/autofill facial login with ${cameraOptions.denyFirst ? "permission retry" : "autoplay recovery and portrait video"}; capture ${Math.round(captureMs)}ms (emulated device and camera)`);
+        assert.equal(
+          (await cameraContext.request.get(origin + "/api/workspace")).status(),
+          200,
+        );
+      } finally {
+        await cameraContext.close();
       }
-      const sessionNames = (await cameraContext.cookies()).map(
-        (cookie) => cookie.name,
-      );
-      assert.ok(
-        sessionNames.includes("marcon_session") &&
-          sessionNames.includes("marcon_api_token"),
-      );
-      const automaticCapture = loginRequests.find(body => body.action === "finish");
-      assert.equal(automaticCapture.images.length, 3, "Login sends only three automatic frontal frames");
-      assert.ok(captureMs >= 1200 && captureMs < 5000, `Camera capture took ${captureMs}ms; processing/network excluded`);
-      console.log(`PASS: automatic frontal browser login capture in ${captureMs}ms (simulated camera)`);
-      assert.equal(
-        (await cameraContext.request.get(origin + "/api/workspace")).status(),
-        200,
-      );
-    } finally {
-      await cameraContext.close();
     }
   } finally {
     await context.close();
