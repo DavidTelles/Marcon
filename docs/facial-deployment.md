@@ -24,7 +24,7 @@ captura, além de permissão, inicialização e processamento. Não pede giros.
 O cadastro mantém cinco imagens e um movimento leve para cada lado, com cerca
 de 8,4 segundos de captura. A tolerância frontal é 0,35 na razão dos pontos
 faciais; o giro mínimo é 0,10 (antes 0,18). Isso não representa ângulos em graus.
-Rosto único, coerência das imagens, senha e limiar de identidade são preservados.
+Rosto único, coerência das imagens e limiar de identidade são preservados.
 A finalidade e a quantidade vêm do desafio armazenado no servidor; o navegador
 não pode transformar um cadastro em login para evitar os movimentos. Cadastros
 existentes de cinco vetores continuam válidos, sem necessidade de recadastro.
@@ -37,21 +37,37 @@ antigo ou incompleto não impede o motor padrão de funcionar.
 
 Entre com senha e abra **Editar perfil → Reconhecimento facial**. Confirme
 novamente a senha e o consentimento antes de permitir a câmera. Siga as posições,
-saia e teste o acesso facial com a mesma conta e senha. A câmera exige HTTPS e
+saia e toque em **Entrar com reconhecimento facial**, sem preencher e-mail,
+matrícula ou senha. O servidor compara a captura com os cadastros compatíveis
+das contas ativas e só emite as duas sessões quando há uma única correspondência.
+Rostos desconhecidos, contas inativas e correspondências ambíguas são recusados.
+A senha continua obrigatória para cadastrar ou excluir o rosto no perfil.
+A câmera exige HTTPS e
 permissão no navegador. Capturas sem rosto, com vários rostos, rosto distante,
 posição divergente ou quadros repetidos são recusadas.
 
 As fotos não são gravadas pelo código da aplicação; apenas os vetores são
 guardados criptografados no Neon. Cadastros anteriores a `server-face-v2` exigem
 novo cadastro e consentimento. Cadastros compatíveis são preservados. Trocar o
-segredo de sessão exige recadastro. A senha permanece obrigatória: resistência
-a fotos e vídeos não foi validada com pessoas autorizadas e câmera física.
+segredo de sessão exige recadastro. O login facial agora dispensa a senha.
+Resistência a fotos e vídeos não foi validada com pessoas autorizadas e câmera
+física; esse reconhecimento por câmera não oferece a garantia do Face ID nativo.
+Os três quadros diferentes e a coerência facial são controles de captura, não
+uma prova de vida certificada.
+
+A migração `0009_face_passwordless_login` permite desafios de login sem conta
+associada. Cadastros e vetores existentes são preservados. A conta é escolhida
+somente depois da inferência; IDs e senhas enviados pelo cliente não escolhem
+quem entra. O desafio expira em dois minutos e é consumido atomicamente antes
+da inferência. O limite de início é 30 tentativas por rede em 15 minutos, usando
+o IP fornecido pela Vercel; a conta identificada mantém o limite de 5 tentativas.
 
 ```bash
 npm run check:face
 npm run check:hosting -- --url https://marcon-ten.vercel.app --face
 npm run test:face:node
 npm run test:face:policy
+npm run test:face:mobile
 npm run build
 node scripts/test-integrated-logistics.mjs --ui --embedded --face-node
 node scripts/test-integrated-logistics.mjs --ui --embedded --face
@@ -67,10 +83,14 @@ ambiente Python opcional e execute `npm run test:face:node -- --compare-python`.
 `--face-node` testa as rotas do build de produção com `VERCEL=1`, sem serviço
 facial externo ou Python: cadastro criptografado, cinco capturas no cadastro e
 três capturas frontais automáticas no login,
-login dos quatro perfis, ambas as sessões, senha incorreta, recusa de repetição
+identificação sem credenciais dos quatro perfis, ambas as sessões, senha
+incorreta no cadastro/exclusão, recusa de repetição
 do desafio e exclusão. Usa imagens sintéticas com perspectiva. `--face` usa
 câmera e provedor controlados para testar a interface, senha antes da câmera,
-interrupção, nova tentativa e redirecionamento. Ambos usam schema Neon temporário
+interrupção, nova tentativa, rosto desconhecido/inativo/ambíguo, finalização
+concorrente e redirecionamento. O teste móvel verifica o botão sem credenciais
+no Chromium e WebKit com dispositivo emulado e desafio simulado. Ambos os testes
+integrados usam schema Neon temporário
 e removem apenas esse schema ao terminar. Não alteram contas públicas e não
 comprovam identidade ou resistência a fotos/vídeos no domínio publicado.
 

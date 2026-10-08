@@ -197,8 +197,8 @@ export const faceLoginGrants = pgTable("face_login_grants", {
   expiresAt: timestamp("expires_at", { mode: "string", precision: 3 }).notNull(), createdAt: createdAt(),
 }, (t) => [index("idx_face_login_grants_expiry").on(t.expiresAt)]);
 export const faceChallenges = pgTable("face_challenges", {
-  tokenHash: bytea("token_hash").primaryKey(), userId: ref("user_id", () => users), purpose: challengePurpose("purpose").notNull(),
-  poses: jsonb("poses").notNull(), sessionHash: bytea("session_hash"), passwordHash: varchar("password_hash", { length: 190 }).notNull(),
+  tokenHash: bytea("token_hash").primaryKey(), userId: bigint("user_id", { mode: "number" }).references(() => users.id), purpose: challengePurpose("purpose").notNull(),
+  poses: jsonb("poses").notNull(), sessionHash: bytea("session_hash"), passwordHash: varchar("password_hash", { length: 190 }),
   createdAt: createdAt(), expiresAt: timestamp("expires_at", { mode: "string", precision: 3 }).notNull(),
 }, (t) => [index("idx_face_challenge_expiry").on(t.expiresAt)]);
 

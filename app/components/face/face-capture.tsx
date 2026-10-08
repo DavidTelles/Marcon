@@ -115,8 +115,8 @@ export function FaceCapture({
         {
           action: "start",
           purpose,
-          identity,
-          password,
+          identity: purpose === "register" ? identity : undefined,
+          password: purpose === "register" ? password : undefined,
           adminTarget,
           consent: purpose === "register" ? FACE_CONSENT : undefined,
         },

@@ -87,6 +87,7 @@ export async function checkFacialWorkflow({
   sql,
   model,
   consent,
+  encryptFace,
 }) {
   const pending = new WeakMap();
   const frames = (label, count = 5) =>
@@ -99,9 +100,7 @@ export async function checkFacialWorkflow({
     const response = await post(request, {
       action: "start",
       purpose,
-      identity: "test-admin",
-      password,
-      consent,
+      ...(purpose === "register" ? { identity: "test-admin", password, consent } : {}),
       ...extra,
     });
     if (response.ok()) pending.set(request, await response.json());
@@ -186,24 +185,24 @@ export async function checkFacialWorkflow({
 
   const context = await browser.newContext();
   try {
-    assert.equal(
-      (
-        await start(context.request, "login", { password: "incorrect" })
-      ).status(),
-      401,
-    );
     assert.equal((await start(context.request, "login")).status(), 200);
+    const anonymous = (await sql("SELECT user_id,password_hash FROM face_challenges WHERE purpose='login'")).rows;
+    assert.ok(anonymous.length > 0 && anonymous.every(row => row.user_id === null && row.password_hash === null));
+    assert.equal((await post(context.request, { action: "finish", recognized: true, userId: "test-admin" })).status(), 422, "Client recognition flags cannot authorize login");
     assert.equal(
       (await finish(context.request, "different")).status(),
       401,
       "a different face must not issue sessions",
     );
+    assert.equal((await finish(context.request)).status(), 400, "Failed matching also consumes the challenge");
     assert.equal(
       (await context.request.get(origin + "/api/workspace")).status(),
       401,
     );
-    assert.equal((await start(context.request, "login")).status(), 200);
-    const login = await finish(context.request);
+    assert.equal((await start(context.request, "login", { identity: "test-worker", password: "incorrect" })).status(), 200);
+    const concurrent = await Promise.all([finish(context.request), finish(context.request)]);
+    assert.deepEqual(concurrent.map(response => response.status()).sort(), [200, 400], "Only one concurrent finish may issue sessions");
+    const login = concurrent.find(response => response.ok());
     assert.equal(login.status(), 200, await login.text());
     assert.equal((await login.json()).destination, "/admin/dashboard");
     const names = (await context.cookies()).map((cookie) => cookie.name);
@@ -226,13 +225,31 @@ export async function checkFacialWorkflow({
         .enrolled,
       false,
     );
+    assert.equal((await start(context.request, "login")).status(), 200);
     assert.equal(
-      (await start(context.request, "login")).status(),
-      401,
+      (await finish(context.request)).status(), 401,
       "deleted enrollments cannot authorize login",
     );
     assert.equal((await start(page.request, "register")).status(), 200);
     assert.equal((await finish(page.request)).status(), 200);
+    const visitor = await browser.newContext();
+    const workerId = Number((await sql("SELECT id FROM users WHERE employee_no='test-worker'")).rows[0].id);
+    try {
+      const reference = Array.from({ length: 5 }, () => Array.from({ length: 128 }, (_, i) => i === 0 ? 1 : 0));
+      await sql("INSERT INTO face_credentials(user_id,embeddings,model_version,consent_version) VALUES($1,$2,$3,$4)", [workerId, encryptFace(workerId, reference), model, consent]);
+      assert.equal((await start(visitor.request, "login")).status(), 200);
+      assert.equal((await finish(visitor.request)).status(), 409, "Two matching accounts must be rejected");
+      assert.equal((await visitor.request.get(origin + "/api/workspace")).status(), 401);
+      await sql("DELETE FROM face_credentials WHERE user_id=$1", [workerId]);
+      await sql("UPDATE users SET active=FALSE WHERE employee_no='test-admin'");
+      assert.equal((await start(visitor.request, "login")).status(), 200);
+      assert.equal((await finish(visitor.request)).status(), 401, "Inactive accounts cannot be identified");
+      assert.equal((await visitor.request.get(origin + "/api/workspace")).status(), 401);
+    } finally {
+      await sql("UPDATE users SET active=TRUE WHERE employee_no='test-admin'");
+      await sql("DELETE FROM face_credentials WHERE user_id=$1", [workerId]);
+      await visitor.close();
+    }
     for (const [device, cameraOptions] of [
       ["Pixel 7", { denyFirst: true }],
       ["iPhone 13", { portrait: true, blockAutoplay: true }],
@@ -263,20 +280,8 @@ export async function checkFacialWorkflow({
         await cameraPage.goto(origin + "/login");
         const facialButton = cameraPage.getByRole("button", { name: "Entrar com reconhecimento facial" });
         await expect(facialButton).toBeEnabled();
-        await facialButton.tap();
-        await expect(cameraPage.locator("#login-error")).toContainText("Informe e-mail ou matrícula e senha");
-        await expect(cameraPage.getByLabel("E-mail ou matrícula")).toBeFocused();
-        await cameraPage.getByLabel("E-mail ou matrícula").fill("test-admin");
-        await facialButton.tap();
-        await expect(cameraPage.getByLabel("Senha", { exact: true })).toBeFocused();
-        assert.equal(loginRequests.length, 0, "Empty credentials must not request a facial challenge");
-        assert.equal(await cameraPage.evaluate(() => window.faceTest.calls), 0);
-        // Reproduce password managers that update input values without input events.
-        await cameraPage.evaluate(password => {
-          const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
-          setValue.call(document.getElementById("identity"), "test-admin");
-          setValue.call(document.getElementById("password"), password);
-        }, password);
+        await expect(cameraPage.getByLabel("E-mail ou matrícula")).toHaveValue("");
+        await expect(cameraPage.getByLabel("Senha", { exact: true })).toHaveValue("");
         await facialButton.tap();
         await cameraPage
           .getByLabel("Prévia da câmera")
@@ -293,7 +298,7 @@ export async function checkFacialWorkflow({
           assert.equal(loginRequests.filter(body => body.action === "finish").length, 0);
           await cameraPage.getByRole("button", { name: "Cancelar", exact: true }).tap();
           await expect(cameraPage.getByLabel("E-mail ou matrícula")).toBeFocused();
-          await expect(cameraPage.getByLabel("Senha", { exact: true })).toHaveValue(password);
+          await expect(cameraPage.getByLabel("Senha", { exact: true })).toHaveValue("");
           assert.ok(await cameraPage.evaluate(() => window.faceTest.tracks.every(track => track.readyState === "ended")));
           await cameraPage.evaluate(() => { window.faceTest.playAttempts = 0; });
           await facialButton.tap();
@@ -319,12 +324,11 @@ export async function checkFacialWorkflow({
             sessionNames.includes("marcon_api_token"),
         );
         const automaticCapture = loginRequests.find(body => body.action === "finish");
-        assert.equal(loginRequests[0].identity, "test-admin");
-        assert.equal(loginRequests[0].password, password, "Use the actual autofilled password");
+        assert.ok(loginRequests.every(body => !Object.hasOwn(body, "identity") && !Object.hasOwn(body, "password")), "Facial browser login must never send credentials");
         assert.equal(loginRequests.filter(body => body.action === "start").length, 2, "Retry/cancel gets a new challenge; activating the preview reuses the verified challenge");
         assert.equal(automaticCapture.images.length, 3, "Login sends only three automatic frontal frames");
         assert.ok(captureMs >= 1200 && captureMs < (cameraOptions.blockAutoplay ? 10000 : 5000), `Camera capture took ${captureMs}ms; processing/network excluded`);
-        console.log(`PASS: ${device} touch/autofill facial login with ${cameraOptions.denyFirst ? "permission retry" : "autoplay recovery and portrait video"}; capture ${Math.round(captureMs)}ms (emulated device and camera)`);
+        console.log(`PASS: ${device} credential-free facial login with ${cameraOptions.denyFirst ? "permission retry" : "autoplay recovery and portrait video"}; capture ${Math.round(captureMs)}ms (emulated device and camera)`);
         assert.equal(
           (await cameraContext.request.get(origin + "/api/workspace")).status(),
           200,
@@ -348,7 +352,7 @@ export async function checkFacialWorkflow({
       assert.equal((await start(actor.request, "register", { identity })).status(), 200);
       const registered = await finish(actor.request, label);
       assert.equal(registered.status(), 200, await registered.text());
-      assert.equal((await start(visitor.request, "login", { identity })).status(), 200);
+      assert.equal((await start(visitor.request, "login")).status(), 200);
       const loggedIn = await finish(visitor.request, label);
       assert.equal(loggedIn.status(), 200, await loggedIn.text());
       assert.equal((await loggedIn.json()).destination, destination);

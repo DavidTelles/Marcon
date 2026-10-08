@@ -29,13 +29,11 @@ export default function LoginForm({ children, demoMode = false }: { children?: R
     submit,
   } = useLogin();
   const [showPassword, setShowPassword] = useState(false);
-  const [faceCredentials, setFaceCredentials] = useState<{ identity: string; password: string } | null>(null);
-  const [faceError, setFaceError] = useState("");
+  const [cameraActive, setCameraActive] = useState(false);
   const identityRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
   const returnFocus = useRef(false);
-  const displayedError = faceError || error;
-  const errorDescription = displayedError ? "login-error" : undefined;
+  const errorDescription = error ? "login-error" : undefined;
   const buttonLabel =
     status === "success"
       ? "Acesso confirmado"
@@ -44,30 +42,17 @@ export default function LoginForm({ children, demoMode = false }: { children?: R
         : "Entrar";
 
   function openFaceLogin() {
-    // Password managers can fill the inputs without updating React state.
-    const currentIdentity = identityRef.current?.value.trim() ?? identity.trim();
-    const currentPassword = passwordRef.current?.value ?? password;
-    setIdentity(currentIdentity);
-    setPassword(currentPassword);
-    if (!currentIdentity || !currentPassword) {
-      setFaceError("Informe e-mail ou matrícula e senha para entrar com reconhecimento facial.");
-      const missingInput = !currentIdentity ? identityRef.current : passwordRef.current;
-      missingInput?.focus();
-      missingInput?.scrollIntoView({ block: "center" });
-      return;
-    }
-    setFaceError("");
     identityRef.current?.blur();
     passwordRef.current?.blur();
-    setFaceCredentials({ identity: currentIdentity, password: currentPassword });
+    setCameraActive(true);
   }
 
   return (
     <>
-      {faceCredentials ? (
-        <FaceLogin {...faceCredentials} onCancel={() => {
+      {cameraActive ? (
+        <FaceLogin onCancel={() => {
           returnFocus.current = true;
-          setFaceCredentials(null);
+          setCameraActive(false);
         }} />
       ) : (
         <>
@@ -92,9 +77,9 @@ export default function LoginForm({ children, demoMode = false }: { children?: R
                   placeholder="Seu e-mail ou matrícula"
                   required
                   value={identity}
-                  onChange={(event) => { setIdentity(event.target.value); setFaceError(""); }}
+                  onChange={(event) => setIdentity(event.target.value)}
                   disabled={isBusy}
-                  aria-invalid={Boolean(displayedError)}
+                  aria-invalid={Boolean(error)}
                   aria-describedby={errorDescription}
                 />
               </div>
@@ -113,9 +98,9 @@ export default function LoginForm({ children, demoMode = false }: { children?: R
                   placeholder="Sua senha"
                   required
                   value={password}
-                  onChange={(event) => { setPassword(event.target.value); setFaceError(""); }}
+                  onChange={(event) => setPassword(event.target.value)}
                   disabled={isBusy}
-                  aria-invalid={Boolean(displayedError)}
+                  aria-invalid={Boolean(error)}
                   aria-describedby={errorDescription}
                 />
                 <button
@@ -133,10 +118,10 @@ export default function LoginForm({ children, demoMode = false }: { children?: R
                 </button>
               </div>
             </div>
-            {displayedError && (
+            {error && (
               <p id="login-error" role="alert" className={styles.errorMessage}>
                 <CircleAlert size={18} aria-hidden="true" />
-                {displayedError}
+                {error}
               </p>
             )}
             <button
@@ -167,7 +152,7 @@ export default function LoginForm({ children, demoMode = false }: { children?: R
             <button className={styles.alternativeButton} type="button" disabled={demoMode || isBusy} onClick={openFaceLogin} aria-describedby="camera-access-note">
               <ScanFace size={20} aria-hidden="true" /><span>Entrar com reconhecimento facial</span>
             </button>
-            <p id="camera-access-note" className={styles.accessNote}>{demoMode ? "Acesso facial disponível com Neon configurado." : "Informe e-mail ou matrícula e senha. Cadastre seu rosto no perfil após entrar com senha."}</p>
+            <p id="camera-access-note" className={styles.accessNote}>{demoMode ? "Acesso facial disponível com Neon configurado." : "Entre só com seu rosto, sem preencher e-mail, matrícula ou senha. Cadastre seu rosto no perfil após entrar com senha."}</p>
 
           </div>
         </>

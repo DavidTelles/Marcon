@@ -1071,14 +1071,15 @@ try {
       }
       if (facialFixture) {
         const { FACE_MODEL, FACE_CONSENT } = require("../lib/face-policy.ts");
-        await checkFacialWorkflow({ page, browser, origin, password: testPassword, sql, model: FACE_MODEL, consent: FACE_CONSENT });
-        check("Profile verifies password before camera, interrupted capture retries and encrypts enrollment; facial login issues both sessions for all four roles; wrong password, mismatch, replay and deleted enrollment fail (controlled provider and video, not physical biometric validation)");
+        const { encryptFace } = require("../lib/face-crypto.ts");
+        await checkFacialWorkflow({ page, browser, origin, password: testPassword, sql, model: FACE_MODEL, consent: FACE_CONSENT, encryptFace });
+        check("Password-protected enrollment; credential-free identification for all four roles and mobile touch; unknown, inactive, ambiguous and deleted faces fail; client-selected identities ignored; concurrent finish and replay rejected (controlled provider and video, not physical biometric validation)");
       }
       if (process.argv.includes("--face-node")) {
         const { FACE_MODEL, FACE_CONSENT } = require("../lib/face-policy.ts");
         const { checkNodeFacialWorkflow } = await import("./facial-node-flow-checks.mjs");
         await checkNodeFacialWorkflow({ page, browser, origin, password: testPassword, sql, model: FACE_MODEL, consent: FACE_CONSENT });
-        check("Real Node YuNet/SFace with VERCEL=1 and no FACE service/Python configuration: five enrollment frames with turns, three automatic frontal login frames, server-bound capture count, encrypted enrollment, four-role login, both sessions, wrong password, replay and deletion (synthetic perspective fixtures)");
+        check("Real Node YuNet/SFace with VERCEL=1: five password-protected enrollment frames, three credential-free login frames, server-bound count, encrypted enrollment, four-role identification, both sessions, replay and deletion (synthetic perspective fixtures)");
       }
       if (process.argv.includes("--marco")) {
         const post = (context, body, extra = {}) => context.post(origin + "/api/james/chat", { headers: { origin }, data: body, timeout: 60000, ...extra });

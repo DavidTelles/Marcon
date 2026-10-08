@@ -8,7 +8,7 @@ export async function checkNodeFacialWorkflow({ page, browser, origin, password,
   assert.equal(health.status(), 200, await health.text());
   assert.deepEqual(await health.json(), { status: "ok", model, dimensions: 128 });
   const post = (request, data) => request.post(origin + "/api/login/face", { headers: { origin }, data });
-  const start = (request, purpose, extra = {}) => post(request, { action: "start", purpose, password, consent, ...extra });
+  const start = (request, purpose, extra = {}) => post(request, { action: "start", purpose, ...(purpose === "register" ? { password, consent } : {}), ...extra });
   const samples = {};
   for (const pose of ["center", "left", "right"]) {
     samples[pose] = await Promise.all(Array.from({ length: 5 }, async (_, i) =>
@@ -46,8 +46,7 @@ export async function checkNodeFacialWorkflow({ page, browser, origin, password,
     assert.equal((await post(page.request, { action: "finish", model, images: samples.center })).status(), 400, "Registration challenge cannot be replayed");
     const context = await browser.newContext();
     try {
-      assert.equal((await start(context.request, "login", { identity, password: "incorrect" })).status(), 401);
-      const login = await finish(context.request, await start(context.request, "login", { identity }));
+      const login = await finish(context.request, await start(context.request, "login"));
       assert.equal(login.status(), 200, identity + ": " + await login.text());
       assert.equal((await login.json()).destination, destination);
       const names = (await context.cookies()).map((cookie) => cookie.name);
@@ -56,6 +55,8 @@ export async function checkNodeFacialWorkflow({ page, browser, origin, password,
       assert.equal((await post(context.request, { action: "finish", model, images: samples.center })).status(), 400);
       assert.equal((await post(context.request, { action: "delete", password })).status(), 200);
       assert.equal((await (await context.request.get(origin + "/api/login/face")).json()).enrolled, false);
+      const deleted = await finish(context.request, await start(context.request, "login"));
+      assert.equal(deleted.status(), 401, "Deleted faces cannot be identified");
     } finally {
       await context.close();
     }

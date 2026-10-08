@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
+import { isIP } from "node:net";
 import { NextRequest, NextResponse } from "next/server";
 import type { RowDataPacket } from "@/lib/db-types";
 import { cookieName, createSession, currentUser } from "@/lib/auth";
@@ -40,16 +41,17 @@ type UserRow = RowDataPacket & {
   role: string;
 };
 type ChallengeRow = RowDataPacket & {
-  user_id: number;
+  user_id: number | null;
   purpose: string;
   session_hash: Buffer | null;
-  password_hash: string;
+  password_hash: string | null;
 };
 type StoredFace = RowDataPacket & { embeddings: Buffer; model_version: string };
+type FaceAccount = StoredFace & UserRow & { user_id: number; consent_version: string };
 
 // Reserve antes de emitir desafios: até tentativas abandonadas contam; bloqueio
 // e incremento são atômicos para que requisições paralelas não burlem o limite.
-async function reserveAttempt(identity: string) {
+async function reserveAttempt(identity: string, limit = 5) {
   return transaction(async (c) => {
     const hash = digest(`face:${identity}`);
     await c.execute(
@@ -60,7 +62,7 @@ async function reserveAttempt(identity: string) {
       "SELECT attempts, first_at < UTC_TIMESTAMP(3) - INTERVAL 15 MINUTE AS expired FROM auth_attempts WHERE identity_digest = ? FOR UPDATE",
       [hash],
     );
-    if (!rows[0].expired && rows[0].attempts >= 5) return false;
+    if (!rows[0].expired && rows[0].attempts >= limit) return false;
     const count = rows[0].expired ? 1 : Number(rows[0].attempts) + 1;
     await c.execute(
       "UPDATE auth_attempts SET attempts = ?, first_at = IF(?, UTC_TIMESTAMP(3), first_at) WHERE identity_digest = ?",
@@ -68,6 +70,24 @@ async function reserveAttempt(identity: string) {
     );
     return true;
   });
+}
+
+async function issueChallenge(request: NextRequest, purpose: "register" | "login", account?: UserRow) {
+  await checkFaceService();
+  const turns = randomBytes(1)[0] % 2 ? ["left", "right"] : ["right", "left"];
+  const poses = purpose === "register" ? ["center", turns[0], "center", turns[1], "center"] :
+    Array(faceCapturePolicy("login").count).fill("center");
+  const token = randomBytes(32).toString("base64url");
+  await getPool().execute("DELETE FROM face_challenges WHERE expires_at < UTC_TIMESTAMP(3)");
+  await getPool().execute(
+    "INSERT INTO face_challenges (token_hash, user_id, purpose, poses, session_hash, password_hash, expires_at) VALUES (?, ?, ?, ?, ?, ?, DATE_ADD(UTC_TIMESTAMP(3), INTERVAL 120 SECOND))",
+    [digest(token), account?.id ?? null, purpose, JSON.stringify(poses),
+      purpose === "register" ? digest(request.cookies.get(cookieName)?.value ?? "") : null,
+      account?.password_hash ?? null],
+  );
+  const response = json({ purpose, poses, model: FACE_MODEL, expiresIn: FACE_TTL });
+  response.cookies.set(challengeCookie, token, cookiesFor(request));
+  return response;
 }
 
 async function readBody(
@@ -134,6 +154,18 @@ export async function POST(request: NextRequest) {
       return fail("Configure o Neon para usar o acesso facial.", 503);
     const body = await readBody(request);
     if (!body) return fail("Dados inválidos ou captura muito grande.");
+    if (body.action === "start" && body.purpose === "login") {
+      // Vercel overwrites its forwarding headers. Outside Vercel, use a shared
+      // bucket rather than trusting arbitrary client-supplied IP headers.
+      const forwarded = process.env.VERCEL === "1" ?
+        (request.headers.get("x-vercel-forwarded-for") ?? request.headers.get("x-forwarded-for"))?.split(",")[0].trim() : undefined;
+      const network = forwarded && isIP(forwarded) ? forwarded : "local-or-unknown";
+      if (!(await reserveAttempt(`identify:${network}`, 30)))
+        return fail("Muitas tentativas de acesso facial. Aguarde 15 minutos ou entre com senha.", 429);
+      // No account, identity, password or client-selected user is bound here.
+      // Only server-side matching at finish can identify the account.
+      return await issueChallenge(request, "login");
+    }
     if (body.action === "start" || body.action === "delete") {
       const registering = body.purpose === "register";
       const managing = registering || body.action === "delete";
@@ -175,8 +207,6 @@ export async function POST(request: NextRequest) {
           "Acesso facial indisponível para esta conta. Entre com senha.",
           401,
         );
-      if (!managing && (typeof body.password !== "string" || body.password.length > 1024 || !verifyPassword(body.password, account.password_hash)))
-        return fail("Confirme a senha: a prova de vida facial ainda não foi validada contra foto e vídeo.", 401);
       const [actors] = adminTarget ? await getPool().execute<UserRow[]>(
         "SELECT id,password_hash FROM users WHERE employee_no=? AND active=TRUE LIMIT 1", [user!.id],
       ) : [rows];
@@ -217,41 +247,7 @@ export async function POST(request: NextRequest) {
         });
         return response;
       }
-      if (!registering) {
-        const [stored] = await getPool().execute<StoredFace[]>(
-          "SELECT model_version,consent_version FROM face_credentials WHERE user_id = ?",
-          [account.id],
-        );
-        if (stored[0]?.model_version !== FACE_MODEL || stored[0]?.consent_version !== FACE_CONSENT)
-          return fail(
-            "Entre com senha e cadastre novamente o rosto para autorizar a verificação facial atual.",
-            401,
-          );
-      }
-      await checkFaceService();
-      const turns = randomBytes(1)[0] % 2 ? ["left", "right"] : ["right", "left"];
-      const poses = registering ? ["center", turns[0], "center", turns[1], "center"] :
-        Array(faceCapturePolicy("login").count).fill("center");
-      const token = randomBytes(32).toString("base64url");
-      await getPool().execute(
-        "DELETE FROM face_challenges WHERE expires_at < UTC_TIMESTAMP(3)",
-      );
-      await getPool().execute(
-        "INSERT INTO face_challenges (token_hash, user_id, purpose, poses, session_hash, password_hash, expires_at) VALUES (?, ?, ?, ?, ?, ?, DATE_ADD(UTC_TIMESTAMP(3), INTERVAL 120 SECOND))",
-        [
-          digest(token),
-          account.id,
-          registering ? "register" : "login",
-          JSON.stringify(poses),
-          managing
-            ? digest(request.cookies.get(cookieName)?.value ?? "")
-            : null,
-          account.password_hash,
-        ],
-      );
-      const response = json({ purpose: registering ? "register" : "login", poses, model: FACE_MODEL, expiresIn: FACE_TTL });
-      response.cookies.set(challengeCookie, token, cookiesFor(request));
-      return response;
+      return await issueChallenge(request, "register", account);
     }
     if (body.action !== "finish") return fail("Ação inválida.");
     const token = request.cookies.get(challengeCookie)?.value;
@@ -266,6 +262,8 @@ export async function POST(request: NextRequest) {
       return fail("Captura expirada ou já utilizada. Inicie novamente.");
     if (challenge.purpose !== "register" && challenge.purpose !== "login")
       return fail("Desafio facial inválido. Inicie novamente.");
+    if (challenge.purpose === "register" && (!challenge.user_id || !challenge.password_hash))
+      return fail("Desafio de cadastro inválido. Inicie novamente.");
     const count = faceCapturePolicy(challenge.purpose).count;
     const images = body.images;
     if (body.model !== FACE_MODEL || !validImages(images, count))
@@ -275,6 +273,17 @@ export async function POST(request: NextRequest) {
       );
     if (new Set(images).size !== count)
       return fail("As fotos precisam ser capturas diferentes.", 422);
+    // Consume atomically before inference: one challenge cannot be used to
+    // try many faces or to issue simultaneous sessions.
+    const claimed = await transaction(async c => {
+      const [pending] = await c.execute<RowDataPacket[]>(
+        "SELECT token_hash FROM face_challenges WHERE token_hash = ? AND expires_at > UTC_TIMESTAMP(3) FOR UPDATE", [digest(token)],
+      );
+      if (!pending.length) return false;
+      await c.execute("DELETE FROM face_challenges WHERE token_hash = ?", [digest(token)]);
+      return true;
+    });
+    if (!claimed) return fail("Captura expirada ou já utilizada. Inicie novamente.");
     let samples: number[][];
     try {
       samples = await extractFaces(images, typeof challenge.poses === "string" ? JSON.parse(challenge.poses) : challenge.poses, challenge.purpose);
@@ -298,30 +307,28 @@ export async function POST(request: NextRequest) {
       );
     const sessionUser =
       challenge.purpose === "register" ? await currentUser() : null;
-    const [others] = await getPool().execute<(StoredFace & { user_id: number })[]>(
-      "SELECT f.user_id,f.embeddings,f.model_version FROM face_credentials f JOIN users u ON u.id=f.user_id WHERE u.active=1 AND f.user_id<>? AND f.model_version=? LIMIT 10001", [challenge.user_id, FACE_MODEL]);
-    if (others.length > 10000) return fail("Cadastro facial excedeu o limite de verificação. Entre com senha.", 503);
-    if (others.some((other) => matchesEnrollment(samples, decryptFace(Number(other.user_id), other.embeddings), count)))
+    const [gallery] = await getPool().execute<FaceAccount[]>(
+      "SELECT f.user_id,f.embeddings,f.model_version,f.consent_version,u.id,u.employee_no,u.password_hash,u.active,u.role FROM face_credentials f JOIN users u ON u.id=f.user_id WHERE u.active=1 AND f.model_version=? AND f.consent_version=? LIMIT 10001", [FACE_MODEL, FACE_CONSENT]);
+    if (gallery.length > 10000) return fail("Cadastro facial excedeu o limite de verificação. Entre com senha.", 503);
+    const matches = gallery.filter(account => matchesEnrollment(samples, decryptFace(Number(account.user_id), account.embeddings), count));
+    if (challenge.purpose === "register" ? matches.some(account => Number(account.user_id) !== Number(challenge.user_id)) : matches.length > 1)
       return fail("Identidade facial ambígua. Use a senha e solicite revisão dos cadastros.", 409);
+    const identified = challenge.purpose === "login" ? matches[0] : undefined;
+    if (challenge.purpose === "login" && (!identified || (challenge.user_id !== null && Number(challenge.user_id) !== Number(identified.user_id))))
+      return fail("Rosto não reconhecido. Entre com senha para cadastrar seu rosto no perfil.", 401);
+    if (identified && !(await reserveAttempt(`login:${identified.user_id}`)))
+      return fail("Limite de 5 tentativas atingido. Aguarde 15 minutos ou entre com senha.", 429);
+    const expectedPasswordHash = challenge.password_hash ?? identified?.password_hash;
     let loginGrant: string | undefined;
     const response = await transaction(async (c) => {
       const [users] = await c.execute<UserRow[]>(
         "SELECT id, employee_no, password_hash, active, role FROM users WHERE id = ? FOR UPDATE",
-        [challenge.user_id],
+        [identified?.user_id ?? challenge.user_id],
       );
-      // A exclusão/recadastro também bloqueia users antes de invalidar desafios.
-      // Revalidar sob o mesmo lock impede ressuscitar cadastro já excluído.
-      const [pending] = await c.execute<RowDataPacket[]>(
-        "SELECT token_hash FROM face_challenges WHERE token_hash = ? AND expires_at > UTC_TIMESTAMP(3) FOR UPDATE",
-        [digest(token)],
-      );
-      if (!pending.length)
-        return fail("Captura expirada ou já utilizada. Inicie novamente.");
-      await c.execute("DELETE FROM face_challenges WHERE token_hash = ?", [
-        digest(token),
-      ]);
+      // Management locks the same user. Revalidate after inference to reject
+      // deletion, account disablement and credential/password replacement.
       const user = users[0];
-      if (!user?.active || user.password_hash !== challenge.password_hash)
+      if (!user?.active || user.password_hash !== expectedPasswordHash || !roleLanding[user.role as Role])
         return fail("Conta alterada. Entre novamente com senha.", 401);
       if (challenge.purpose === "register") {
         if (
@@ -349,6 +356,7 @@ export async function POST(request: NextRequest) {
         !stored[0] ||
         stored[0].model_version !== FACE_MODEL ||
         stored[0].consent_version !== FACE_CONSENT ||
+        !identified || !stored[0].embeddings.equals(identified.embeddings) ||
         !matchesEnrollment(samples, decryptFace(user.id, stored[0].embeddings), count)
       )
         return fail(
