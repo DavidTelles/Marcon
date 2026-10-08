@@ -43,6 +43,15 @@ async function installCamera(page, options = {}) {
 // engine has separate tests using real models and a synthetic face fixture.
 export async function startFacialFixtureService() {
   const token = randomBytes(32).toString("hex");
+  let extractionGate;
+  const holdNextExtraction = () => {
+    assert.ok(!extractionGate);
+    let notify, release;
+    const started = new Promise(resolve => { notify = resolve; });
+    const wait = new Promise(resolve => { release = resolve; });
+    extractionGate = { notify, wait };
+    return { started, release };
+  };
   const server = createServer(async (req, res) => {
     res.setHeader("Content-Type", "application/json");
     if (req.headers.authorization !== `Bearer ${token}`) {
@@ -57,6 +66,8 @@ export async function startFacialFixtureService() {
     const chunks = [];
     for await (const chunk of req) chunks.push(chunk);
     const input = JSON.parse(Buffer.concat(chunks).toString());
+    const gate = extractionGate;
+    if (gate) { extractionGate = undefined; gate.notify(); await gate.wait; }
     const label = input.images?.[0] ? Buffer.from(input.images[0], "base64").toString() : "";
     const index = label.startsWith("different") ? 1 : label.startsWith("worker") ? 2 :
       label.startsWith("leader") ? 3 : label.startsWith("keeper") ? 4 : 0;
@@ -75,6 +86,7 @@ export async function startFacialFixtureService() {
   return {
     url: `http://127.0.0.1:${server.address().port}`,
     token,
+    holdNextExtraction,
     close: () => new Promise((resolve) => server.close(resolve)),
   };
 }
@@ -88,6 +100,7 @@ export async function checkFacialWorkflow({
   model,
   consent,
   encryptFace,
+  holdNextExtraction,
 }) {
   const pending = new WeakMap();
   const frames = (label, count = 5) =>
@@ -232,21 +245,43 @@ export async function checkFacialWorkflow({
     );
     assert.equal((await start(page.request, "register")).status(), 200);
     assert.equal((await finish(page.request)).status(), 200);
+    await sql("DELETE FROM auth_attempts");
+    assert.equal((await start(page.request, "register")).status(), 200);
+    const gate = holdNextExtraction();
+    const registering = finish(page.request);
+    try {
+      await Promise.race([gate.started, registering.then(() => { throw new Error("Enrollment ended before extraction"); })]);
+      assert.equal((await post(page.request, { action: "delete", password })).status(), 200);
+    } finally { gate.release(); }
+    assert.equal((await registering).status(), 400, "Deletion during inference must invalidate pending enrollment");
+    assert.equal((await (await page.request.get(origin + "/api/login/face")).json()).enrolled, false);
+    assert.equal((await start(page.request, "register")).status(), 200);
+    assert.equal((await finish(page.request)).status(), 200);
     const visitor = await browser.newContext();
     const workerId = Number((await sql("SELECT id FROM users WHERE employee_no='test-worker'")).rows[0].id);
     try {
+      assert.equal((await start(visitor.request, "login")).status(), 200);
+      await sql("UPDATE face_challenges SET expires_at=NOW() + INTERVAL '3 seconds' WHERE purpose='login'");
+      const expiryGate = holdNextExtraction();
+      const expiring = finish(visitor.request);
+      try {
+        await Promise.race([expiryGate.started, expiring.then(() => { throw new Error("Login ended before extraction"); })]);
+        await new Promise(resolve => setTimeout(resolve, 3500));
+      } finally { expiryGate.release(); }
+      assert.equal((await expiring).status(), 400, "A challenge expiring during inference cannot issue a session");
+      assert.equal((await visitor.request.get(origin + "/api/workspace")).status(), 401);
       const reference = Array.from({ length: 5 }, () => Array.from({ length: 128 }, (_, i) => i === 0 ? 1 : 0));
       await sql("INSERT INTO face_credentials(user_id,embeddings,model_version,consent_version) VALUES($1,$2,$3,$4)", [workerId, encryptFace(workerId, reference), model, consent]);
       assert.equal((await start(visitor.request, "login")).status(), 200);
       assert.equal((await finish(visitor.request)).status(), 409, "Two matching accounts must be rejected");
       assert.equal((await visitor.request.get(origin + "/api/workspace")).status(), 401);
       await sql("DELETE FROM face_credentials WHERE user_id=$1", [workerId]);
-      await sql("UPDATE users SET active=FALSE WHERE employee_no='test-admin'");
+      await sql("UPDATE users SET active=0 WHERE employee_no='test-admin'");
       assert.equal((await start(visitor.request, "login")).status(), 200);
       assert.equal((await finish(visitor.request)).status(), 401, "Inactive accounts cannot be identified");
       assert.equal((await visitor.request.get(origin + "/api/workspace")).status(), 401);
     } finally {
-      await sql("UPDATE users SET active=TRUE WHERE employee_no='test-admin'");
+      await sql("UPDATE users SET active=1 WHERE employee_no='test-admin'");
       await sql("DELETE FROM face_credentials WHERE user_id=$1", [workerId]);
       await visitor.close();
     }

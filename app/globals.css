@@ -5,7 +5,26 @@
 .decision-totals strong { color: var(--blue); font-size: 2rem; }
 .decision-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; margin: 20px 0; }
 .decision-card { min-width: 0; padding: clamp(16px, 3vw, 24px); border: 1px solid var(--line); border-radius: 18px; background: var(--white); overflow-wrap: anywhere; }
-.decision-card h3 { margin: 12px 0 6px; }
+.decision-card h3, .decision-card h4 { margin: 12px 0 6px; font-size: 1.2rem; }
+.decision-destinations { display: grid; gap: 24px; margin-top: 24px; }
+.decision-destination { min-width: 0; }
+.decision-destination-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 16px; border-left: 4px solid var(--blue); border-radius: 12px; background: var(--canvas); }
+.decision-destination-heading span, .decision-destination-heading p { color: var(--subtle); font-size: .85rem; }
+.decision-destination-heading h3, .decision-destination-heading p { margin: 4px 0; }
+.decision-receipt { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 16px; margin: 16px 0; border: 1px solid var(--line); border-radius: 12px; background: var(--canvas); }
+.decision-receipt span:not(.decision-arrow) { display: grid; gap: 6px; flex: 1; min-width: 100px; }
+.decision-receipt strong { color: var(--blue); font-size: 1.4rem; }
+.decision-receipt small { flex-basis: 100%; color: var(--subtle); }
+.decision-impact { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 16px 0; }
+.decision-impact > div { min-width: 0; border: 1px solid var(--line); padding: 12px; border-radius: 10px; }
+.decision-impact dt, .decision-impact small { color: var(--subtle); font-size: .8rem; }
+.decision-impact dd { margin: 6px 0; font-weight: 650; }
+.decision-occupancy { margin: 16px 0; }
+.decision-occupancy label { display: grid; gap: 8px; }
+.decision-occupancy meter { width: 100%; height: 16px; accent-color: var(--blue); }
+.decision-occupancy small { color: var(--subtle); }
+.decision-route > span:not(.decision-arrow) { display: grid; flex: 1; gap: 4px; min-width: 100px; }
+.decision-route small { font-size: .75rem; color: var(--subtle); font-weight: 400; }
 .decision-route, .decision-balance { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .decision-route { color: var(--blue); font-weight: 600; }
 .decision-arrow { display: inline-block; color: var(--blue); font-size: 1.25rem; }

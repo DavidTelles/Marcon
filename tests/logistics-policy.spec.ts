@@ -14,17 +14,17 @@ const graph: FacilityGraph = {
     { id: "d", label: "Setor consumidor", kind: "sector", x: 1, y: 1, blockId: 5 },
   ],
   edges: [
-    { from: "a", to: "b", blocked: false, distance: 2, seconds: 8 },
-    { from: "b", to: "c", blocked: false, distance: 3, seconds: 8 },
-    { from: "a", to: "c", blocked: false, distance: 9, seconds: 2 },
-    { from: "c", to: "d", blocked: false, distance: 1, seconds: 1 },
+    { from: "a", to: "b", blocked: false, distance: 2, distanceUnit: "m", seconds: 8 },
+    { from: "b", to: "c", blocked: false, distance: 3, distanceUnit: "m", seconds: 8 },
+    { from: "a", to: "c", blocked: false, distance: 9, distanceUnit: "m", seconds: 2 },
+    { from: "c", to: "d", blocked: false, distance: 1, distanceUnit: "m", seconds: 1 },
   ],
 };
 
 test("menor distância e menor tempo têm resultados e unidades independentes", () => {
   expect(shortestPath(graph, "a", "c")).toMatchObject({ nodes: ["a", "b", "c"], cost: 5, unit: "m" });
   expect(shortestPath(graph, "a", "c", { objective: "time" })).toMatchObject({ nodes: ["a", "c"], cost: 2, unit: "s" });
-  const legacy = { ...graph, scaleCalibrated: false };
+  const legacy = { ...graph, scaleCalibrated: false, edges: graph.edges.map(edge => ({ ...edge, distanceUnit: "map" as const })) };
   expect(shortestPath(legacy, "a", "c")?.unit).toBe("unidades do mapa");
   expect(shortestPath({ ...graph, edges: graph.edges.map((e) => ({ ...e, seconds: undefined })) }, "a", "d", { objective: "time" })).toBeNull();
 });
@@ -55,7 +55,7 @@ test("empate determinístico, custo zero, origem igual e nós inexistentes", () 
   expect(shortestPath(graph, "a", "a")).toMatchObject({ nodes: ["a"], cost: 0 });
   expect(planStops(graph, "missing", [])).toBeNull();
   expect(shortestPath(graph, "a", "missing")).toBeNull();
-  expect(shortestPath({ ...graph, edges: [{ from: "a", to: "c", blocked: false, distance: 0 }] }, "a", "c")?.cost).toBe(0);
+  expect(shortestPath({ ...graph, edges: [{ from: "a", to: "c", blocked: false, distance: 0, distanceUnit: "m" }] }, "a", "c")?.cost).toBe(0);
 });
 
 test("pesos inválidos, conexões inexistentes e paredes nunca geram linhas fictícias", () => {

@@ -523,6 +523,10 @@ export async function dashboardReport(
               !!c.row.distribution?.unmappedConsumption
             : !c.row.priceDate))),
   );
+  if (q.get("planning") === "distribution") decisionCards.sort((a, b) =>
+    a.row.warehouse.localeCompare(b.row.warehouse, "pt-BR") ||
+    Number(b.row.available < b.row.configuredMinimum) - Number(a.row.available < a.row.configuredMinimum) ||
+    a.row.item.localeCompare(b.row.item, "pt-BR") || (a.transfer?.from ?? "").localeCompare(b.transfer?.from ?? "", "pt-BR"));
   return {
     decisions: {
       filter: decision,

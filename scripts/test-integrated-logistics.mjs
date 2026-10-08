@@ -756,6 +756,11 @@ try {
   );
   assert.ok(suggestion.quantity > 0);
   assert.ok(suggestion.evidence.route.nodes.includes("near"));
+  assert.equal(suggestion.evidence.destinationPhysicalAfter - suggestion.evidence.destinationPhysicalBefore, suggestion.quantity);
+  assert.equal(suggestion.evidence.sourcePhysicalBefore - suggestion.evidence.sourcePhysicalAfter, suggestion.quantity);
+  assert.equal(suggestion.evidence.destinationSpaceBefore - suggestion.evidence.destinationSpaceAfter, suggestion.quantity);
+  assert.ok(suggestion.evidence.destinationPhysicalAfter + suggestion.evidence.destinationIncoming <= suggestion.evidence.destinationCapacity);
+  assert.ok(suggestion.evidence.nearbyConsumption.length > 0, "Destination explains the nearby demand it serves");
   const transferPayload = {
     type: "transfer",
     code: suggestion.code,
@@ -1072,7 +1077,7 @@ try {
       if (facialFixture) {
         const { FACE_MODEL, FACE_CONSENT } = require("../lib/face-policy.ts");
         const { encryptFace } = require("../lib/face-crypto.ts");
-        await checkFacialWorkflow({ page, browser, origin, password: testPassword, sql, model: FACE_MODEL, consent: FACE_CONSENT, encryptFace });
+        await checkFacialWorkflow({ page, browser, origin, password: testPassword, sql, model: FACE_MODEL, consent: FACE_CONSENT, encryptFace, holdNextExtraction: facialFixture.holdNextExtraction });
         check("Password-protected enrollment; credential-free identification for all four roles and mobile touch; unknown, inactive, ambiguous and deleted faces fail; client-selected identities ignored; concurrent finish and replay rejected (controlled provider and video, not physical biometric validation)");
       }
       if (process.argv.includes("--face-node")) {
@@ -1080,6 +1085,11 @@ try {
         const { checkNodeFacialWorkflow } = await import("./facial-node-flow-checks.mjs");
         await checkNodeFacialWorkflow({ page, browser, origin, password: testPassword, sql, model: FACE_MODEL, consent: FACE_CONSENT });
         check("Real Node YuNet/SFace with VERCEL=1: five password-protected enrollment frames, three credential-free login frames, server-bound count, encrypted enrollment, four-role identification, both sessions, replay and deletion (synthetic perspective fixtures)");
+      }
+      if (process.argv.includes("--recommendations")) {
+        const { checkRecommendationCards } = await import("./recommendation-ui-checks.mjs");
+        await checkRecommendationCards({ page, origin, sql, part, near, far });
+        check("Intuitive receiving-warehouse recommendations show consumption, safe capacity, before/after balances and published Dijkstra route; responsive review never moves stock");
       }
       if (process.argv.includes("--marco")) {
         const post = (context, body, extra = {}) => context.post(origin + "/api/james/chat", { headers: { origin }, data: body, timeout: 60000, ...extra });

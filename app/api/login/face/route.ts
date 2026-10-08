@@ -45,6 +45,7 @@ type ChallengeRow = RowDataPacket & {
   purpose: string;
   session_hash: Buffer | null;
   password_hash: string | null;
+  expires_at: string;
 };
 type StoredFace = RowDataPacket & { embeddings: Buffer; model_version: string };
 type FaceAccount = StoredFace & UserRow & { user_id: number; consent_version: string };
@@ -273,9 +274,9 @@ export async function POST(request: NextRequest) {
       );
     if (new Set(images).size !== count)
       return fail("As fotos precisam ser capturas diferentes.", 422);
-    // Consume atomically before inference: one challenge cannot be used to
-    // try many faces or to issue simultaneous sessions.
-    const claimed = await transaction(async c => {
+    // Consume login atomically before inference: one challenge cannot be used
+    // to try many faces or to issue simultaneous sessions.
+    const claimed = challenge.purpose === "register" || await transaction(async c => {
       const [pending] = await c.execute<RowDataPacket[]>(
         "SELECT token_hash FROM face_challenges WHERE token_hash = ? AND expires_at > UTC_TIMESTAMP(3) FOR UPDATE", [digest(token)],
       );
@@ -321,6 +322,8 @@ export async function POST(request: NextRequest) {
     const expectedPasswordHash = challenge.password_hash ?? identified?.password_hash;
     let loginGrant: string | undefined;
     const response = await transaction(async (c) => {
+      const [deadline] = await c.execute<RowDataPacket[]>("SELECT ? > UTC_TIMESTAMP(3) AS valid", [challenge.expires_at]);
+      if (!deadline[0]?.valid) return fail("Captura expirada. Inicie novamente.");
       const [users] = await c.execute<UserRow[]>(
         "SELECT id, employee_no, password_hash, active, role FROM users WHERE id = ? FOR UPDATE",
         [identified?.user_id ?? challenge.user_id],
@@ -331,6 +334,13 @@ export async function POST(request: NextRequest) {
       if (!user?.active || user.password_hash !== expectedPasswordHash || !roleLanding[user.role as Role])
         return fail("Conta alterada. Entre novamente com senha.", 401);
       if (challenge.purpose === "register") {
+        // Keep enrollment pending during inference so deletion can invalidate
+        // it. Login challenges were already consumed before extraction.
+        const [pending] = await c.execute<RowDataPacket[]>(
+          "SELECT token_hash FROM face_challenges WHERE token_hash = ? AND expires_at > UTC_TIMESTAMP(3) FOR UPDATE", [digest(token)],
+        );
+        if (!pending.length) return fail("Captura expirada ou já utilizada. Inicie novamente.");
+        await c.execute("DELETE FROM face_challenges WHERE token_hash = ?", [digest(token)]);
         if (
           !challenge.session_hash?.equals(
             digest(request.cookies.get(cookieName)?.value ?? ""),

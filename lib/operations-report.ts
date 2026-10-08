@@ -60,6 +60,7 @@ export type ReportRow = {
     verified: boolean;
     unmappedConsumption: number;
     consumption: { block: string; quantity: number }[];
+    nearbyConsumption: { block: string; sector: string; quantity: number }[];
     proximity: string;
     pendingOutgoing: number;
     pendingIncoming: number;
@@ -138,12 +139,15 @@ export async function operationsReport(user: Account, filters: ReportFilter) {
     : null;
   if (graph && (!graph.reviewed || graphProblems(graph).length)) graph = null;
   if (graph) graph.scaleCalibrated = graph.scaleCalibrated === true;
+  const routeCache = new Map<string, ReturnType<typeof warehouseRoute> | null>();
   function mappedRoute(code: string, from: string, to: string) {
     if (!graph) return null;
+    const key = JSON.stringify([code, from, to]);
+    if (routeCache.has(key)) return routeCache.get(key)!;
     const a = warehouses.find((w) => w.name === from),
       b = warehouses.find((w) => w.name === to);
     const locations = snapshot.stock.find((p) => p.code === code)?.locations;
-    return a && b
+    const route = a && b
       ? warehouseRoute(
           graph,
           Number(a.id),
@@ -157,6 +161,8 @@ export async function operationsReport(user: Account, filters: ReportFilter) {
           },
         )
       : null;
+    routeCache.set(key, route);
+    return route;
   }
   const [pendingTransfers] = permitted(user, "planning")
     ? await pool.query<RowDataPacket[]>(
@@ -371,6 +377,15 @@ export async function operationsReport(user: Account, filters: ReportFilter) {
               )
               .reduce((s, m) => s + Number(m.quantity), 0),
           })),
+          nearbyConsumption: [...new Set(allocated
+            .filter(m => Number(m.warehouse_id) === location.warehouseId && m.quantity > 0)
+            .map(m => JSON.stringify([String(m.block ?? "Sem bloco"), String(m.request_sector ?? "Sem setor")])))]
+            .map(key => {
+              const [block, sector] = JSON.parse(key) as [string, string];
+              return { block, sector, quantity: allocated
+                .filter(m => Number(m.warehouse_id) === location.warehouseId && String(m.block ?? "Sem bloco") === block && String(m.request_sector ?? "Sem setor") === sector)
+                .reduce((sum, m) => sum + Number(m.quantity), 0) };
+            }),
           proximity:
             filters.purpose === "purchase"
               ? "Compra baseada nas baixas efetivas do próprio local, sem redistribuir consumo pelo mapa."
@@ -487,6 +502,9 @@ export async function operationsReport(user: Account, filters: ReportFilter) {
         )!;
         const sourceBefore = projected.get(`${t.code}:${t.from}`)!,
           destinationBefore = projected.get(`${t.code}:${t.to}`)!;
+        const sourcePhysicalBefore = source.physical + sourceBefore - source.available,
+          destinationPhysicalBefore = dest.physical + destinationBefore - dest.available,
+          destinationIncoming = dest.incoming + (dest.distribution?.pendingIncoming ?? 0);
         projected.set(`${t.code}:${t.from}`, sourceBefore - t.quantity);
         projected.set(`${t.code}:${t.to}`, destinationBefore + t.quantity);
         return {
@@ -525,6 +543,14 @@ export async function operationsReport(user: Account, filters: ReportFilter) {
             destinationAvailable: destinationBefore,
             destinationReserved: dest.reserved,
             destinationTarget: dest.target,
+            sourcePhysicalBefore,
+            sourcePhysicalAfter: sourcePhysicalBefore - t.quantity,
+            destinationPhysicalBefore,
+            destinationPhysicalAfter: destinationPhysicalBefore + t.quantity,
+            destinationCapacity: dest.capacity,
+            destinationSpaceBefore: dest.capacity === null ? null : Math.max(0, dest.capacity - destinationPhysicalBefore - destinationIncoming),
+            destinationSpaceAfter: dest.capacity === null ? null : Math.max(0, dest.capacity - destinationPhysicalBefore - destinationIncoming - t.quantity),
+            destinationIncoming,
             forecast: dest.forecast,
             leadDays: snapshot.stock.find((p) => p.code === t.code)?.leadDays,
             incoming: dest.incoming,
