@@ -3,6 +3,15 @@
 .decision-totals { display: grid; grid-template-columns: 1fr; gap: 12px; margin: 16px 0; }
 .decision-totals button { display: grid; gap: 8px; text-align: left; border: 1px solid var(--line); border-radius: 16px; padding: 18px; background: var(--canvas); color: var(--ink); cursor: pointer; }
 .decision-totals strong { color: var(--blue); font-size: 2rem; }
+.decision-needs-total { display: grid; gap: 8px; border: 1px solid var(--line); border-radius: 16px; padding: 18px; background: var(--canvas); color: var(--ink); }
+.stock-needs { margin: 24px 0; }
+.stock-need-balances { display: grid; gap: 12px; margin: 16px 0; }
+.stock-need-balances > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
+.stock-need-balances dt { color: var(--subtle); }
+.stock-need-balances dd { margin: 0; font-weight: 650; }
+.stock-need h5 { font-size: 1rem; margin: 16px 0 8px; }
+.stock-need ul { padding-left: 20px; }
+.stock-need li { margin: 8px 0; }
 .decision-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; margin: 20px 0; }
 .decision-card { min-width: 0; padding: clamp(16px, 3vw, 24px); border: 1px solid var(--line); border-radius: 18px; background: var(--white); overflow-wrap: anywhere; }
 .decision-card h3, .decision-card h4 { margin: 12px 0 6px; font-size: 1.2rem; }

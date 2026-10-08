@@ -1095,6 +1095,10 @@ try {
         const { checkPurchaseCards } = await import("./purchase-ui-checks.mjs");
         await checkPurchaseCards({ page, origin, sql, insert, near, far });
       }
+      if (process.argv.includes("--stock-needs")) {
+        const { checkStockNeeds } = await import("./stock-needs-ui-checks.mjs");
+        await checkStockNeeds({ page, browser, origin, sql, insert, actorId: users["test-admin"], testPassword });
+      }
       if (process.argv.includes("--marco")) {
         const post = (context, body, extra = {}) => context.post(origin + "/api/james/chat", { headers: { origin }, data: body, timeout: 60000, ...extra });
         const workerContext = await browser.newContext();

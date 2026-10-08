@@ -4,6 +4,8 @@ import { getPool } from "./db";
 import { operationsReport } from "./operations-report";
 import { ActionError } from "./permissions";
 import { graphProblems } from "./routing";
+import { permitted } from "./permissions";
+import { operationalNeeds, importedNeed, type StockNeed } from "./stock-needs";
 import {
   dashboardFilters,
   dashboardTitles,
@@ -550,12 +552,46 @@ export async function dashboardReport(
   const pageStart = (decisionPage - 1) * f.pageSize;
   const pageEnd = decisionPage * f.pageSize;
   const purchaseMode = q.get("planning") === "purchase";
+  const needs: StockNeed[] = [];
+  if (q.get("planning") === "distribution" && permitted(user, "stock")) {
+    needs.push(...operationalNeeds(rows, mapVersion));
+    // A newer import supersedes the older source row even after reconciliation.
+    // Source balances remain separate from the operational ledger until confirmed.
+    const [sources] = await pool.query<RowDataPacket[]>(
+      `SELECT * FROM (
+        SELECT DISTINCT ON (rb.branch_id,l.code,rb.unit)
+          rb.id,rb.quantity,rb.unit,rb.material_id,rb.warehouse_id,rb.reconciliation_movement_id,
+          l.code,l.parameters,l.consumption,l.raw_cells,l.conflicts,l.row_number,l.sheet,
+          r.file_name,r.created_at AS imported_at,r.mapping,br.code AS branch_code,
+          w.name AS warehouse,b.name AS block,rp.directive
+        FROM reported_balances rb JOIN material_import_lines l ON l.id=rb.source_line_id
+        JOIN material_import_runs r ON r.id=l.run_id JOIN branches br ON br.id=rb.branch_id
+        LEFT JOIN warehouses w ON w.id=rb.warehouse_id LEFT JOIN blocks b ON b.id=w.block_id
+        LEFT JOIN reported_purchases rp ON rp.source_line_id=l.id
+        ORDER BY rb.branch_id,l.code,rb.unit,r.created_at DESC,l.id DESC
+      ) latest WHERE reconciliation_movement_id IS NULL`,
+    );
+    const json = (value: unknown) => typeof value === "string" ? JSON.parse(value) : value;
+    for (const source of sources) {
+      if ((f.code && source.code !== f.code) || (f.warehouse && source.warehouse !== f.warehouse) ||
+        (f.block && source.block !== f.block) || f.requester || f.sector || f.status || f.priority) continue;
+      const mapping = json(source.mapping), raw = json(source.raw_cells), parameters = json(source.parameters), consumption = json(source.consumption);
+      const item = String(raw[String(mapping.columns.description)]?.text ?? source.code);
+      const need = importedNeed({ id: Number(source.id), code: String(source.code), item, unit: String(source.unit), branch: String(source.branch_code),
+        balance: source.quantity, minimum: parameters.minimum, consumption: consumption.aggregate, period: consumption.period,
+        file: String(source.file_name), sheet: String(source.sheet), line: Number(source.row_number), importedAt: String(source.imported_at),
+        directive: source.directive, conflicts: json(source.conflicts), materialLinked: !!source.material_id });
+      if (need) needs.push(need);
+    }
+    needs.sort((a, b) => a.destination.localeCompare(b.destination, "pt-BR") || a.item.localeCompare(b.item, "pt-BR"));
+  }
   return {
     decisions: {
       filter: decision,
       page: decisionPage,
       total: purchaseMode ? groupedPurchases.length : decisionCards.length,
       purchaseGroups: groupedPurchases.slice(pageStart, pageEnd),
+      needs,
       cards: decisionCards.slice(
         (decisionPage - 1) * f.pageSize,
         decisionPage * f.pageSize,

@@ -5,6 +5,7 @@ import { can } from "@/lib/permissions";
 import { DistributionMap } from "./distribution-map";
 import { TransferQueue } from "./transfer-queue";
 import { PurchaseCard } from "./purchase-card";
+import { StockNeeds } from "./stock-needs";
 export function RecommendationCards({
   mode = "distribution",
   report,
@@ -80,6 +81,12 @@ export function RecommendationCards({
           <strong>{d.awaitingReview}</strong>
           <span>Sugestões aguardando aprovação</span>
         </button>
+        {mode === "distribution" && (
+          <div className="decision-needs-total">
+            <strong>{d.needs.length}</strong>
+            <span>Necessidades de reposição a revisar</span>
+          </div>
+        )}
       </div>
       <p className="decision-context">
         Contagem no escopo filtrado, antes da paginação. “Aguardando aprovação”
@@ -112,7 +119,7 @@ export function RecommendationCards({
         <p role="status">
           {report.mapVersion
             ? `Mapa publicado #${report.mapVersion}. Rotas por Dijkstra nos caminhos transitáveis; reposição conforme consumo dos blocos e setores próximos, preservando a cobertura da origem e o espaço do destino.`
-            : "Publique um mapa com blocos, almoxarifados e caminhos revisados para obter recomendações por proximidade. Sem mapa válido, use a movimentação manual."}
+            : "Os déficits identificados aparecem abaixo. Para calcular de qual estoque retirar e a rota por Dijkstra, publique a planta com blocos, almoxarifados e caminhos vinculados."}
         </p>
       )}
       {archived ? (
@@ -127,6 +134,22 @@ export function RecommendationCards({
         />
       ) : (
         <>
+          {mode === "distribution" && (
+            <StockNeeds
+              key={JSON.stringify([
+                report.filters.code,
+                report.filters.warehouse,
+                report.filters.block,
+                report.filters.requester,
+                report.filters.sector,
+                report.filters.status,
+                report.filters.priority,
+              ])}
+              needs={d.needs}
+              role={role}
+              pageSize={report.filters.pageSize}
+            />
+          )}
           {mode === "purchase" ? (
             <div className="decision-grid">
               {d.purchaseGroups.map((group) => (
@@ -547,8 +570,9 @@ export function RecommendationCards({
             ? d.purchaseGroups.length
             : d.cards.length) && (
             <p role="status">
-              Nenhuma sugestão corresponde a este filtro. Revise o período ou
-              selecione todas as posições.
+              {mode === "distribution" && d.needs.length
+                ? "Nenhuma transferência validada corresponde a este filtro. Confira as necessidades de reposição acima e os dados pendentes em cada card."
+                : "Nenhuma sugestão corresponde a este filtro. Revise o período ou selecione todas as posições."}
             </p>
           )}
           <nav className="head-actions" aria-label="Paginação das sugestões">
